@@ -14,14 +14,18 @@
 // apps/api/tests/test_ai_label_parity.py fails if the two ever drift, the same
 // way test_readme_claims.py holds the countable claims to their source.
 export const AI_LABEL =
-  'AI-DRAFTED · UNVERIFIED. This text was machine-generated as a drafting ' +
-  'aid; a human must verify every statement against the cited evidence ' +
-  'before relying on it. Not itself evidence.';
+  "AI-DRAFTED · UNVERIFIED. This text was machine-generated as a drafting " +
+  "aid; a human must verify every statement against the cited evidence " +
+  "before relying on it. Not itself evidence.";
 
 /** The marker itself. Muted rather than loud: it is a standing condition of the
  *  text, not an error, and an alarm colour on every AI block trains people to
  *  stop seeing it. */
-export function AiLabel({ className = '' }: { className?: string }): JSX.Element {
+export function AiLabel({
+  className = "",
+}: {
+  className?: string;
+}): JSX.Element {
   return (
     <p
       data-ai-label

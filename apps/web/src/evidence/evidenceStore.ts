@@ -4,15 +4,16 @@
 // these routes is a compute path, so a bare `docker compose up` can preserve
 // evidence without ALLOW_UNAUTHENTICATED.
 
-import { create } from 'zustand';
-import { apiFetch } from '../transport/http.js';
+import { create } from "zustand";
+import { apiFetch } from "../transport/http.js";
 
 export interface EvidenceProps {
-  kind: 'evidence';
+  kind: "evidence";
   sha256: string;
   size_bytes: number;
   media_type: string;
-  capture_method: 'url' | 'file_upload' | 'screenshot' | 'feed_freeze' | 'replay_window';
+  capture_method:
+    "url" | "file_upload" | "screenshot" | "feed_freeze" | "replay_window";
   source_url?: string | null;
   source_context?: string | null;
   filename?: string | null;
@@ -52,8 +53,17 @@ interface EvidenceState {
   error: string | null;
   busy: boolean; // a capture/attach is in flight
   load: () => Promise<void>;
-  captureUrl: (url: string, context?: string, situationId?: string) => Promise<EvidenceObject | null>;
-  upload: (file: File, context?: string, title?: string, situationId?: string) => Promise<EvidenceObject | null>;
+  captureUrl: (
+    url: string,
+    context?: string,
+    situationId?: string,
+  ) => Promise<EvidenceObject | null>;
+  upload: (
+    file: File,
+    context?: string,
+    title?: string,
+    situationId?: string,
+  ) => Promise<EvidenceObject | null>;
   captureScreenshot: (
     dataBase64: string,
     title?: string,
@@ -81,7 +91,11 @@ interface EvidenceState {
   ) => Promise<EvidenceObject | null>;
   attach: (sha: string, situationId: string, note?: string) => Promise<boolean>;
   verify: (sha: string) => Promise<boolean>;
-  detail: (sha: string) => Promise<{ object: EvidenceObject; custody: CustodyEvent[]; blob_present: boolean } | null>;
+  detail: (sha: string) => Promise<{
+    object: EvidenceObject;
+    custody: CustodyEvent[];
+    blob_present: boolean;
+  } | null>;
 }
 
 async function insertFront(
@@ -102,11 +116,12 @@ export const useEvidence = create<EvidenceState>((set) => ({
   load: async () => {
     set({ loading: true });
     try {
-      const r = await apiFetch('/api/evidence');
-      if (r.ok) set({ items: (await r.json()) as EvidenceObject[], error: null });
+      const r = await apiFetch("/api/evidence");
+      if (r.ok)
+        set({ items: (await r.json()) as EvidenceObject[], error: null });
       else set({ error: `load failed (${r.status})` });
     } catch {
-      set({ error: 'Could not load evidence. You appear to be offline.' });
+      set({ error: "Could not load evidence. You appear to be offline." });
     } finally {
       set({ loading: false });
     }
@@ -114,10 +129,14 @@ export const useEvidence = create<EvidenceState>((set) => ({
   captureUrl: async (url, context, situationId) => {
     set({ busy: true, error: null });
     try {
-      const r = await apiFetch('/api/evidence/capture/url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, context: context || null, situation_id: situationId || null }),
+      const r = await apiFetch("/api/evidence/capture/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url,
+          context: context || null,
+          situation_id: situationId || null,
+        }),
       });
       if (!r.ok) {
         set({ error: `capture failed (${r.status})` });
@@ -127,7 +146,7 @@ export const useEvidence = create<EvidenceState>((set) => ({
       await insertFront(set, obj);
       return obj;
     } catch {
-      set({ error: 'capture failed (network)' });
+      set({ error: "capture failed (network)" });
       return null;
     } finally {
       set({ busy: false });
@@ -137,11 +156,14 @@ export const useEvidence = create<EvidenceState>((set) => ({
     set({ busy: true, error: null });
     try {
       const fd = new FormData();
-      fd.append('file', file);
-      if (context) fd.append('context', context);
-      if (title) fd.append('title', title);
-      if (situationId) fd.append('situation_id', situationId);
-      const r = await apiFetch('/api/evidence/upload', { method: 'POST', body: fd });
+      fd.append("file", file);
+      if (context) fd.append("context", context);
+      if (title) fd.append("title", title);
+      if (situationId) fd.append("situation_id", situationId);
+      const r = await apiFetch("/api/evidence/upload", {
+        method: "POST",
+        body: fd,
+      });
       if (!r.ok) {
         set({ error: `upload failed (${r.status})` });
         return null;
@@ -150,7 +172,7 @@ export const useEvidence = create<EvidenceState>((set) => ({
       await insertFront(set, obj);
       return obj;
     } catch {
-      set({ error: 'upload failed (network)' });
+      set({ error: "upload failed (network)" });
       return null;
     } finally {
       set({ busy: false });
@@ -159,9 +181,9 @@ export const useEvidence = create<EvidenceState>((set) => ({
   captureScreenshot: async (dataBase64, title, context, situationId) => {
     set({ busy: true, error: null });
     try {
-      const r = await apiFetch('/api/evidence/capture/screenshot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const r = await apiFetch("/api/evidence/capture/screenshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           data_base64: dataBase64,
           title: title || null,
@@ -177,7 +199,7 @@ export const useEvidence = create<EvidenceState>((set) => ({
       await insertFront(set, obj);
       return obj;
     } catch {
-      set({ error: 'screenshot capture failed (network)' });
+      set({ error: "screenshot capture failed (network)" });
       return null;
     } finally {
       set({ busy: false });
@@ -186,9 +208,9 @@ export const useEvidence = create<EvidenceState>((set) => ({
   captureFeedFreeze: async (entityId, snapshot, context, situationId) => {
     set({ busy: true, error: null });
     try {
-      const r = await apiFetch('/api/evidence/capture/feed-freeze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const r = await apiFetch("/api/evidence/capture/feed-freeze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           entity_id: entityId,
           snapshot,
@@ -204,18 +226,26 @@ export const useEvidence = create<EvidenceState>((set) => ({
       await insertFront(set, obj);
       return obj;
     } catch {
-      set({ error: 'freeze failed (network)' });
+      set({ error: "freeze failed (network)" });
       return null;
     } finally {
       set({ busy: false });
     }
   },
-  captureReplayWindow: async (bbox, atA, atB, windowSec, kind, context, situationId) => {
+  captureReplayWindow: async (
+    bbox,
+    atA,
+    atB,
+    windowSec,
+    kind,
+    context,
+    situationId,
+  ) => {
     set({ busy: true, error: null });
     try {
-      const r = await apiFetch('/api/evidence/capture/replay-window', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const r = await apiFetch("/api/evidence/capture/replay-window", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...bbox,
           at_a: atA,
@@ -234,7 +264,7 @@ export const useEvidence = create<EvidenceState>((set) => ({
       await insertFront(set, obj);
       return obj;
     } catch {
-      set({ error: 'replay freeze failed (network)' });
+      set({ error: "replay freeze failed (network)" });
       return null;
     } finally {
       set({ busy: false });
@@ -243,24 +273,32 @@ export const useEvidence = create<EvidenceState>((set) => ({
 
   attach: async (sha, situationId, note) => {
     try {
-      const r = await apiFetch(`/api/evidence/${encodeURIComponent(sha)}/attach`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ situation_id: situationId, note: note || null }),
-      });
+      const r = await apiFetch(
+        `/api/evidence/${encodeURIComponent(sha)}/attach`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            situation_id: situationId,
+            note: note || null,
+          }),
+        },
+      );
       if (!r.ok) {
         set({ error: `attach failed (${r.status})` });
         return false;
       }
       return true;
     } catch {
-      set({ error: 'attach failed (network)' });
+      set({ error: "attach failed (network)" });
       return false;
     }
   },
   verify: async (sha) => {
     try {
-      const r = await apiFetch(`/api/evidence/${encodeURIComponent(sha)}/verify`);
+      const r = await apiFetch(
+        `/api/evidence/${encodeURIComponent(sha)}/verify`,
+      );
       if (!r.ok) return false;
       const j = (await r.json()) as { ok: boolean };
       return Boolean(j.ok);

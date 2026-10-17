@@ -2,11 +2,15 @@
 // directly on the globe via the shared draw toolbox. Edits write to copStore;
 // MilSymbolAdapter re-renders them live. Mounted as the 'cop' mode-surface.
 
-import { useEffect, useState } from 'react';
-import { Widget, Btn, SectionLabel, MicroLabel } from '../shell/instruments.js';
-import { Anchor, Mountain, Plus, X } from 'lucide-react';
-import { toast } from '../shell/toast.js';
-import { OrbatTree } from './OrbatTree.js';
+import { Suspense, lazy, useEffect, useState } from "react";
+import { Widget, Btn, SectionLabel, MicroLabel } from "../shell/instruments.js";
+import { Anchor, Mountain, Plus, X } from "lucide-react";
+import { toast } from "../shell/toast.js";
+// Its own chunk: OrbatTree draws with milsymbol, the largest library the
+// console carried at boot (1.3 MB of source) for a mode most sessions never open.
+const OrbatTree = lazy(() =>
+  import("./OrbatTree.js").then((m) => ({ default: m.OrbatTree })),
+);
 import {
   useCop,
   composeSidc,
@@ -15,30 +19,52 @@ import {
   type Affiliation,
   type UnitType,
   type Echelon,
-} from './copStore.js';
-import { getDrawController } from '../globe/draw.js';
-import { CoordEntry } from '../globe/CoordEntry.js';
-import { planRoute, type RouteMode } from '../globe/routePlanner.js';
-import type { LayerRegistry } from '../registry/LayerRegistry.js';
+} from "./copStore.js";
+import { getDrawController } from "../globe/draw.js";
+import { CoordEntry } from "../globe/CoordEntry.js";
+import { planRoute, type RouteMode } from "../globe/routePlanner.js";
+import type { LayerRegistry } from "../registry/LayerRegistry.js";
 
-const COP_LAYER = 'mil.cop.notional';
+const COP_LAYER = "mil.cop.notional";
 
-const AFFILS: Affiliation[] = ['F', 'H', 'N', 'U'];
+const AFFILS: Affiliation[] = ["F", "H", "N", "U"];
 const AFFIL_COLOR: Record<Affiliation, string> = {
-  F: '#5b9bd5',
-  H: '#e8584e',
-  N: '#4ade80',
-  U: '#facc15',
+  F: "#5b9bd5",
+  H: "#e8584e",
+  N: "#4ade80",
+  U: "#facc15",
 };
-const TYPES: UnitType[] = ['infantry', 'armor', 'artillery', 'ada', 'recon', 'engineer', 'hq', 'support'];
+const TYPES: UnitType[] = [
+  "infantry",
+  "armor",
+  "artillery",
+  "ada",
+  "recon",
+  "engineer",
+  "hq",
+  "support",
+];
 const ECHELONS: Echelon[] = [
-  'none', 'team', 'squad', 'section', 'platoon', 'company', 'battalion', 'regiment', 'brigade', 'division',
+  "none",
+  "team",
+  "squad",
+  "section",
+  "platoon",
+  "company",
+  "battalion",
+  "regiment",
+  "brigade",
+  "division",
 ];
 
 const selectCls =
-  'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono focus:outline-hidden focus:border-accent-line';
+  "bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono focus:outline-hidden focus:border-accent-line";
 
-export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Element {
+export function CopEditor({
+  registry,
+}: {
+  registry: LayerRegistry;
+}): JSX.Element {
   const units = useCop((s) => s.units);
   const lines = useCop((s) => s.lines);
   const rings = useCop((s) => s.rings);
@@ -51,10 +77,10 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
   const reset = useCop((s) => s.reset);
   const clearAll = useCop((s) => s.clearAll);
 
-  const [aff, setAff] = useState<Affiliation>('F');
-  const [type, setType] = useState<UnitType>('infantry');
-  const [ech, setEch] = useState<Echelon>('company');
-  const [desig, setDesig] = useState('');
+  const [aff, setAff] = useState<Affiliation>("F");
+  const [type, setType] = useState<UnitType>("infantry");
+  const [ech, setEch] = useState<Echelon>("company");
+  const [desig, setDesig] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -72,7 +98,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
 
   const placeUnit = (): void => {
     if (!draw) return;
-    setStatus('click the map to place the unit (or type coordinates below)…');
+    setStatus("click the map to place the unit (or type coordinates below)…");
     draw.placePoint((p) => {
       addUnit({
         sidc: composeSidc(aff, type, ech),
@@ -80,20 +106,20 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
         lon: p.lon,
         designation: desig.trim() || TYPE_LABEL[type],
       });
-      setStatus('Unit placed');
+      setStatus("Unit placed");
     });
   };
 
-  const drawLine = (side: 'friendly' | 'hostile'): void => {
+  const drawLine = (side: "friendly" | "hostile"): void => {
     if (!draw) return;
-    setStatus('click vertices; right-click or Finish to commit…');
+    setStatus("click vertices; right-click or Finish to commit…");
     draw.drawPolyline((verts) => {
       addLine({
         side,
-        label: side === 'hostile' ? 'FLOT' : 'PL',
+        label: side === "hostile" ? "FLOT" : "PL",
         coords: verts.map((v) => [v.lon, v.lat] as [number, number]),
       });
-      setStatus(`${side === 'hostile' ? 'FLOT' : 'PL'} line added`);
+      setStatus(`${side === "hostile" ? "FLOT" : "PL"} line added`);
     });
   };
 
@@ -104,15 +130,15 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
     setStatus(`click ${mode} waypoints; right-click / Finish to route…`);
     draw.drawPolyline((verts) => {
       if (verts.length < 2) {
-        setStatus('need ≥2 waypoints');
+        setStatus("need ≥2 waypoints");
         return;
       }
       setStatus(`routing ${mode} (sampling terrain)…`);
       planRoute(verts, mode)
         .then((res) => {
           addLine({
-            side: 'friendly',
-            label: mode === 'naval' ? 'NAVAL RTE' : 'GND RTE',
+            side: "friendly",
+            label: mode === "naval" ? "NAVAL RTE" : "GND RTE",
             coords: res.coords,
           });
           setStatus(
@@ -121,29 +147,34 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
               : `${mode} route added (${res.coords.length} pts, grid ${res.cells})`,
           );
         })
-        .catch(() => setStatus('Could not compute the route.'));
+        .catch(() => setStatus("Could not compute the route."));
     });
   };
 
   const drawRing = (): void => {
     if (!draw) return;
-    setStatus('click centre, then click the edge to set radius…');
+    setStatus("click centre, then click the edge to set radius…");
     draw.drawCircle((c, rKm) => {
-      addRing({ lat: c.lat, lon: c.lon, radiusKm: +rKm.toFixed(1), label: 'AO' });
+      addRing({
+        lat: c.lat,
+        lon: c.lon,
+        radiusKm: +rKm.toFixed(1),
+        label: "AO",
+      });
       setStatus(`Ring added (${rKm.toFixed(1)} km)`);
     });
   };
 
   const save = async (): Promise<void> => {
     setBusy(true);
-    setStatus('saving…');
+    setStatus("saving…");
     const r = await saveCopToOntology();
     setBusy(false);
     setStatus(null);
     if (r.ok) {
-      toast.ok('COP saved to ontology');
+      toast.ok("COP saved to ontology");
     } else if (r.status === 401 || r.status === 403) {
-      toast.warn('Sign in to persist (local-only for now)');
+      toast.warn("Sign in to persist (local-only for now)");
     } else {
       toast.error(`Could not save the COP (HTTP ${r.status}).`);
     }
@@ -151,7 +182,9 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
 
   return (
     <div className="space-y-2 p-2">
-      <OrbatTree />
+      <Suspense fallback={null}>
+        <OrbatTree />
+      </Suspense>
       <Widget title="Build symbol" count={`${units.length} units`}>
         {/* Affiliation */}
         <SectionLabel title="Affiliation" />
@@ -162,10 +195,15 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
               type="button"
               onClick={() => setAff(a)}
               className={`flex-1 text-[10px] mono py-1 rounded-sm border transition-colors ${
-                aff === a ? 'border-accent-line bg-accent-dim text-txt-0' : 'border-line text-txt-2 hover:text-txt-0'
+                aff === a
+                  ? "border-accent-line bg-accent-dim text-txt-0"
+                  : "border-line text-txt-2 hover:text-txt-0"
               }`}
             >
-              <span style={{ color: AFFIL_COLOR[a] }} aria-hidden>●</span> {a}
+              <span style={{ color: AFFIL_COLOR[a] }} aria-hidden>
+                ●
+              </span>{" "}
+              {a}
             </button>
           ))}
         </div>
@@ -173,7 +211,11 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
         <div className="grid grid-cols-2 gap-1.5 mt-2">
           <label className="flex flex-col gap-0.5">
             <MicroLabel>Type</MicroLabel>
-            <select className={selectCls} value={type} onChange={(e) => setType(e.target.value as UnitType)}>
+            <select
+              className={selectCls}
+              value={type}
+              onChange={(e) => setType(e.target.value as UnitType)}
+            >
               {TYPES.map((t) => (
                 <option key={t} value={t}>
                   {TYPE_LABEL[t]}
@@ -183,7 +225,11 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
           </label>
           <label className="flex flex-col gap-0.5">
             <MicroLabel>Echelon</MicroLabel>
-            <select className={selectCls} value={ech} onChange={(e) => setEch(e.target.value as Echelon)}>
+            <select
+              className={selectCls}
+              value={ech}
+              onChange={(e) => setEch(e.target.value as Echelon)}
+            >
               {ECHELONS.map((x) => (
                 <option key={x} value={x}>
                   {x}
@@ -202,7 +248,12 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
           />
         </label>
         <div className="mt-2">
-          <Btn tone="accent" onClick={placeUnit} disabled={noDraw} className="w-full justify-center gap-1.5">
+          <Btn
+            tone="accent"
+            onClick={placeUnit}
+            disabled={noDraw}
+            className="w-full justify-center gap-1.5"
+          >
             <Plus size={12} strokeWidth={1.75} aria-hidden />
             Place unit on map
           </Btn>
@@ -219,7 +270,7 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
                   lon,
                   designation: desig.trim() || TYPE_LABEL[type],
                 });
-                setStatus('Unit placed');
+                setStatus("Unit placed");
               }}
               placeholder="lat,lon · place · airport / port"
             />
@@ -229,49 +280,103 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
 
       <Widget title="Draw graphics">
         <div className="grid grid-cols-2 gap-1.5">
-          <Btn onClick={() => drawLine('hostile')} disabled={noDraw}>FLOT (hostile)</Btn>
-          <Btn onClick={() => drawLine('friendly')} disabled={noDraw}>Phase line</Btn>
-          <Btn onClick={drawRing} disabled={noDraw}>Range ring</Btn>
-          <Btn onClick={() => draw?.finish()} disabled={noDraw}>Finish line</Btn>
+          <Btn onClick={() => drawLine("hostile")} disabled={noDraw}>
+            FLOT (hostile)
+          </Btn>
+          <Btn onClick={() => drawLine("friendly")} disabled={noDraw}>
+            Phase line
+          </Btn>
+          <Btn onClick={drawRing} disabled={noDraw}>
+            Range ring
+          </Btn>
+          <Btn onClick={() => draw?.finish()} disabled={noDraw}>
+            Finish line
+          </Btn>
         </div>
         <div className="mt-1.5">
           <MicroLabel>A* routes (terrain-aware)</MicroLabel>
           <div className="grid grid-cols-2 gap-1.5 mt-1">
-            <Btn tone="accent" onClick={() => drawRoute('naval')} disabled={noDraw} className="gap-1.5">
+            <Btn
+              tone="accent"
+              onClick={() => drawRoute("naval")}
+              disabled={noDraw}
+              className="gap-1.5"
+            >
               <Anchor size={12} strokeWidth={1.75} aria-hidden />
               Naval route
             </Btn>
-            <Btn tone="accent" onClick={() => drawRoute('ground')} disabled={noDraw} className="gap-1.5">
+            <Btn
+              tone="accent"
+              onClick={() => drawRoute("ground")}
+              disabled={noDraw}
+              className="gap-1.5"
+            >
               <Mountain size={12} strokeWidth={1.75} aria-hidden />
               Ground route
             </Btn>
           </div>
         </div>
         <div className="mt-1.5">
-          <Btn onClick={() => { draw?.cancel(); setStatus(null); }} disabled={noDraw} className="w-full justify-center">
+          <Btn
+            onClick={() => {
+              draw?.cancel();
+              setStatus(null);
+            }}
+            disabled={noDraw}
+            className="w-full justify-center"
+          >
             Cancel drawing
           </Btn>
         </div>
         {noDraw && <MicroLabel>map not ready</MicroLabel>}
-        {status && <p className="text-[10px] text-accent mt-2 mono">{status}</p>}
+        {status && (
+          <p className="text-[10px] text-accent mt-2 mono">{status}</p>
+        )}
       </Widget>
 
-      <Widget title="Laydown" count={`${units.length}u ${lines.length}l ${rings.length}r`}>
+      <Widget
+        title="Laydown"
+        count={`${units.length}u ${lines.length}l ${rings.length}r`}
+      >
         <div className="max-h-[180px] overflow-auto space-y-0.5">
           {units.map((u) => (
-            <Row key={u.id} dot={AFFIL_COLOR[(u.sidc[1] as Affiliation) ?? 'U'] ?? '#888'} label={u.designation || u.id} onDel={() => removeUnit(u.id)} />
+            <Row
+              key={u.id}
+              dot={AFFIL_COLOR[(u.sidc[1] as Affiliation) ?? "U"] ?? "#888"}
+              label={u.designation || u.id}
+              onDel={() => removeUnit(u.id)}
+            />
           ))}
           {lines.map((l) => (
-            <Row key={l.id} dot={l.side === 'hostile' ? '#e8584e' : '#5b9bd5'} label={`${l.label} · ${l.coords.length}pt`} onDel={() => removeLine(l.id)} />
+            <Row
+              key={l.id}
+              dot={l.side === "hostile" ? "#e8584e" : "#5b9bd5"}
+              label={`${l.label} · ${l.coords.length}pt`}
+              onDel={() => removeLine(l.id)}
+            />
           ))}
           {rings.map((r) => (
-            <Row key={r.id} dot="#f59e0b" label={`${r.label} · ${r.radiusKm}km`} onDel={() => removeRing(r.id)} />
+            <Row
+              key={r.id}
+              dot="#f59e0b"
+              label={`${r.label} · ${r.radiusKm}km`}
+              onDel={() => removeRing(r.id)}
+            />
           ))}
-          {units.length + lines.length + rings.length === 0 && <MicroLabel>empty COP, place a unit</MicroLabel>}
+          {units.length + lines.length + rings.length === 0 && (
+            <MicroLabel>empty COP, place a unit</MicroLabel>
+          )}
         </div>
         <div className="grid grid-cols-3 gap-1.5 mt-2">
-          <Btn tone="accent" onClick={() => void save()} disabled={busy}>Save</Btn>
-          <Btn onClick={reset} title="Load the notional example laydown (illustrative)">Load example</Btn>
+          <Btn tone="accent" onClick={() => void save()} disabled={busy}>
+            Save
+          </Btn>
+          <Btn
+            onClick={reset}
+            title="Load the notional example laydown (illustrative)"
+          >
+            Load example
+          </Btn>
           <Btn onClick={clearAll}>Clear</Btn>
         </div>
       </Widget>
@@ -279,13 +384,23 @@ export function CopEditor({ registry }: { registry: LayerRegistry }): JSX.Elemen
   );
 }
 
-function Row({ dot, label, onDel }: { dot: string; label: string; onDel: () => void }): JSX.Element {
+function Row({
+  dot,
+  label,
+  onDel,
+}: {
+  dot: string;
+  label: string;
+  onDel: () => void;
+}): JSX.Element {
   return (
     <div className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
       <span style={{ color: dot }} className="text-[10px]" aria-hidden>
         ●
       </span>
-      <span className="flex-1 text-[10px] text-txt-1 mono truncate">{label}</span>
+      <span className="flex-1 text-[10px] text-txt-1 mono truncate">
+        {label}
+      </span>
       <button
         type="button"
         onClick={onDel}

@@ -17,6 +17,15 @@ to the working directory and fail in confusing ways from elsewhere.
   `M_ARENA_MAX=2`; sidecar children scrub `LD_PRELOAD` and that is guarded.
   Restart the backend ONCE and wait — repeated restarts get the egress
   rate-limited, which then looks like a code bug.
+- `start.sh` — the whole dev stack: `run-api.sh` on :8000, the tile process on
+  :8001 (`app/tiles_main.py`, the tile routes on a loop the feeds are not on)
+  and Vite on :5173 with `TILES_PROXY_TARGET` and `VITE_TILES_PORT` pointing at
+  :8001 (a browser on this machine asks :8001 for the mesh directly). Stopping
+  it frees all three; `run-api.sh` plus a bare `vite` still works, with tiles
+  coming from the API. Before starting it again, wait for the old uvicorn PID
+  to exit, not for the ports: its teardown outlives the port by seconds to
+  minutes and kills the sidecars the new backend has already adopted.
+  → `docs/decisions.md` (Keyless Google Earth 3D)
 - `kill-port.sh <port>` — kill dev servers by port holder. Never `pkill -f` on
   an argv guess. It escalates TERM → verify → SIGKILL of the process GROUP, and
   must keep doing so: Playwright installs a SIGTERM listener, and once any

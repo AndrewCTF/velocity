@@ -13,13 +13,23 @@
 // The key is in USER_DATA_KEYS, so AuthProvider's SIGNED_OUT clear removes it
 // and the next sign-in starts fresh. The server-side guarantee still needs Supabase's own inactivity
 // timeout; this is the browser half.
-import { useEffect } from 'react';
-import { createIdleTimer, idleMinutesFrom, localActivityStore } from './idle.js';
-import { isSupabaseConfigured, supabase } from '../transport/supabase.js';
-import { latestRuntimeConfig } from '../transport/config.js';
-import { toast } from '../shell/toast.js';
+import { useEffect } from "react";
+import {
+  createIdleTimer,
+  idleMinutesFrom,
+  localActivityStore,
+} from "./idle.js";
+import { isSupabaseConfigured, supabase } from "../transport/supabase.js";
+import { latestRuntimeConfig } from "../transport/config.js";
+import { toast } from "../shell/toast.js";
 
-const INPUT_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const;
+const INPUT_EVENTS = [
+  "pointerdown",
+  "pointermove",
+  "keydown",
+  "wheel",
+  "touchstart",
+] as const;
 
 export function useIdleSignOut(signedIn: boolean): void {
   useEffect(() => {
@@ -47,14 +57,18 @@ export function useIdleSignOut(signedIn: boolean): void {
         // 'local' revokes this session's refresh token on the server as well as
         // dropping it here; other devices stay signed in. AuthProvider's
         // SIGNED_OUT handler clears the user's investigation data.
-        void client.auth.signOut({ scope: 'local' }).finally(() => {
-          toast.info(`Signed out after ${minutes()} minutes without activity.`, 10_000);
+        void client.auth.signOut({ scope: "local" }).finally(() => {
+          toast.info(
+            `Signed out after ${minutes()} minutes without activity.`,
+            10_000,
+          );
         });
       },
     });
 
     const onInput = (): void => timer.activity();
-    for (const ev of INPUT_EVENTS) window.addEventListener(ev, onInput, { passive: true });
+    for (const ev of INPUT_EVENTS)
+      window.addEventListener(ev, onInput, { passive: true });
     return () => {
       timer.stop();
       for (const ev of INPUT_EVENTS) window.removeEventListener(ev, onInput);

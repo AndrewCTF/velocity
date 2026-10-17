@@ -3,14 +3,14 @@
 Companion to `docs/edge-wave-1-vram.md`, which found the VRAM was the model
 stack and not the scrapers. This one measures the CPU, which **is** the scrapers.
 
-Operator's report: *"it uses a hell lot ton of RAM and CPU, especially the
-sidecars."* Correct. Measured, with the union at ~19 000 aircraft: 24-25 Chromium
+Operator's report: _"it uses a hell lot ton of RAM and CPU, especially the
+sidecars."_ Correct. Measured, with the union at ~19 000 aircraft: 24-25 Chromium
 processes, **4 457 MB RSS**, and a single renderer at **433 %**.
 
 ## The question
 
 `readFn` (`tools/adsb-globe-feeder/index.js:77-99`) reads `g.planesOrdered` —
-tar1090's *parsed* aircraft store. We never look at a pixel. So how much of the
+tar1090's _parsed_ aircraft store. We never look at a pixel. So how much of the
 CPU is the rendering we throw away?
 
 ## The experiment
@@ -26,12 +26,12 @@ at warm-up.
 Cost is the whole process tree rooted at each feeder's node pid, so each
 browser's renderers are attributed to their own feeder.
 
-| t | | CPU | RSS | procs | `/health` total | rev |
-|---|---|---|---|---|---|---|
-| +90 s | control | **213.6 %** | 1 765 MB | 9 | 14 609 | 8 |
-| +90 s | detached | **43.2 %** | 1 583 MB | 9 | 14 209 | 8 |
-| +165 s | control | **227.1 %** | 1 975 MB | 9 | **15 338** | 28 |
-| +165 s | detached | **31.9 %** | 1 581 MB | 9 | **14 209** | 28 |
+| t      |          | CPU         | RSS      | procs | `/health` total | rev |
+| ------ | -------- | ----------- | -------- | ----- | --------------- | --- |
+| +90 s  | control  | **213.6 %** | 1 765 MB | 9     | 14 609          | 8   |
+| +90 s  | detached | **43.2 %**  | 1 583 MB | 9     | 14 209          | 8   |
+| +165 s | control  | **227.1 %** | 1 975 MB | 9     | **15 338**      | 28  |
+| +165 s | detached | **31.9 %**  | 1 581 MB | 9     | **14 209**      | 28  |
 
 ## Result 1 — rendering is ~85 % of the sidecar's CPU
 
@@ -55,8 +55,8 @@ The dangerous part is not that it broke. It is **how** it broke:
 
 `rev` advancing, `age_s` at 1 second, a plausible 14 209 aircraft. Every health
 signal we have says green. That is precisely the failure class
-`docs/decisions.md` (2026-07-15) already records — *a tier that can serve a cache
-must publish the age of the DATA, never the age of the response* — reappearing
+`docs/decisions.md` (2026-07-15) already records — _a tier that can serve a cache
+must publish the age of the DATA, never the age of the response_ — reappearing
 in a new place. Our `age_s` here is the age of **our pump**, not of tar1090's
 store, so it cannot see this at all.
 

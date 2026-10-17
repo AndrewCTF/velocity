@@ -2,12 +2,12 @@
 // and FRONT LINES (solid = confirmed, dotted = contested), coloured by faction.
 // Lives inside the Situations panel. Uses the shared draw toolbox + the control store.
 
-import { useEffect, useRef, useState } from 'react';
-import type * as Cesium from 'cesium';
-import { Widget, Btn, SectionLabel, MicroLabel } from '../shell/instruments.js';
-import { toast } from '../shell/toast.js';
-import { getDrawController } from '../globe/draw.js';
-import { flyToPosition } from '../globe/camera.js';
+import { useEffect, useRef, useState } from "react";
+import type * as Cesium from "cesium";
+import { Widget, Btn, SectionLabel, MicroLabel } from "../shell/instruments.js";
+import { toast } from "../shell/toast.js";
+import { getDrawController } from "../globe/draw.js";
+import { flyToPosition } from "../globe/camera.js";
 import {
   useControl,
   saveControl,
@@ -16,11 +16,11 @@ import {
   factionColor,
   type ZoneStatus,
   type LineStatus,
-} from './controlStore.js';
-import { Icon } from '../normal/Icon.js';
+} from "./controlStore.js";
+import { Icon } from "../normal/Icon.js";
 
 const inputCls =
-  'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-hidden focus:border-accent-line';
+  "bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-hidden focus:border-accent-line";
 
 // Faction palette — literal hexes aligned to the dark-theme token values in
 // theme/tokens.css (--accent, --alert, --ok, --warn, --mag, --accent-fg).
@@ -28,9 +28,20 @@ const inputCls =
 // by Cesium (Color.fromCssColorString / hatchMaterial) in globe/ControlLayer.ts,
 // where var() cannot resolve; the globe canvas stays dark in both themes, so
 // the dark values are the right ones.
-const FACTION_PALETTE = ['#6fb1dd', '#ff5a52', '#4ed3a1', '#f5a524', '#e25bef', '#9cc2ff'];
+const FACTION_PALETTE = [
+  "#6fb1dd",
+  "#ff5a52",
+  "#4ed3a1",
+  "#f5a524",
+  "#e25bef",
+  "#9cc2ff",
+];
 
-export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
+export function ControlSection({
+  viewer,
+}: {
+  viewer: Cesium.Viewer | null;
+}): JSX.Element {
   const factions = useControl((s) => s.factions);
   const zones = useControl((s) => s.zones);
   const lines = useControl((s) => s.lines);
@@ -41,11 +52,11 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
   const addFaction = useControl((s) => s.addFaction);
   const clear = useControl((s) => s.clear);
 
-  const [facId, setFacId] = useState<string>(factions[0]?.id ?? 'blue');
-  const [zoneStatus, setZoneStatus] = useState<ZoneStatus>('controlled');
-  const [lineStatus, setLineStatus] = useState<LineStatus>('confirmed');
-  const [label, setLabel] = useState('');
-  const [conditions, setConditions] = useState('');
+  const [facId, setFacId] = useState<string>(factions[0]?.id ?? "blue");
+  const [zoneStatus, setZoneStatus] = useState<ZoneStatus>("controlled");
+  const [lineStatus, setLineStatus] = useState<LineStatus>("confirmed");
+  const [label, setLabel] = useState("");
+  const [conditions, setConditions] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -70,7 +81,7 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
 
   const drawZone = (): void => {
     if (!draw) return;
-    setStatus('click vertices; right-click / Finish to close the area…');
+    setStatus("click vertices; right-click / Finish to close the area…");
     draw.drawPolygon((ring) => {
       addZone({
         factionId: facId,
@@ -80,26 +91,34 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
         ring: ring.map((p) => [p.lon, p.lat]),
       });
       setStatus(null);
-      toast.ok('Area added');
+      toast.ok("Area added");
     });
   };
 
   const drawLine = (): void => {
     if (!draw) return;
-    setStatus('click vertices; right-click / Finish to commit the front line…');
+    setStatus("click vertices; right-click / Finish to commit the front line…");
     draw.drawPolyline((verts) => {
-      addLine({ status: lineStatus, label: lbl(), coords: verts.map((v) => [v.lon, v.lat]) });
+      addLine({
+        status: lineStatus,
+        label: lbl(),
+        coords: verts.map((v) => [v.lon, v.lat]),
+      });
       setStatus(null);
-      toast.ok('Front line added');
+      toast.ok("Front line added");
     });
   };
 
   const doImport = (text: string): void => {
     const r = importGeoJSON(text);
     if (r.zones + r.lines === 0) {
-      toast.warn(`Nothing imported (${r.errors[0] ?? 'no polygons/lines found'})`);
+      toast.warn(
+        `Nothing imported (${r.errors[0] ?? "no polygons/lines found"})`,
+      );
     } else {
-      toast.ok(`Imported ${r.zones} area(s), ${r.lines} line(s)${r.errors.length ? ` · ${r.errors.length} skipped` : ''}`);
+      toast.ok(
+        `Imported ${r.zones} area(s), ${r.lines} line(s)${r.errors.length ? ` · ${r.errors.length} skipped` : ""}`,
+      );
     }
   };
 
@@ -107,15 +126,16 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
     const f = e.target.files?.[0];
     if (!f) return;
     void f.text().then(doImport);
-    e.target.value = '';
+    e.target.value = "";
   };
 
   const save = async (): Promise<void> => {
     setBusy(true);
     const r = await saveControl();
     setBusy(false);
-    if (r.ok) toast.ok('Saved');
-    else if (r.status === 401 || r.status === 403) toast.warn('Sign in to persist (local-only)');
+    if (r.ok) toast.ok("Saved");
+    else if (r.status === 401 || r.status === 403)
+      toast.warn("Sign in to persist (local-only)");
     else toast.error(`Could not save the control layer (HTTP ${r.status}).`);
   };
 
@@ -131,7 +151,10 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
   };
 
   return (
-    <Widget title="Territorial control" count={`${zones.length + lines.length}`}>
+    <Widget
+      title="Territorial control"
+      count={`${zones.length + lines.length}`}
+    >
       {/* faction picker + add */}
       <SectionLabel title="Faction" />
       <div className="flex flex-wrap gap-1 mt-1">
@@ -142,7 +165,9 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
             onClick={() => setFacId(f.id)}
             title={f.name}
             className={`flex items-center gap-1 text-[10px] mono px-1.5 py-1 rounded-sm border ${
-              facId === f.id ? 'border-accent-line bg-accent-dim text-txt-0' : 'border-line text-txt-2 hover:text-txt-0'
+              facId === f.id
+                ? "border-accent-line bg-accent-dim text-txt-0"
+                : "border-line text-txt-2 hover:text-txt-0"
             }`}
           >
             {/* A swatch, not a glyph. As a `■` in the faction's own colour it
@@ -161,9 +186,14 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
         <button
           type="button"
           onClick={() => {
-            const name = window.prompt('New faction name');
+            const name = window.prompt("New faction name");
             if (name?.trim()) {
-              setFacId(addFaction(name.trim(), FACTION_PALETTE[factions.length % FACTION_PALETTE.length]!));
+              setFacId(
+                addFaction(
+                  name.trim(),
+                  FACTION_PALETTE[factions.length % FACTION_PALETTE.length]!,
+                ),
+              );
             }
           }}
           className="text-[10px] mono px-1.5 py-1 rounded-sm border border-line text-txt-3 hover:text-accent"
@@ -174,67 +204,99 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
 
       <label className="flex flex-col gap-0.5 mt-2">
         <MicroLabel>Label (optional)</MicroLabel>
-        <input className={inputCls} placeholder="e.g. SECTOR EAST" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <input
+          className={inputCls}
+          placeholder="e.g. SECTOR EAST"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
       </label>
       <label className="flex flex-col gap-0.5 mt-1.5">
         <MicroLabel>Current conditions (optional)</MicroLabel>
-        <input className={inputCls} placeholder="e.g. under shelling / encircled" value={conditions} onChange={(e) => setConditions(e.target.value)} />
+        <input
+          className={inputCls}
+          placeholder="e.g. under shelling / encircled"
+          value={conditions}
+          onChange={(e) => setConditions(e.target.value)}
+        />
       </label>
 
       {/* area */}
       <div className="mt-2 flex items-center gap-1.5">
         <div className="flex rounded-sm border border-line overflow-hidden">
-          {(['controlled', 'contested'] as ZoneStatus[]).map((s) => (
+          {(["controlled", "contested"] as ZoneStatus[]).map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setZoneStatus(s)}
-              className={`text-[10px] mono px-1.5 py-1 ${zoneStatus === s ? 'bg-accent-dim text-txt-0' : 'text-txt-3 hover:text-txt-1'}`}
+              className={`text-[10px] mono px-1.5 py-1 ${zoneStatus === s ? "bg-accent-dim text-txt-0" : "text-txt-3 hover:text-txt-1"}`}
             >
               {s}
             </button>
           ))}
         </div>
-        <Btn tone="accent" onClick={drawZone} disabled={noDraw}>Draw area</Btn>
+        <Btn tone="accent" onClick={drawZone} disabled={noDraw}>
+          Draw area
+        </Btn>
       </div>
 
       {/* front line */}
       <div className="mt-1.5 flex items-center gap-1.5">
         <div className="flex rounded-sm border border-line overflow-hidden">
-          {(['confirmed', 'contested'] as LineStatus[]).map((s) => (
+          {(["confirmed", "contested"] as LineStatus[]).map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setLineStatus(s)}
-              className={`text-[10px] mono px-1.5 py-1 ${lineStatus === s ? 'bg-accent-dim text-txt-0' : 'text-txt-3 hover:text-txt-1'}`}
+              className={`text-[10px] mono px-1.5 py-1 ${lineStatus === s ? "bg-accent-dim text-txt-0" : "text-txt-3 hover:text-txt-1"}`}
             >
-              {s === 'confirmed' ? 'solid' : 'dotted'}
+              {s === "confirmed" ? "solid" : "dotted"}
             </button>
           ))}
         </div>
-        <Btn tone="accent" onClick={drawLine} disabled={noDraw}>Draw line</Btn>
+        <Btn tone="accent" onClick={drawLine} disabled={noDraw}>
+          Draw line
+        </Btn>
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 mt-1.5">
-        <Btn onClick={() => draw?.finish()} disabled={noDraw}>Finish</Btn>
-        <Btn onClick={() => { draw?.cancel(); setStatus(null); }} disabled={noDraw}>Cancel</Btn>
+        <Btn onClick={() => draw?.finish()} disabled={noDraw}>
+          Finish
+        </Btn>
+        <Btn
+          onClick={() => {
+            draw?.cancel();
+            setStatus(null);
+          }}
+          disabled={noDraw}
+        >
+          Cancel
+        </Btn>
       </div>
 
       {/* import */}
       <div className="mt-2">
-        <MicroLabel>Import GeoJSON (polygons → areas, lines → front lines)</MicroLabel>
+        <MicroLabel>
+          Import GeoJSON (polygons → areas, lines → front lines)
+        </MicroLabel>
         <div className="grid grid-cols-2 gap-1.5 mt-1">
           <Btn onClick={() => fileRef.current?.click()}>From file</Btn>
           <Btn
             onClick={() => {
-              const t = window.prompt('Paste GeoJSON');
+              const t = window.prompt("Paste GeoJSON");
               if (t) doImport(t);
             }}
           >
             Paste
           </Btn>
         </div>
-        <input ref={fileRef} type="file" accept=".json,.geojson,application/json" onChange={onFile} className="hidden" />
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,.geojson,application/json"
+          onChange={onFile}
+          className="hidden"
+        />
       </div>
 
       {noDraw && <MicroLabel>map not ready</MicroLabel>}
@@ -243,28 +305,66 @@ export function ControlSection({ viewer }: { viewer: Cesium.Viewer | null }): JS
       {/* list */}
       <div className="mt-2 max-h-[180px] overflow-auto space-y-0.5">
         {zones.map((z) => (
-          <div key={z.id} className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
-            <span style={{ color: factionColor(factions, z.factionId) }} className="text-[10px]" aria-hidden>▧</span>
-            <button type="button" onClick={() => flyToZone(z.ring)} className="flex-1 text-left text-[10px] text-txt-1 mono truncate">
-              area{z.label ? ` · ${z.label}` : ''}{z.status === 'contested' ? ' · contested' : ''}
+          <div
+            key={z.id}
+            className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group"
+          >
+            <span
+              style={{ color: factionColor(factions, z.factionId) }}
+              className="text-[10px]"
+              aria-hidden
+            >
+              ▧
+            </span>
+            <button
+              type="button"
+              onClick={() => flyToZone(z.ring)}
+              className="flex-1 text-left text-[10px] text-txt-1 mono truncate"
+            >
+              area{z.label ? ` · ${z.label}` : ""}
+              {z.status === "contested" ? " · contested" : ""}
             </button>
-            <button type="button" onClick={() => removeZone(z.id)} aria-label="Delete area" className="text-[11px] text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"><Icon name="x" className="w-3 h-3" /></button>
+            <button
+              type="button"
+              onClick={() => removeZone(z.id)}
+              aria-label="Delete area"
+              className="text-[11px] text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"
+            >
+              <Icon name="x" className="w-3 h-3" />
+            </button>
           </div>
         ))}
         {lines.map((l) => (
-          <div key={l.id} className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
-            <span className="text-[10px] text-txt-2" aria-hidden>{l.status === 'contested' ? '┄' : '──'}</span>
-            <span className="flex-1 text-[10px] text-txt-1 mono truncate">
-              front line{l.label ? ` · ${l.label}` : ''}{l.status === 'contested' ? ' · contested' : ''}
+          <div
+            key={l.id}
+            className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group"
+          >
+            <span className="text-[10px] text-txt-2" aria-hidden>
+              {l.status === "contested" ? "┄" : "──"}
             </span>
-            <button type="button" onClick={() => removeLine(l.id)} aria-label="Delete line" className="text-[11px] text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"><Icon name="x" className="w-3 h-3" /></button>
+            <span className="flex-1 text-[10px] text-txt-1 mono truncate">
+              front line{l.label ? ` · ${l.label}` : ""}
+              {l.status === "contested" ? " · contested" : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => removeLine(l.id)}
+              aria-label="Delete line"
+              className="text-[11px] text-txt-3 hover:text-alert px-1 opacity-0 group-hover:opacity-100"
+            >
+              <Icon name="x" className="w-3 h-3" />
+            </button>
           </div>
         ))}
-        {zones.length + lines.length === 0 && <MicroLabel>nothing drawn yet, draw or import</MicroLabel>}
+        {zones.length + lines.length === 0 && (
+          <MicroLabel>nothing drawn yet, draw or import</MicroLabel>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 mt-2">
-        <Btn tone="accent" onClick={() => void save()} disabled={busy}>Save</Btn>
+        <Btn tone="accent" onClick={() => void save()} disabled={busy}>
+          Save
+        </Btn>
         <Btn onClick={clear}>Clear all</Btn>
       </div>
     </Widget>

@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
-import { useSelection } from '../state/stores.js';
+import * as Cesium from "cesium";
+import { useSelection } from "../state/stores.js";
 
 // Pulsing reticle around the selected entity. Implemented as a billboard
 // whose position is sourced from the selected entity's position at every
@@ -19,10 +19,10 @@ const RETICLE_URI = `data:image/svg+xml;utf8,${encodeURIComponent(RETICLE_SVG)}`
 
 export function installSelectionReticle(viewer: Cesium.Viewer): () => void {
   const reduce =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const ds = new Cesium.CustomDataSource('__reticle');
+  const ds = new Cesium.CustomDataSource("__reticle");
   viewer.dataSources.add(ds);
 
   let currentId: string | null = null;
@@ -47,13 +47,16 @@ export function installSelectionReticle(viewer: Cesium.Viewer): () => void {
       return entityRef.position.getValue(time, result) ?? undefined;
     }, false);
     reticle = ds.entities.add({
-      id: '__reticle__',
+      id: "__reticle__",
       position: positionProp,
       billboard: {
         image: RETICLE_URI,
         scale: scaleProp as unknown as Cesium.Property,
         color: new Cesium.CallbackProperty(
-          () => Cesium.Color.WHITE.withAlpha(pulse.getValue(Cesium.JulianDate.now()) as number),
+          () =>
+            Cesium.Color.WHITE.withAlpha(
+              pulse.getValue(Cesium.JulianDate.now()) as number,
+            ),
           false,
         ) as unknown as Cesium.Property,
         verticalOrigin: Cesium.VerticalOrigin.CENTER,
@@ -82,7 +85,9 @@ export function installSelectionReticle(viewer: Cesium.Viewer): () => void {
 
   // Initial sync + subscribe.
   updateReticle(useSelection.getState().selectedEntityId);
-  const unsub = useSelection.subscribe((s) => updateReticle(s.selectedEntityId));
+  const unsub = useSelection.subscribe((s) =>
+    updateReticle(s.selectedEntityId),
+  );
 
   // Throttled re-paint driven by Cesium's own per-frame tick. We only call
   // requestRender when (a) something is selected, (b) at most ~8 fps for the
@@ -119,10 +124,13 @@ export function installSelectionReticle(viewer: Cesium.Viewer): () => void {
   };
 }
 
-function findEntity(viewer: Cesium.Viewer, id: string): Cesium.Entity | undefined {
+function findEntity(
+  viewer: Cesium.Viewer,
+  id: string,
+): Cesium.Entity | undefined {
   for (let i = 0; i < viewer.dataSources.length; i++) {
     const ds = viewer.dataSources.get(i);
-    if (ds.name === '__reticle') continue;
+    if (ds.name === "__reticle") continue;
     const e = ds.entities.getById(id);
     if (e) return e;
   }

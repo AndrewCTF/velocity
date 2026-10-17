@@ -1,28 +1,28 @@
-import { useEffect, useRef, useState } from 'react';
-import * as Cesium from 'cesium';
-import { useSelection, useAlerts } from '../state/stores.js';
-import { aircraftStyle, vesselStyle } from '../globe/adapters/styles.js';
-import { CONFIDENCE_RULE } from '../globe/adapters/freshness.js';
-import { ArchiveSeriesCard } from './ArchiveSeriesCard.js';
-import { tracks } from '../intel/tracks.js';
+import { useEffect, useRef, useState } from "react";
+import * as Cesium from "cesium";
+import { useSelection, useAlerts } from "../state/stores.js";
+import { aircraftStyle, vesselStyle } from "../globe/adapters/styles.js";
+import { CONFIDENCE_RULE } from "../globe/adapters/freshness.js";
+import { ArchiveSeriesCard } from "./ArchiveSeriesCard.js";
+import { tracks } from "../intel/tracks.js";
 import {
   fetchEnrichment,
   type Enrichment,
   type Airport,
   type AirportEnrichment,
   type PortEnrichment,
-} from '../transport/entity.js';
-import { flyToPosition, followEntity, stopFollow } from '../globe/camera.js';
-import { Sparkline } from './Sparkline.js';
-import { CameraCard } from './CameraCard.js';
-import { CaptureCard } from './CaptureCard.js';
-import type { Alert } from '@osint/shared';
-import { apiFetch } from '../transport/http.js';
-import { Icon, type IconName } from '../normal/Icon.js';
-import { findEntity, readProperties, readPosition } from './read.js';
-import { toast } from '../shell/toast.js';
-import { Flag, Crosshair, BellRing, ShieldCheck } from 'lucide-react';
-import { useEvidence } from '../evidence/evidenceStore.js';
+} from "../transport/entity.js";
+import { flyToPosition, followEntity, stopFollow } from "../globe/camera.js";
+import { Sparkline } from "./Sparkline.js";
+import { CameraCard } from "./CameraCard.js";
+import { CaptureCard } from "./CaptureCard.js";
+import type { Alert } from "@osint/shared";
+import { apiFetch } from "../transport/http.js";
+import { Icon, type IconName } from "../normal/Icon.js";
+import { findEntity, readProperties, readPosition } from "./read.js";
+import { toast } from "../shell/toast.js";
+import { Flag, Crosshair, BellRing, ShieldCheck } from "lucide-react";
+import { useEvidence } from "../evidence/evidenceStore.js";
 import {
   SectionLabel,
   Badge,
@@ -36,28 +36,32 @@ import {
   MicroLabel,
   StatusDot,
   type BadgeTone,
-} from '../shell/instruments.js';
-import { ConnectionsCard } from './ConnectionsCard.js';
-import { AcarsCard } from './AcarsCard.js';
-import { ImageryCard } from './ImageryCard.js';
-import { PatternOfLifeCard } from './PatternOfLifeCard.js';
-import { DossierNarrativeCard } from './DossierNarrativeCard.js';
-import { AiAssessmentCard } from './AiAssessmentCard.js';
-import { VesselClassCard } from './VesselClassCard.js';
-import { AisGapCard } from './AisGapCard.js';
-import { AirportCard } from './AirportCard.js';
-import { PortCard } from './PortCard.js';
-import { BaseCard } from './BaseCard.js';
-import { SituationPanel } from '../situations/SituationPanel.js';
-import { OsintEntityPanel } from '../osint/OsintEntityPanel.js';
-import { useProjection } from '../globe/ProjectionLayer.js';
-import { useFov } from '../globe/FovLayer.js';
-import { useSettings } from '../state/settings.js';
-import { resolveAircraftFamily, aircraftSilhouette, vesselSilhouette } from './silhouettes.js';
-import { useChip } from '../imagery/chipStore.js';
-import { useInvestigation } from '../graph/investigationStore.js';
-import { usePolReplay } from '../state/polReplayStore.js';
-import { safeHttpUrl } from '../shell/safeUrl.js';
+} from "../shell/instruments.js";
+import { ConnectionsCard } from "./ConnectionsCard.js";
+import { AcarsCard } from "./AcarsCard.js";
+import { ImageryCard } from "./ImageryCard.js";
+import { PatternOfLifeCard } from "./PatternOfLifeCard.js";
+import { DossierNarrativeCard } from "./DossierNarrativeCard.js";
+import { AiAssessmentCard } from "./AiAssessmentCard.js";
+import { VesselClassCard } from "./VesselClassCard.js";
+import { AisGapCard } from "./AisGapCard.js";
+import { AirportCard } from "./AirportCard.js";
+import { PortCard } from "./PortCard.js";
+import { BaseCard } from "./BaseCard.js";
+import { SituationPanel } from "../situations/SituationPanel.js";
+import { OsintEntityPanel } from "../osint/OsintEntityPanel.js";
+import { useProjection } from "../globe/ProjectionLayer.js";
+import { useFov } from "../globe/FovLayer.js";
+import { useSettings } from "../state/settings.js";
+import {
+  resolveAircraftFamily,
+  aircraftSilhouette,
+  vesselSilhouette,
+} from "./silhouettes.js";
+import { useChip } from "../imagery/chipStore.js";
+import { useInvestigation } from "../graph/investigationStore.js";
+import { usePolReplay } from "../state/polReplayStore.js";
+import { safeHttpUrl } from "../shell/safeUrl.js";
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -89,7 +93,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   const [snap, setSnap] = useState<PanelSnapshot | null>(null);
   const [enrichment, setEnrichment] = useState<Enrichment | null>(null);
   const [enrichLoading, setEnrichLoading] = useState(false);
-  const [track, setTrack] = useState(tracks.get(id ?? ''));
+  const [track, setTrack] = useState(tracks.get(id ?? ""));
   // Client-side layout pref: whether the AI-assessment card sits at the top of
   // the card stack (seen first) or the bottom. Rendered in exactly one place.
   const aiPosition = useSettings((s) => s.selectionAiPosition);
@@ -97,17 +101,17 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   // (position or observation time) actually CHANGED on our side — that is the
   // honest "Last refresh", distinct from the AIS/ADS-B observation time.
   const lastRefreshRef = useRef<number>(Date.now());
-  const freshKeyRef = useRef<string>('');
+  const freshKeyRef = useRef<string>("");
   // Re-render gate that INCLUDES the live freshness counters (not just position),
   // so "Last seen"/age stays live for a cached contact whose lat/lon is steady.
-  const snapKeyRef = useRef<string>('');
+  const snapKeyRef = useRef<string>("");
 
   // Snapshot the selected entity continuously so values update in place.
   useEffect(() => {
     setSnap(null);
-    setTrack(tracks.get(id ?? ''));
-    freshKeyRef.current = '';
-    snapKeyRef.current = '';
+    setTrack(tracks.get(id ?? ""));
+    freshKeyRef.current = "";
+    snapKeyRef.current = "";
     lastRefreshRef.current = Date.now();
     if (!viewer || !id) return;
     const tick = () => {
@@ -119,11 +123,11 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
       const pos = readPosition(e, viewer);
       const next: PanelSnapshot = { id, properties: props };
       if (e.name) next.name = e.name;
-      if (props['kind']) next.kind = String(props['kind']);
+      if (props["kind"]) next.kind = String(props["kind"]);
       if (pos) next.position = pos;
       // Stamp "Last refresh" ONLY when the position/fix genuinely changed — a
       // re-sent same position must not reset it. (fk = obs time + rounded pos.)
-      const fk = `${String(props['t'] ?? props['seen_at'] ?? '')}|${pos ? `${pos.lat.toFixed(4)},${pos.lon.toFixed(4)}` : ''}`;
+      const fk = `${String(props["t"] ?? props["seen_at"] ?? "")}|${pos ? `${pos.lat.toFixed(4)},${pos.lon.toFixed(4)}` : ""}`;
       if (fk !== freshKeyRef.current) {
         freshKeyRef.current = fk;
         lastRefreshRef.current = Date.now();
@@ -133,7 +137,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
       // lat/lon is steady). Skip only a TRUE no-op resend (identical bag), so a
       // genuinely static contact with no backend update doesn't churn. Excluding
       // the freshness fields here is what froze "Last seen" — keep them in.
-      const snapKey = `${fk}|${String(props['seen_pos_s'] ?? '')}|${String(props['last_contact'] ?? '')}`;
+      const snapKey = `${fk}|${String(props["seen_pos_s"] ?? "")}|${String(props["last_contact"] ?? "")}`;
       if (snapKey === snapKeyRef.current) return;
       snapKeyRef.current = snapKey;
       setSnap(next);
@@ -180,19 +184,24 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   // callsign (when known) so the backend can map it to an airline operator
   // via the built-in ICAO airline prefix table.
   const callsignHint =
-    typeof snap?.properties?.['callsign'] === 'string'
-      ? (snap.properties['callsign'] as string)
+    typeof snap?.properties?.["callsign"] === "string"
+      ? (snap.properties["callsign"] as string)
       : null;
   // Sim entities are notional — there is no backend /api/entity row, so the
   // enrichment fetch would just 404. Detect via the live property bag.
-  const isSim = snap?.properties?.['sim'] === true || (snap?.kind?.startsWith('sim-') ?? false);
+  const isSim =
+    snap?.properties?.["sim"] === true ||
+    (snap?.kind?.startsWith("sim-") ?? false);
   // Fetch once per selected id. The callsign hint is derived from the async
   // snapshot and typically arrives ~1s AFTER selection, so re-running on every
   // hint change would blank the card (setEnrichment(null)) and double-fetch.
   // Instead: fetch on id change (with the hint if it's already available), and
   // refetch ONLY the first time a hint arrives to improve a hint-less fetch —
   // never blanking the card in that case.
-  const enrichStateRef = useRef<{ id: string | null; hadHint: boolean }>({ id: null, hadHint: false });
+  const enrichStateRef = useRef<{ id: string | null; hadHint: boolean }>({
+    id: null,
+    hadHint: false,
+  });
   useEffect(() => {
     if (!id || isSim) {
       setEnrichment(null);
@@ -230,21 +239,27 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
     return (
       <div className="p-4">
         <SectionLabel title="Selection" />
-        <p className="mt-2 text-txt-3 text-[11px]">No entity selected. Click an object on the globe.</p>
+        <p className="mt-2 text-txt-3 text-[11px]">
+          No entity selected. Click an object on the globe.
+        </p>
       </div>
     );
   }
 
   // A Situation is an aggregate case file, not a map entity — delegate to its
   // dedicated tabbed panel (Summary/Intel/Reporting/Properties/Link/Media).
-  if (id.startsWith('situation:')) {
+  if (id.startsWith("situation:")) {
     return <SituationPanel id={id} viewer={viewer ?? null} />;
   }
 
   // Positionless digital-OSINT entities (domain / ip / cert / asn / service /
   // threat / org / email) have no Cesium entity to snapshot — their own panel
   // (keyless enrichment cards + search-around), mirroring the situation branch.
-  if (/^(domain|ip|cert|asn|service|threat|org|email|person|username|url|wallet|tx|file):/.test(id)) {
+  if (
+    /^(domain|ip|cert|asn|service|threat|org|email|person|username|url|wallet|tx|file):/.test(
+      id,
+    )
+  ) {
     return <OsintEntityPanel id={id} />;
   }
 
@@ -254,7 +269,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
   const aiCard = (
     <AiAssessmentCard
       id={id}
-      kind={snap?.kind ?? ''}
+      kind={snap?.kind ?? ""}
       properties={snap?.properties ?? {}}
       {...(snap?.position ? { altM: snap.position.alt } : {})}
     />
@@ -267,7 +282,11 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
     <div className="p-4 ep-stack">
       {isSim && (
         <div className="ep-span">
-          <Caveat level="SIMULATED" note="notional war-game entity, not a real contact" tone="warn" />
+          <Caveat
+            level="SIMULATED"
+            note="notional war-game entity, not a real contact"
+            tone="warn"
+          />
         </div>
       )}
       <div className="ep-span">
@@ -279,22 +298,33 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
         />
       </div>
 
-      {aiPosition === 'top' && <div className="ep-span">{aiCard}</div>}
+      {aiPosition === "top" && <div className="ep-span">{aiCard}</div>}
 
       <ProfileCard enrichment={enrichment} snap={snap} />
 
-      {snap && <DetailsCard snap={snap} lastRefreshMs={lastRefreshRef.current} />}
+      {snap && (
+        <DetailsCard snap={snap} lastRefreshMs={lastRefreshRef.current} />
+      )}
 
       {snap && <FlightCard enrichment={enrichment} snap={snap} />}
 
-      {snap?.kind === 'aircraft' && (
+      {snap?.kind === "aircraft" && (
         <AcarsCard
           kind="aircraft"
-          icao24={typeof snap.properties['icao24'] === 'string' ? (snap.properties['icao24'] as string) : null}
-          callsign={typeof snap.properties['callsign'] === 'string' ? (snap.properties['callsign'] as string) : null}
+          icao24={
+            typeof snap.properties["icao24"] === "string"
+              ? (snap.properties["icao24"] as string)
+              : null
+          }
+          callsign={
+            typeof snap.properties["callsign"] === "string"
+              ? (snap.properties["callsign"] as string)
+              : null
+          }
           registration={
-            enrichment?.kind === 'aircraft'
-              ? ((enrichment as { registration?: string | null }).registration ?? null)
+            enrichment?.kind === "aircraft"
+              ? ((enrichment as { registration?: string | null })
+                  .registration ?? null)
               : null
           }
         />
@@ -305,7 +335,15 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
           <Btn
             tone="accent"
             size="sm"
-            onClick={() => flyToPosition(viewer, snap.position!.lon, snap.position!.lat, 350_000, 1.0)}
+            onClick={() =>
+              flyToPosition(
+                viewer,
+                snap.position!.lon,
+                snap.position!.lat,
+                350_000,
+                1.0,
+              )
+            }
           >
             → Slew
           </Btn>
@@ -319,13 +357,17 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
                 setFollowing(followEntity(viewer, id));
               }
             }}
-            className={following ? 'border-accent-line text-accent' : ''}
+            className={following ? "border-accent-line text-accent" : ""}
           >
-            {following ? '◼ Following' : '⌖ Follow'}
+            {following ? "◼ Following" : "⌖ Follow"}
           </Btn>
           <Btn
             size="sm"
-            onClick={() => navigator.clipboard?.writeText(`${snap.position!.lat.toFixed(5)},${snap.position!.lon.toFixed(5)}`)}
+            onClick={() =>
+              navigator.clipboard?.writeText(
+                `${snap.position!.lat.toFixed(5)},${snap.position!.lon.toFixed(5)}`,
+              )
+            }
           >
             Copy lat,lon
           </Btn>
@@ -344,17 +386,19 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
           >
             ⊞ Load imagery here
           </Btn>
-          {(snap.kind === 'aircraft' || snap.kind === 'satellite') && (
+          {(snap.kind === "aircraft" || snap.kind === "satellite") && (
             <Btn
               size="sm"
               title="Toggle field-of-view footprint + boresight lines (satellite = real geometry, aircraft = notional camera cone)"
-              onClick={() => useFov.getState().setEnabled(!useFov.getState().enabled)}
-              className={fovOn ? 'border-accent-line text-accent' : ''}
+              onClick={() =>
+                useFov.getState().setEnabled(!useFov.getState().enabled)
+              }
+              className={fovOn ? "border-accent-line text-accent" : ""}
             >
               ⨀ FOV
             </Btn>
           )}
-          {(snap.kind === 'vessel' || snap.kind === 'aircraft') && (
+          {(snap.kind === "vessel" || snap.kind === "aircraft") && (
             <Btn
               size="sm"
               title="Draw a +1h/+3h/+6h reachable-area projection from the last fix (decision support, not observed motion)"
@@ -368,16 +412,16 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
                 const num = (...keys: string[]): number => {
                   for (const k of keys) {
                     const v = p[k];
-                    if (typeof v === 'number' && Number.isFinite(v)) return v;
+                    if (typeof v === "number" && Number.isFinite(v)) return v;
                   }
                   return 0;
                 };
                 // Vessels report knots (sog); aircraft report velocity_ms (m/s) →
                 // convert (1 m/s = 1.94384 kn).
-                let speedKn = num('sog', 'speed_kn', 'gs', 'speed');
-                const vms = num('velocity_ms');
+                let speedKn = num("sog", "speed_kn", "gs", "speed");
+                const vms = num("velocity_ms");
                 if (!speedKn && vms) speedKn = vms * 1.94384;
-                const cogRaw = num('cog', 'track_deg', 'track', 'heading');
+                const cogRaw = num("cog", "track_deg", "track", "heading");
                 proj.project({
                   entityId: id,
                   lat: snap.position!.lat,
@@ -415,74 +459,99 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
 
       <ActionsCard id={id} snap={snap} />
 
-      {snap?.kind === 'camera' && typeof snap.properties['cam_id'] === 'string' && (
-        <CameraCard
-          camId={snap.properties['cam_id']}
-          hlsUrl={(snap.properties['hls_url'] as string | null) ?? null}
-          lat={snap.position?.lat}
-          lon={snap.position?.lon}
-          camName={snap.name ?? undefined}
-        />
-      )}
+      {snap?.kind === "camera" &&
+        typeof snap.properties["cam_id"] === "string" && (
+          <CameraCard
+            camId={snap.properties["cam_id"]}
+            hlsUrl={(snap.properties["hls_url"] as string | null) ?? null}
+            lat={snap.position?.lat}
+            lon={snap.position?.lon}
+            camName={snap.name ?? undefined}
+          />
+        )}
 
-      {snap?.kind === 'capture' && <CaptureCard snap={snap} />}
+      {snap?.kind === "capture" && <CaptureCard snap={snap} />}
 
-      <PatternOfLifeCard id={id} kind={snap?.kind ?? ''} viewer={viewer ?? null} />
+      <PatternOfLifeCard
+        id={id}
+        kind={snap?.kind ?? ""}
+        viewer={viewer ?? null}
+      />
 
-      <DossierNarrativeCard id={id} kind={snap?.kind ?? ''} />
+      <DossierNarrativeCard id={id} kind={snap?.kind ?? ""} />
 
-      {snap?.kind === 'vessel' && (
+      {snap?.kind === "vessel" && (
         <VesselClassCard
           lengthM={
-            ((enrichment?.kind === 'vessel' ? (enrichment as { length_m?: number | null }).length_m : null) ??
-              (snap?.properties?.['length_m'] as number | undefined)) ?? null
+            (enrichment?.kind === "vessel"
+              ? (enrichment as { length_m?: number | null }).length_m
+              : null) ??
+            (snap?.properties?.["length_m"] as number | undefined) ??
+            null
           }
           shipType={
-            ((enrichment?.kind === 'vessel' ? (enrichment as { vessel_type?: string | null }).vessel_type : null) ??
-              (snap?.properties?.['shipType'] as string | undefined)) ?? null
+            (enrichment?.kind === "vessel"
+              ? (enrichment as { vessel_type?: string | null }).vessel_type
+              : null) ??
+            (snap?.properties?.["shipType"] as string | undefined) ??
+            null
           }
           sogKn={
-            (typeof snap?.properties?.['sog'] === 'number'
-              ? (snap.properties['sog'] as number)
-              : typeof snap?.properties?.['speed'] === 'number'
-                ? (snap.properties['speed'] as number)
+            (typeof snap?.properties?.["sog"] === "number"
+              ? (snap.properties["sog"] as number)
+              : typeof snap?.properties?.["speed"] === "number"
+                ? (snap.properties["speed"] as number)
                 : undefined) ?? null
           }
         />
       )}
 
-      {snap?.kind === 'vessel' && (
+      {snap?.kind === "vessel" && (
         <AisGapCard
           mmsi={
-            typeof snap.properties?.['mmsi'] === 'string' || typeof snap.properties?.['mmsi'] === 'number'
-              ? String(snap.properties['mmsi'])
+            typeof snap.properties?.["mmsi"] === "string" ||
+            typeof snap.properties?.["mmsi"] === "number"
+              ? String(snap.properties["mmsi"])
               : null
           }
         />
       )}
 
-      {enrichment?.kind === 'airport' && (
+      {enrichment?.kind === "airport" && (
         <AirportCard enrichment={enrichment as AirportEnrichment} />
       )}
 
-      {enrichment?.kind === 'port' && (
+      {enrichment?.kind === "port" && (
         <PortCard enrichment={enrichment as PortEnrichment} />
       )}
 
-      {snap?.kind === 'base' && (
+      {snap?.kind === "base" && (
         <BaseCard
-          name={snap.name ?? (typeof snap.properties['name'] === 'string' ? (snap.properties['name'] as string) : null)}
-          branch={typeof snap.properties['branch'] === 'string' ? (snap.properties['branch'] as string) : null}
+          name={
+            snap.name ??
+            (typeof snap.properties["name"] === "string"
+              ? (snap.properties["name"] as string)
+              : null)
+          }
+          branch={
+            typeof snap.properties["branch"] === "string"
+              ? (snap.properties["branch"] as string)
+              : null
+          }
           lat={snap.position?.lat ?? null}
           lon={snap.position?.lon ?? null}
         />
       )}
 
-      <ImageryCard id={id} kind={snap?.kind ?? ''} />
+      <ImageryCard id={id} kind={snap?.kind ?? ""} />
 
-      <TrackCard kind={snap?.kind ?? ''} points={track} />
+      <TrackCard kind={snap?.kind ?? ""} points={track} />
 
-      <ArchiveSeriesCard id={id} kind={snap?.kind ?? ''} viewer={viewer ?? null} />
+      <ArchiveSeriesCard
+        id={id}
+        kind={snap?.kind ?? ""}
+        viewer={viewer ?? null}
+      />
 
       <ConnectionsCard
         entityId={id}
@@ -491,7 +560,11 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
         {...(snap?.position ? { position: snap.position } : {})}
       />
 
-      <EnrichmentCard kind={snap?.kind ?? ''} enrichment={enrichment} loading={enrichLoading} />
+      <EnrichmentCard
+        kind={snap?.kind ?? ""}
+        enrichment={enrichment}
+        loading={enrichLoading}
+      />
 
       {snap?.properties && Object.keys(snap.properties).length > 0 && (
         <PropertiesCard properties={snap.properties} />
@@ -516,7 +589,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
           : {})}
       />
 
-      {aiPosition === 'bottom' && aiCard}
+      {aiPosition === "bottom" && aiCard}
     </div>
   );
 }
@@ -535,7 +608,7 @@ export function EntityPanel({ viewer }: Props = {}): JSX.Element {
 //
 // add_watch's param model REQUIRES lat/lon/label, so that button only renders when
 // the live snapshot has a position; the other two work off the entity id alone.
-type ActionPhase = 'idle' | 'running' | 'ok' | 'error';
+type ActionPhase = "idle" | "running" | "ok" | "error";
 
 export function ActionsCard({
   id,
@@ -545,7 +618,9 @@ export function ActionsCard({
   snap: PanelSnapshot | null;
 }): JSX.Element {
   // The display label the watch rule is filed under: entity name → kind+id → id.
-  const watchLabel = (snap?.name as string | undefined) || (snap?.kind ? `${snap.kind} ${id}` : id);
+  const watchLabel =
+    (snap?.name as string | undefined) ||
+    (snap?.kind ? `${snap.kind} ${id}` : id);
   const pos = snap?.position;
   // The live Cesium property blob for the selected entity — sent alongside each
   // action so the backend can MINT this entity as a durable ontology object
@@ -564,7 +639,7 @@ export function ActionsCard({
           label="Flag"
           icon={<Flag size={12} strokeWidth={1.75} aria-hidden />}
           action="flag_entity"
-          params={{ target_id: id, note: '', severity: 3 }}
+          params={{ target_id: id, note: "", severity: 3 }}
           promoteProps={promoteProps}
           doneLabel="Flagged"
         />
@@ -572,7 +647,7 @@ export function ActionsCard({
           label="Nominate target"
           icon={<Crosshair size={12} strokeWidth={1.75} aria-hidden />}
           action="nominate_target"
-          params={{ target_id: id, priority: 3, note: '' }}
+          params={{ target_id: id, priority: 3, note: "" }}
           promoteProps={promoteProps}
           doneLabel="Nominated"
         />
@@ -609,15 +684,15 @@ function PreserveEvidenceButton({
   id: string;
   snap: PanelSnapshot | null;
 }): JSX.Element {
-  const [phase, setPhase] = useState<ActionPhase>('idle');
+  const [phase, setPhase] = useState<ActionPhase>("idle");
   const freeze = useEvidence((s) => s.captureFeedFreeze);
 
   useEffect(() => {
-    setPhase('idle');
+    setPhase("idle");
   }, [id]);
 
   const run = async (): Promise<void> => {
-    setPhase('running');
+    setPhase("running");
     const snapshot: Record<string, unknown> = {
       ...(snap?.properties ?? {}),
       name: snap?.name ?? null,
@@ -625,13 +700,13 @@ function PreserveEvidenceButton({
       position: snap?.position ?? null,
       frozen_at: new Date().toISOString(),
     };
-    const obj = await freeze(id, snapshot, 'preserved from globe selection');
+    const obj = await freeze(id, snapshot, "preserved from globe selection");
     if (obj) {
-      setPhase('ok');
-      toast.ok('Preserved as evidence');
+      setPhase("ok");
+      toast.ok("Preserved as evidence");
     } else {
-      setPhase('error');
-      toast.error('Could not preserve.');
+      setPhase("error");
+      toast.error("Could not preserve.");
     }
   };
 
@@ -639,13 +714,17 @@ function PreserveEvidenceButton({
     <Btn
       size="sm"
       tone="accent"
-      disabled={phase === 'running'}
+      disabled={phase === "running"}
       onClick={() => void run()}
       title="Notarize this entity's current live state as hash-verified evidence"
     >
       <span className="inline-flex items-center gap-1">
         <ShieldCheck size={12} strokeWidth={1.75} aria-hidden />
-        {phase === 'ok' ? 'Preserved' : phase === 'running' ? 'Preserving…' : 'Preserve'}
+        {phase === "ok"
+          ? "Preserved"
+          : phase === "running"
+            ? "Preserving…"
+            : "Preserve"}
       </span>
     </Btn>
   );
@@ -653,9 +732,9 @@ function PreserveEvidenceButton({
 
 // action verb → promotion trigger (drives the server-stamped provenance source).
 const PROMOTE_TRIGGER: Record<
-  'flag_entity' | 'nominate_target' | 'add_watch',
-  'flag' | 'nominate' | 'watch'
-> = { flag_entity: 'flag', nominate_target: 'nominate', add_watch: 'watch' };
+  "flag_entity" | "nominate_target" | "add_watch",
+  "flag" | "nominate" | "watch"
+> = { flag_entity: "flag", nominate_target: "nominate", add_watch: "watch" };
 
 // One write-back verb. Owns its own busy/result state so each action reports
 // independently. On 4xx/5xx we read the backend `detail` for a useful message
@@ -670,24 +749,24 @@ function ActionButton({
 }: {
   label: string;
   icon?: JSX.Element;
-  action: 'flag_entity' | 'nominate_target' | 'add_watch';
+  action: "flag_entity" | "nominate_target" | "add_watch";
   params: Record<string, unknown>;
   promoteProps: Record<string, unknown>;
   doneLabel: string;
 }): JSX.Element {
-  const [phase, setPhase] = useState<ActionPhase>('idle');
+  const [phase, setPhase] = useState<ActionPhase>("idle");
   const [msg, setMsg] = useState<string | null>(null);
 
   // Reset the per-button result whenever the target changes (a new entity → a
   // fresh action), keyed on the action's target_id.
-  const targetKey = String(params['target_id'] ?? '');
+  const targetKey = String(params["target_id"] ?? "");
   useEffect(() => {
-    setPhase('idle');
+    setPhase("idle");
     setMsg(null);
   }, [targetKey]);
 
   const run = async (): Promise<void> => {
-    setPhase('running');
+    setPhase("running");
     setMsg(null);
     // Move 1: materialize the entity into the ontology BEFORE the governed
     // action, and AWAIT it (not fire-and-forget). flag_entity's handler does a
@@ -696,9 +775,9 @@ function ActionButton({
     // first means flag_entity's get then reads the merged props and preserves
     // them. Keyless + best-effort: .catch so a promote failure never blocks the
     // action, and going first keeps the mint even if the action then 401s keyless.
-    await apiFetch('/api/ontology/promote', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+    await apiFetch("/api/ontology/promote", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         id: targetKey,
         props: promoteProps,
@@ -707,22 +786,22 @@ function ActionButton({
     }).catch(() => undefined);
     try {
       const r = await apiFetch(`/api/actions/${action}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify(params),
       });
       if (!r.ok) {
         const text = await actionErrorText(r);
-        setPhase('error');
+        setPhase("error");
         setMsg(text);
         toast.error(`${label}: ${text}`);
         return;
       }
-      setPhase('ok');
+      setPhase("ok");
       toast.ok(doneLabel);
     } catch {
-      setPhase('error');
-      setMsg('Network error. Check your connection.');
+      setPhase("error");
+      setMsg("Network error. Check your connection.");
       toast.error(`${label}: network error`);
     }
   };
@@ -731,30 +810,33 @@ function ActionButton({
     <div className="flex flex-col gap-0.5">
       <Btn
         size="sm"
-        disabled={phase === 'running'}
+        disabled={phase === "running"}
         onClick={() => void run()}
         className={`gap-1.5 ${
-          phase === 'ok'
-            ? 'border-ok-line text-ok'
-            : phase === 'error'
-              ? 'border-alert-line text-alert'
-              : ''
+          phase === "ok"
+            ? "border-ok-line text-ok"
+            : phase === "error"
+              ? "border-alert-line text-alert"
+              : ""
         }`}
         {...(msg ? { title: msg } : {})}
       >
-        {phase === 'running' ? (
-          '…'
+        {phase === "running" ? (
+          "…"
         ) : (
           <>
             {icon}
-            {phase === 'ok' ? doneLabel : label}
+            {phase === "ok" ? doneLabel : label}
           </>
         )}
       </Btn>
       {/* Persistent inline error — the toast auto-dismisses after 4s, but a
           failed governed action must stay visible until the operator retries. */}
-      {phase === 'error' && msg && (
-        <span className="mono text-[10px] text-alert leading-tight max-w-[140px] truncate" title={msg}>
+      {phase === "error" && msg && (
+        <span
+          className="mono text-[10px] text-alert leading-tight max-w-[140px] truncate"
+          title={msg}
+        >
           {msg}
         </span>
       )}
@@ -768,7 +850,7 @@ async function actionErrorText(r: Response): Promise<string> {
   try {
     const j = (await r.json()) as { detail?: unknown };
     const d = j.detail;
-    if (typeof d === 'string') return d;
+    if (typeof d === "string") return d;
     if (Array.isArray(d) && d.length > 0) {
       const first = d[0] as { msg?: string };
       if (first?.msg) return first.msg;
@@ -776,8 +858,8 @@ async function actionErrorText(r: Response): Promise<string> {
   } catch {
     /* non-JSON body */
   }
-  if (r.status === 401 || r.status === 403) return 'sign-in required';
-  if (r.status === 503) return 'backend store not configured';
+  if (r.status === 401 || r.status === 403) return "sign-in required";
+  if (r.status === 503) return "backend store not configured";
   return `failed (${r.status})`;
 }
 
@@ -790,7 +872,7 @@ async function actionErrorText(r: Response): Promise<string> {
 // AIS contact — an earned dark-vessel candidate, not merely a missing name
 // field. The AisGapCard below shows real transmission gaps from the dossier.
 function isDark(snap: PanelSnapshot | null): boolean {
-  return snap?.properties?.['darkCandidate'] === true;
+  return snap?.properties?.["darkCandidate"] === true;
 }
 
 // Category icons come from the shared registry (normal/Icon.tsx, lucide-backed)
@@ -801,33 +883,33 @@ function isDark(snap: PanelSnapshot | null): boolean {
 // two hand-drawn silhouettes the registry keeps because lucide has no
 // equivalent.
 const AIRCRAFT_ICON: Record<string, IconName> = {
-  airliner: 'plane',
-  private: 'jet',
-  helicopter: 'heli',
-  glider: 'plane',
-  military: 'shield',
-  emergency: 'warning',
+  airliner: "plane",
+  private: "jet",
+  helicopter: "heli",
+  glider: "plane",
+  military: "shield",
+  emergency: "warning",
 };
 const VESSEL_ICON: Record<string, IconName> = {
-  cargo: 'ship',
-  tanker: 'ship',
-  fishing: 'anchor',
-  passenger: 'ship',
-  military: 'shield',
-  sailing: 'ship',
-  pleasure: 'ship',
-  tug: 'ship',
-  sar: 'crosshair',
-  generic: 'ship',
+  cargo: "ship",
+  tanker: "ship",
+  fishing: "anchor",
+  passenger: "ship",
+  military: "shield",
+  sailing: "ship",
+  pleasure: "ship",
+  tug: "ship",
+  sar: "crosshair",
+  generic: "ship",
 };
 const OTHER_ICON: Record<string, IconName> = {
-  quake: 'quake',
-  camera: 'image',
-  fire: 'fire',
-  airport: 'plane',
-  port: 'anchor',
-  base: 'shield',
-  satellite: 'satellite',
+  quake: "quake",
+  camera: "image",
+  fire: "fire",
+  airport: "plane",
+  port: "anchor",
+  base: "shield",
+  satellite: "satellite",
 };
 
 interface Category {
@@ -838,52 +920,58 @@ interface Category {
 }
 function categoryOf(snap: PanelSnapshot | null): Category {
   const p = snap?.properties ?? {};
-  if (isDark(snap)) return { icon: 'warning', color: 'var(--alert)', label: 'dark candidate', tone: 'alert' };
-  if (snap?.kind === 'aircraft') {
+  if (isDark(snap))
+    return {
+      icon: "warning",
+      color: "var(--alert)",
+      label: "dark candidate",
+      tone: "alert",
+    };
+  if (snap?.kind === "aircraft") {
     const s = aircraftStyle(p);
     return {
-      icon: AIRCRAFT_ICON[s.kind] ?? 'plane',
+      icon: AIRCRAFT_ICON[s.kind] ?? "plane",
       color: s.color.toCssHexString(),
       label: s.kind,
-      tone: s.emergency ? 'alert' : 'accent',
+      tone: s.emergency ? "alert" : "accent",
     };
   }
-  if (snap?.kind === 'vessel') {
+  if (snap?.kind === "vessel") {
     const s = vesselStyle(p);
     return {
-      icon: VESSEL_ICON[s.kind] ?? 'ship',
+      icon: VESSEL_ICON[s.kind] ?? "ship",
       color: s.color.toCssHexString(),
       label: s.kind,
-      tone: s.dark ? 'alert' : 'ok',
+      tone: s.dark ? "alert" : "ok",
     };
   }
   return {
-    icon: OTHER_ICON[snap?.kind ?? ''] ?? 'hexagon',
-    color: 'var(--txt-1)',
-    label: snap?.kind ?? 'object',
+    icon: OTHER_ICON[snap?.kind ?? ""] ?? "hexagon",
+    color: "var(--txt-1)",
+    label: snap?.kind ?? "object",
     tone: kindBadgeTone(snap?.kind),
   };
 }
 function kindBadgeTone(kind: string | undefined): BadgeTone {
   switch (kind) {
-    case 'aircraft':
-      return 'accent';
-    case 'vessel':
-      return 'ok';
-    case 'quake':
-      return 'warn';
-    case 'camera':
-      return 'mag';
-    case 'airport':
-      return 'accent';
-    case 'port':
-      return 'ok';
-    case 'base':
-      return 'warn';
-    case 'satellite':
-      return 'mag';
+    case "aircraft":
+      return "accent";
+    case "vessel":
+      return "ok";
+    case "quake":
+      return "warn";
+    case "camera":
+      return "mag";
+    case "airport":
+      return "accent";
+    case "port":
+      return "ok";
+    case "base":
+      return "warn";
+    case "satellite":
+      return "mag";
     default:
-      return 'neutral';
+      return "neutral";
   }
 }
 
@@ -902,36 +990,41 @@ function Header({
 }): JSX.Element {
   const now = useNowTick();
   const display =
-    (enrichment?.kind === 'aircraft' && (enrichment as { registration?: string }).registration) ||
-    (enrichment?.kind === 'vessel' && (enrichment as { name?: string }).name) ||
+    (enrichment?.kind === "aircraft" &&
+      (enrichment as { registration?: string }).registration) ||
+    (enrichment?.kind === "vessel" && (enrichment as { name?: string }).name) ||
     snap?.name ||
     id;
   // ID line built from the REAL properties we already read: prefer a
   // domain identifier (MMSI / ICAO24), then flag.
   const p = snap?.properties ?? {};
   const idParts: string[] = [];
-  if (typeof p['mmsi'] === 'string' || typeof p['mmsi'] === 'number') idParts.push(`MMSI ${p['mmsi']}`);
-  if (typeof p['icao24'] === 'string') idParts.push((p['icao24'] as string).toUpperCase());
+  if (typeof p["mmsi"] === "string" || typeof p["mmsi"] === "number")
+    idParts.push(`MMSI ${p["mmsi"]}`);
+  if (typeof p["icao24"] === "string")
+    idParts.push((p["icao24"] as string).toUpperCase());
   const flag =
-    (enrichment?.kind === 'vessel' && (enrichment as { flag?: string; flag_country?: string }).flag) ||
-    (enrichment?.kind === 'vessel' && (enrichment as { flag_country?: string }).flag_country) ||
-    (typeof p['flag'] === 'string' ? (p['flag'] as string) : null);
+    (enrichment?.kind === "vessel" &&
+      (enrichment as { flag?: string; flag_country?: string }).flag) ||
+    (enrichment?.kind === "vessel" &&
+      (enrichment as { flag_country?: string }).flag_country) ||
+    (typeof p["flag"] === "string" ? (p["flag"] as string) : null);
   if (flag) idParts.push(String(flag));
   if (idParts.length === 0) idParts.push(id);
 
   const cat = categoryOf(snap);
-  const moving = snap?.kind === 'vessel' || snap?.kind === 'aircraft';
+  const moving = snap?.kind === "vessel" || snap?.kind === "aircraft";
   const seenMs = lastSeenMs(p);
   const seenAge = seenMs != null ? now - seenMs : null;
   const refreshAge = Math.max(0, now - lastRefreshMs);
   const operator =
-    (enrichment?.kind === 'aircraft' &&
+    (enrichment?.kind === "aircraft" &&
       [
         (enrichment as { operator?: string }).operator,
         (enrichment as { type?: string }).type,
       ]
         .filter(Boolean)
-        .join(' · ')) ||
+        .join(" · ")) ||
     null;
 
   return (
@@ -940,8 +1033,11 @@ function Header({
         <Icon name={cat.icon} className="w-5 h-5" />
       </IconTile>
       <div className="min-w-0 flex-1">
-        <div className="mono text-[10px] tracking-[0.03em] text-txt-2 truncate" title={idParts.join(' · ')}>
-          {idParts.join(' · ')}
+        <div
+          className="mono text-[10px] tracking-[0.03em] text-txt-2 truncate"
+          title={idParts.join(" · ")}
+        >
+          {idParts.join(" · ")}
         </div>
         <h2
           className="text-[18px] font-semibold text-txt-0 leading-tight tracking-[-0.01em] truncate mt-1"
@@ -950,9 +1046,17 @@ function Header({
           {display}
         </h2>
         <div className="flex flex-wrap items-center gap-2 mt-2.5">
-          {snap?.kind && <Badge tone={kindBadgeTone(snap.kind)}>{snap.kind}</Badge>}
-          {cat.label && cat.label !== snap?.kind && <Badge tone={cat.tone}>{cat.label}</Badge>}
-          {operator && <span className="mono text-[10.5px] text-txt-2 truncate">{operator}</span>}
+          {snap?.kind && (
+            <Badge tone={kindBadgeTone(snap.kind)}>{snap.kind}</Badge>
+          )}
+          {cat.label && cat.label !== snap?.kind && (
+            <Badge tone={cat.tone}>{cat.label}</Badge>
+          )}
+          {operator && (
+            <span className="mono text-[10.5px] text-txt-2 truncate">
+              {operator}
+            </span>
+          )}
         </div>
         {moving && (
           <div className="flex items-center gap-2 mt-2 mono text-[10px] text-txt-2 tabular-nums">
@@ -983,69 +1087,114 @@ function DetailsCard({
   const p = snap.properties;
   const num = (k: string): number | null => {
     const v = p[k];
-    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
   };
   const str = (...keys: string[]): string | null => {
     for (const k of keys) {
       const v = p[k];
-      if (typeof v === 'string' && v.trim() !== '') return v;
-      if (typeof v === 'number') return String(v);
+      if (typeof v === "string" && v.trim() !== "") return v;
+      if (typeof v === "number") return String(v);
     }
     return null;
   };
-  const isVessel = snap.kind === 'vessel';
-  const isAircraft = snap.kind === 'aircraft';
+  const isVessel = snap.kind === "vessel";
+  const isAircraft = snap.kind === "aircraft";
 
   // ── Identity ──
   const idRows: JSX.Element[] = [];
   if (isVessel) {
     const code = parseShipType(p);
     const typeLabel = shipTypeLabel(code);
-    if (typeLabel) idRows.push(<KVRow key="vt" k="Ship type" v={code != null ? `${typeLabel} · ${code}` : typeLabel} />);
-    const mmsi = str('mmsi');
+    if (typeLabel)
+      idRows.push(
+        <KVRow
+          key="vt"
+          k="Ship type"
+          v={code != null ? `${typeLabel} · ${code}` : typeLabel}
+        />,
+      );
+    const mmsi = str("mmsi");
     if (mmsi) idRows.push(<KVRow key="mmsi" k="MMSI" v={mmsi} />);
-    const imo = str('imo');
+    const imo = str("imo");
     if (imo) idRows.push(<KVRow key="imo" k="IMO" v={imo} />);
-    const cs = str('callSign', 'callsign');
+    const cs = str("callSign", "callsign");
     if (cs) idRows.push(<KVRow key="cs" k="Call sign" v={cs} />);
   } else if (isAircraft) {
-    const icao = str('icao24');
+    const icao = str("icao24");
     if (icao) idRows.push(<KVRow key="ic" k="ICAO24" v={icao.toUpperCase()} />);
-    const cs = str('callsign');
+    const cs = str("callsign");
     if (cs) idRows.push(<KVRow key="cs" k="Callsign" v={cs} />);
-    const sq = str('squawk');
-    if (sq) idRows.push(<KVRow key="sq" k="Squawk" v={sq} warn={['7500', '7600', '7700'].includes(sq)} />);
-    const cat = str('category');
+    const sq = str("squawk");
+    if (sq)
+      idRows.push(
+        <KVRow
+          key="sq"
+          k="Squawk"
+          v={sq}
+          warn={["7500", "7600", "7700"].includes(sq)}
+        />,
+      );
+    const cat = str("category");
     if (cat) idRows.push(<KVRow key="cat" k="ADS-B cat" v={cat} />);
   }
-  const src = str('source');
+  const src = str("source");
   if (src) idRows.push(<KVRow key="src" k="Source" v={src} />);
 
   // ── Kinematics ──
   const kRows: JSX.Element[] = [];
   if (isVessel) {
-    const sog = num('sog');
-    if (sog != null) kRows.push(<KVRow key="sog" k="SOG" v={`${sog.toFixed(1)} kn`} />);
-    const cog = num('cog');
-    if (cog != null) kRows.push(<KVRow key="cog" k="COG" v={`${cog.toFixed(0)}°`} />);
-    const hdg = num('heading');
-    if (hdg != null && hdg !== cog) kRows.push(<KVRow key="hdg" k="Heading" v={`${hdg.toFixed(0)}°`} />);
-    if (p['parked'] === true) kRows.push(<KVRow key="nav" k="Status" v="moored / anchored" />);
-    else if (sog != null && sog >= 0.5) kRows.push(<KVRow key="nav" k="Status" v="underway" />);
+    const sog = num("sog");
+    if (sog != null)
+      kRows.push(<KVRow key="sog" k="SOG" v={`${sog.toFixed(1)} kn`} />);
+    const cog = num("cog");
+    if (cog != null)
+      kRows.push(<KVRow key="cog" k="COG" v={`${cog.toFixed(0)}°`} />);
+    const hdg = num("heading");
+    if (hdg != null && hdg !== cog)
+      kRows.push(<KVRow key="hdg" k="Heading" v={`${hdg.toFixed(0)}°`} />);
+    if (p["parked"] === true)
+      kRows.push(<KVRow key="nav" k="Status" v="moored / anchored" />);
+    else if (sog != null && sog >= 0.5)
+      kRows.push(<KVRow key="nav" k="Status" v="underway" />);
   } else if (isAircraft) {
-    const ms = num('velocity_ms') ?? num('velocity') ?? num('gs');
-    if (ms != null) kRows.push(<KVRow key="spd" k="Speed" v={`${ms.toFixed(0)} m/s · ${(ms * 1.94384).toFixed(0)} kn`} />);
-    const trk = num('track_deg') ?? num('heading');
-    if (trk != null) kRows.push(<KVRow key="trk" k="Track" v={`${trk.toFixed(0)}°`} />);
-    const vs = num('baro_rate') ?? num('geom_rate') ?? num('vert_rate');
-    if (vs != null && vs !== 0) kRows.push(<KVRow key="vs" k="V/S" v={`${vs > 0 ? '↑' : '↓'} ${Math.abs(vs).toFixed(0)} ft/min`} />);
+    const ms = num("velocity_ms") ?? num("velocity") ?? num("gs");
+    if (ms != null)
+      kRows.push(
+        <KVRow
+          key="spd"
+          k="Speed"
+          v={`${ms.toFixed(0)} m/s · ${(ms * 1.94384).toFixed(0)} kn`}
+        />,
+      );
+    const trk = num("track_deg") ?? num("heading");
+    if (trk != null)
+      kRows.push(<KVRow key="trk" k="Track" v={`${trk.toFixed(0)}°`} />);
+    const vs = num("baro_rate") ?? num("geom_rate") ?? num("vert_rate");
+    if (vs != null && vs !== 0)
+      kRows.push(
+        <KVRow
+          key="vs"
+          k="V/S"
+          v={`${vs > 0 ? "↑" : "↓"} ${Math.abs(vs).toFixed(0)} ft/min`}
+        />,
+      );
   }
   if (snap.position) {
-    kRows.push(<KVRow key="lat" k="Lat" v={`${snap.position.lat.toFixed(5)}°`} />);
-    kRows.push(<KVRow key="lon" k="Lon" v={`${snap.position.lon.toFixed(5)}°`} />);
+    kRows.push(
+      <KVRow key="lat" k="Lat" v={`${snap.position.lat.toFixed(5)}°`} />,
+    );
+    kRows.push(
+      <KVRow key="lon" k="Lon" v={`${snap.position.lon.toFixed(5)}°`} />,
+    );
     if (isAircraft && Number.isFinite(snap.position.alt)) {
       const m = snap.position.alt;
-      kRows.push(<KVRow key="alt" k="Alt" v={`${Math.round(m).toLocaleString()} m · ${Math.round(m * 3.28084).toLocaleString()} ft`} />);
+      kRows.push(
+        <KVRow
+          key="alt"
+          k="Alt"
+          v={`${Math.round(m).toLocaleString()} m · ${Math.round(m * 3.28084).toLocaleString()} ft`}
+        />,
+      );
     }
   }
 
@@ -1054,37 +1203,52 @@ function DetailsCard({
   if (isVessel || isAircraft) {
     const seenMs = lastSeenMs(p);
     const refreshAge = Math.max(0, now - lastRefreshMs);
-    fRows.push(<KVRow key="rf" k="Last refresh" v={relAge(refreshAge)} warn={refreshAge >= 120_000} />);
+    fRows.push(
+      <KVRow
+        key="rf"
+        k="Last refresh"
+        v={relAge(refreshAge)}
+        warn={refreshAge >= 120_000}
+      />,
+    );
     if (seenMs != null) {
       const seenAge = now - seenMs;
-      fRows.push(<KVRow key="ls" k="Last seen" v={`${relAge(seenAge)} ago`} warn={seenAge >= 120_000} />);
+      fRows.push(
+        <KVRow
+          key="ls"
+          k="Last seen"
+          v={`${relAge(seenAge)} ago`}
+          warn={seenAge >= 120_000}
+        />,
+      );
     }
     // Corroboration. The backend records which independent tiers reported this
     // contact this cycle; one observer and four observers are very different
     // claims and the panel used to present them identically. `title` carries the
     // confidence rule itself, because a verdict whose rule is hidden reads as no
     // verdict at all (docs/research-last30days-2026-07-29.md §3).
-    const sources = Array.isArray(p['sources'])
-      ? (p['sources'] as unknown[]).map(String).filter(Boolean)
+    const sources = Array.isArray(p["sources"])
+      ? (p["sources"] as unknown[]).map(String).filter(Boolean)
       : null;
     if (sources && sources.length > 0) {
       fRows.push(
         <KVRow
           key="src"
           k="Seen by"
-          v={`${sources.length} ${sources.length === 1 ? 'source' : 'sources'} · ${sources.join(', ')}`}
+          v={`${sources.length} ${sources.length === 1 ? "source" : "sources"} · ${sources.join(", ")}`}
           warn={sources.length === 1}
         />,
       );
     }
-    const confidence = typeof p['confidence'] === 'string' ? p['confidence'] : null;
+    const confidence =
+      typeof p["confidence"] === "string" ? p["confidence"] : null;
     if (confidence) {
       fRows.push(
         <KVRow
           key="conf"
           k="Confidence"
           v={confidence}
-          warn={confidence === 'low'}
+          warn={confidence === "low"}
           title={CONFIDENCE_RULE}
         />,
       );
@@ -1113,12 +1277,22 @@ function DetailsCard({
 }
 
 // Labelled KV sub-group inside a Widget — the Gotham "stacked facts" grouping.
-function Group({ icon, title, rows }: { icon: string; title: string; rows: JSX.Element[] }): JSX.Element | null {
+function Group({
+  icon,
+  title,
+  rows,
+}: {
+  icon: string;
+  title: string;
+  rows: JSX.Element[];
+}): JSX.Element | null {
   if (rows.length === 0) return null;
   return (
     <div>
       <MicroLabel className="flex items-center gap-1.5">
-        <span aria-hidden className="text-txt-2">{icon}</span>
+        <span aria-hidden className="text-txt-2">
+          {icon}
+        </span>
         {title}
       </MicroLabel>
       <KV className="mt-1">{rows}</KV>
@@ -1131,15 +1305,15 @@ function Group({ icon, title, rows }: { icon: string; title: string; rows: JSX.E
 // `seen_at` with a `seen_pos_s` position-age offset. Normalise both to epoch ms.
 export function lastSeenMs(p: Record<string, unknown>): number | null {
   const norm = (v: number): number => (v > 1e12 ? v : v * 1000); // sec → ms
-  const t = p['t'];
-  if (typeof t === 'number' && Number.isFinite(t)) return norm(t);
-  const seenAt = p['seen_at'];
-  if (typeof seenAt === 'number' && Number.isFinite(seenAt)) {
-    const seenPos = p['seen_pos_s'];
-    return norm(seenAt - (typeof seenPos === 'number' ? seenPos : 0));
+  const t = p["t"];
+  if (typeof t === "number" && Number.isFinite(t)) return norm(t);
+  const seenAt = p["seen_at"];
+  if (typeof seenAt === "number" && Number.isFinite(seenAt)) {
+    const seenPos = p["seen_pos_s"];
+    return norm(seenAt - (typeof seenPos === "number" ? seenPos : 0));
   }
-  const ls = p['last_seen'];
-  if (typeof ls === 'string') {
+  const ls = p["last_seen"];
+  if (typeof ls === "string") {
     const d = Date.parse(ls);
     return Number.isNaN(d) ? null : d;
   }
@@ -1150,24 +1324,24 @@ function relAge(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${String(s % 60).padStart(2, '0')}s`;
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
   const h = Math.floor(m / 60);
-  return `${h}h ${String(m % 60).padStart(2, '0')}m`;
+  return `${h}h ${String(m % 60).padStart(2, "0")}m`;
 }
 
 // Status-dot tone by receipt age: <15s live, <2m amber, else stale red.
 function freshnessTone(ageMs: number): string {
-  if (ageMs < 15_000) return 'green';
-  if (ageMs < 120_000) return 'amber';
-  return 'red';
+  if (ageMs < 15_000) return "green";
+  if (ageMs < 120_000) return "amber";
+  return "red";
 }
 
 // ITU-R M.1371 ship-type code (0-99) → human label. Same buckets as the map's
 // classifyShipType, expanded for the panel.
 export function parseShipType(p: Record<string, unknown>): number | null {
-  const raw = p['shipType'] ?? p['ship_type'] ?? p['shiptype'];
-  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
-  if (typeof raw === 'string' && raw.trim() !== '') {
+  const raw = p["shipType"] ?? p["ship_type"] ?? p["shiptype"];
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
     const n = Number.parseInt(raw, 10);
     return Number.isFinite(n) ? n : null;
   }
@@ -1175,43 +1349,50 @@ export function parseShipType(p: Record<string, unknown>): number | null {
 }
 export function shipTypeLabel(code: number | null): string | null {
   if (code == null || code <= 0) return null;
-  if (code === 30) return 'Fishing';
-  if (code === 31 || code === 32) return 'Towing';
-  if (code === 33) return 'Dredging';
-  if (code === 34) return 'Diving ops';
-  if (code === 35) return 'Military ops';
-  if (code === 36) return 'Sailing';
-  if (code === 37) return 'Pleasure craft';
-  if (code >= 40 && code <= 49) return 'High-speed craft';
-  if (code === 50) return 'Pilot vessel';
-  if (code === 51) return 'SAR';
-  if (code === 52) return 'Tug';
-  if (code === 53) return 'Port tender';
-  if (code === 55) return 'Law enforcement';
-  if (code >= 60 && code <= 69) return 'Passenger';
-  if (code >= 70 && code <= 79) return 'Cargo';
-  if (code >= 80 && code <= 89) return 'Tanker';
-  if (code >= 90 && code <= 99) return 'Other';
+  if (code === 30) return "Fishing";
+  if (code === 31 || code === 32) return "Towing";
+  if (code === 33) return "Dredging";
+  if (code === 34) return "Diving ops";
+  if (code === 35) return "Military ops";
+  if (code === 36) return "Sailing";
+  if (code === 37) return "Pleasure craft";
+  if (code >= 40 && code <= 49) return "High-speed craft";
+  if (code === 50) return "Pilot vessel";
+  if (code === 51) return "SAR";
+  if (code === 52) return "Tug";
+  if (code === 53) return "Port tender";
+  if (code === 55) return "Law enforcement";
+  if (code >= 60 && code <= 69) return "Passenger";
+  if (code >= 70 && code <= 79) return "Cargo";
+  if (code >= 80 && code <= 89) return "Tanker";
+  if (code >= 90 && code <= 99) return "Other";
   return `Type ${code}`;
 }
 
 // Great-circle distance in km (haversine) — for distance-to-go to destination.
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function haversineKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
 function airportLabel(a: Airport | null): string {
-  if (!a) return '—';
-  const code = a.iata || a.icao || '';
-  const place = a.municipality || a.name || '';
-  const label = [code, place].filter(Boolean).join(' · ');
-  return label || a.name || '—';
+  if (!a) return "—";
+  const code = a.iata || a.icao || "";
+  const place = a.municipality || a.name || "";
+  const label = [code, place].filter(Boolean).join(" · ");
+  return label || a.name || "—";
 }
 
 // Live flight summary for the selected aircraft: route (departure → destination
@@ -1226,7 +1407,7 @@ export function FlightCard({
   enrichment: Enrichment | null;
   snap: PanelSnapshot;
 }): JSX.Element | null {
-  if (!enrichment || enrichment.kind !== 'aircraft') return null;
+  if (!enrichment || enrichment.kind !== "aircraft") return null;
   const e = enrichment as {
     origin?: Airport | null;
     destination?: Airport | null;
@@ -1238,8 +1419,8 @@ export function FlightCard({
 
   const pos = snap.position;
   const gs =
-    typeof snap.properties['velocity_ms'] === 'number'
-      ? (snap.properties['velocity_ms'] as number)
+    typeof snap.properties["velocity_ms"] === "number"
+      ? (snap.properties["velocity_ms"] as number)
       : null;
 
   let distKm: number | null = null;
@@ -1251,7 +1432,9 @@ export function FlightCard({
   }
   const nowZ = `${new Date().toISOString().slice(11, 16)}Z`;
   const etaZ =
-    goMin != null ? `${new Date(Date.now() + goMin * 60_000).toISOString().slice(11, 16)}Z` : null;
+    goMin != null
+      ? `${new Date(Date.now() + goMin * 60_000).toISOString().slice(11, 16)}Z`
+      : null;
   const goLabel =
     goMin != null
       ? goMin >= 60
@@ -1262,15 +1445,24 @@ export function FlightCard({
   const rows: JSX.Element[] = [];
   rows.push(<KVRow key="from" k="Departed" v={airportLabel(origin)} />);
   rows.push(<KVRow key="to" k="Arriving" v={airportLabel(dest)} />);
-  if (e.route_airline) rows.push(<KVRow key="al" k="Airline" v={e.route_airline} />);
+  if (e.route_airline)
+    rows.push(<KVRow key="al" k="Airline" v={e.route_airline} />);
   if (distKm != null)
-    rows.push(<KVRow key="dist" k="Dist to go" v={`${Math.round(distKm).toLocaleString()} km`} />);
+    rows.push(
+      <KVRow
+        key="dist"
+        k="Dist to go"
+        v={`${Math.round(distKm).toLocaleString()} km`}
+      />,
+    );
   if (etaZ) rows.push(<KVRow key="eta" k="ETA" v={etaZ} />);
   if (goLabel) rows.push(<KVRow key="go" k="Time to run" v={goLabel} />);
   rows.push(<KVRow key="now" k="Time now" v={nowZ} />);
 
   const head =
-    origin?.iata || dest?.iata ? `${origin?.iata ?? '???'} → ${dest?.iata ?? '???'}` : undefined;
+    origin?.iata || dest?.iata
+      ? `${origin?.iata ?? "???"} → ${dest?.iata ?? "???"}`
+      : undefined;
   return (
     <section>
       <SectionLabel title="Flight" {...(head ? { count: head } : {})} />
@@ -1284,15 +1476,28 @@ export function TrackCard({
   points,
 }: {
   kind: string;
-  points: readonly { t: number; lon: number; lat: number; alt: number; sog?: number; track?: number }[];
+  points: readonly {
+    t: number;
+    lon: number;
+    lat: number;
+    alt: number;
+    sog?: number;
+    track?: number;
+  }[];
 }): JSX.Element {
   return (
     <section>
       <SectionLabel title="Track" count={`${points.length} fixes`} />
       <div className="mt-1.5 space-y-1.5">
-        {kind === 'aircraft' && <Sparkline points={points} field="alt" label="alt" unit="m" />}
-        {(kind === 'aircraft' || kind === 'vessel') && (
-          <Sparkline points={points} field="sog" label={kind === 'aircraft' ? 'velocity m/s' : 'sog kn'} />
+        {kind === "aircraft" && (
+          <Sparkline points={points} field="alt" label="alt" unit="m" />
+        )}
+        {(kind === "aircraft" || kind === "vessel") && (
+          <Sparkline
+            points={points}
+            field="sog"
+            label={kind === "aircraft" ? "velocity m/s" : "sog kn"}
+          />
         )}
       </div>
     </section>
@@ -1312,36 +1517,46 @@ export function ProfileCard({
 }): JSX.Element | null {
   const kind = snap?.kind;
   let silhouette: string | null = null;
-  let famLabel = '';
+  let famLabel = "";
 
-  if (kind === 'aircraft') {
-    const e = enrichment?.kind === 'aircraft' ? (enrichment as { icao_type?: string | null; type?: string | null }) : null;
+  if (kind === "aircraft") {
+    const e =
+      enrichment?.kind === "aircraft"
+        ? (enrichment as { icao_type?: string | null; type?: string | null })
+        : null;
     const typeCode =
       e?.icao_type ??
       e?.type ??
-      (typeof snap?.properties?.['type'] === 'string' ? (snap.properties['type'] as string) : null);
-    const catCode = typeof snap?.properties?.['category'] === 'string' ? (snap.properties['category'] as string) : null;
+      (typeof snap?.properties?.["type"] === "string"
+        ? (snap.properties["type"] as string)
+        : null);
+    const catCode =
+      typeof snap?.properties?.["category"] === "string"
+        ? (snap.properties["category"] as string)
+        : null;
     const fam = resolveAircraftFamily(typeCode, catCode);
     if (fam) {
       silhouette = aircraftSilhouette(fam);
       famLabel = (typeCode ?? fam).toUpperCase();
     }
-  } else if (kind === 'vessel') {
+  } else if (kind === "vessel") {
     silhouette = vesselSilhouette();
-    const e = enrichment?.kind === 'vessel' ? (enrichment as { vessel_type?: string | null }) : null;
-    famLabel = (e?.vessel_type ?? 'vessel').toUpperCase();
+    const e =
+      enrichment?.kind === "vessel"
+        ? (enrichment as { vessel_type?: string | null })
+        : null;
+    famLabel = (e?.vessel_type ?? "vessel").toUpperCase();
   }
 
-  const e2 =
-    enrichment as {
-      photo_thumb_url?: string | null;
-      photo_full_url?: string | null;
-      photo_photographer?: string | null;
-      photo_link?: string | null;
-      photo_license?: string | null;
-      photo_credit?: string | null;
-      description?: string | null;
-    } | null;
+  const e2 = enrichment as {
+    photo_thumb_url?: string | null;
+    photo_full_url?: string | null;
+    photo_photographer?: string | null;
+    photo_link?: string | null;
+    photo_license?: string | null;
+    photo_credit?: string | null;
+    description?: string | null;
+  } | null;
   const photo = e2?.photo_full_url ?? e2?.photo_thumb_url ?? null;
   const desc = e2?.description ?? null;
   const credit = e2?.photo_photographer ?? e2?.photo_credit ?? null;
@@ -1353,12 +1568,19 @@ export function ProfileCard({
         <div className="flex items-center gap-2.5 mb-2">
           <img src={silhouette} alt="" className="h-9 w-auto opacity-90" />
           {famLabel && (
-            <span className="mono text-[10px] text-txt-2 uppercase tracking-[0.5px] truncate">{famLabel}</span>
+            <span className="mono text-[10px] text-txt-2 uppercase tracking-[0.5px] truncate">
+              {famLabel}
+            </span>
           )}
         </div>
       )}
       {photo && (
-        <a href={safeHttpUrl(e2?.photo_link ?? photo)} target="_blank" rel="noreferrer" className="block">
+        <a
+          href={safeHttpUrl(e2?.photo_link ?? photo)}
+          target="_blank"
+          rel="noreferrer"
+          className="block"
+        >
           <img
             src={safeHttpUrl(photo)}
             alt="entity reference"
@@ -1366,19 +1588,23 @@ export function ProfileCard({
             className="block w-full rounded-sm border border-line"
             // Broken photo URL → hide the whole link so no broken-image box shows.
             onError={(e) => {
-              const a = (e.currentTarget as HTMLImageElement).closest('a');
-              if (a) (a as HTMLElement).style.display = 'none';
+              const a = (e.currentTarget as HTMLImageElement).closest("a");
+              if (a) (a as HTMLElement).style.display = "none";
             }}
           />
         </a>
       )}
       {(credit || e2?.photo_license) && (
         <div className="mono text-[10px] text-txt-3 mt-1 truncate">
-          {credit ? `© ${credit}` : ''}
-          {e2?.photo_license ? `${credit ? ' · ' : ''}${e2.photo_license}` : ''}
+          {credit ? `© ${credit}` : ""}
+          {e2?.photo_license ? `${credit ? " · " : ""}${e2.photo_license}` : ""}
         </div>
       )}
-      {desc && <p className="text-[11px] text-txt-1 leading-snug mt-2 line-clamp-3">{desc}</p>}
+      {desc && (
+        <p className="text-[11px] text-txt-1 leading-snug mt-2 line-clamp-3">
+          {desc}
+        </p>
+      )}
     </Widget>
   );
 }
@@ -1396,7 +1622,9 @@ export function EnrichmentCard({
     return (
       <section>
         <SectionLabel title="Enrichment" />
-        <p className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">resolving…</p>
+        <p className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">
+          resolving…
+        </p>
       </section>
     );
   }
@@ -1406,27 +1634,27 @@ export function EnrichmentCard({
   // are owned by EntityPhotoCard above us; suppress them here so we don't
   // dump raw URLs into the property grid.
   const specialKeys = new Set([
-    'kind',
-    'source',
-    'wikidata_url',
-    'note',
-    'url',
-    'photo_thumb_url',
-    'photo_full_url',
-    'photo_photographer',
-    'photo_link',
-    'photo_license',
-    'photo_credit',
-    'description',
+    "kind",
+    "source",
+    "wikidata_url",
+    "note",
+    "url",
+    "photo_thumb_url",
+    "photo_full_url",
+    "photo_photographer",
+    "photo_link",
+    "photo_license",
+    "photo_credit",
+    "description",
     // Owned by FlightCard — these are objects; the generic grid would render
     // them as "[object Object]".
-    'origin',
-    'destination',
-    'route_airline',
+    "origin",
+    "destination",
+    "route_airline",
     // Owned by AirportCard — arrays of objects that would render as
     // "[object Object]" in the generic key/value grid below.
-    'runways',
-    'frequencies',
+    "runways",
+    "frequencies",
   ]);
   const note = (enrichment as { note?: string }).note;
   const wikidata = (enrichment as { wikidata_url?: string }).wikidata_url;
@@ -1434,20 +1662,24 @@ export function EnrichmentCard({
     <section>
       <SectionLabel
         title="Enrichment"
-        {...(typeof enrichment.source === 'string' && enrichment.source
+        {...(typeof enrichment.source === "string" && enrichment.source
           ? { count: enrichment.source }
           : {})}
       />
       <KV className="mt-1.5">
         {Object.entries(enrichment)
           .filter(([k]) => !specialKeys.has(k))
-          .filter(([, v]) => v !== null && v !== undefined && v !== '')
+          .filter(([, v]) => v !== null && v !== undefined && v !== "")
           .slice(0, 20)
           .map(([k, v]) => (
             <PropRow key={k} k={k} v={v} />
           ))}
       </KV>
-      {note && <p className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">{note}</p>}
+      {note && (
+        <p className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mt-1.5">
+          {note}
+        </p>
+      )}
       <div className="flex flex-wrap gap-2 mt-1.5">
         {wikidata && (
           <a
@@ -1459,7 +1691,7 @@ export function EnrichmentCard({
             wikidata →
           </a>
         )}
-        {kind === 'quake' && (enrichment as { url?: string }).url && (
+        {kind === "quake" && (enrichment as { url?: string }).url && (
           <a
             href={safeHttpUrl((enrichment as { url: string }).url)}
             target="_blank"
@@ -1474,13 +1706,17 @@ export function EnrichmentCard({
   );
 }
 
-export function PropertiesCard({ properties }: { properties: Record<string, unknown> }): JSX.Element {
+export function PropertiesCard({
+  properties,
+}: {
+  properties: Record<string, unknown>;
+}): JSX.Element {
   return (
     <section>
       <SectionLabel title="Live properties" />
       <KV className="mt-1.5">
         {Object.entries(properties)
-          .filter(([, v]) => v !== null && v !== undefined && v !== '')
+          .filter(([, v]) => v !== null && v !== undefined && v !== "")
           .slice(0, 16)
           .map(([k, v]) => (
             <PropRow key={k} k={k} v={v} />
@@ -1516,7 +1752,9 @@ export function CorrelationCard({
     setHistory([]);
     if (!entityId) return;
     const aborter = new AbortController();
-    apiFetch(`/api/correlations/${encodeURIComponent(entityId)}`, { signal: aborter.signal })
+    apiFetch(`/api/correlations/${encodeURIComponent(entityId)}`, {
+      signal: aborter.signal,
+    })
       .then((r) => (r.ok ? (r.json() as Promise<CorrelationsResponse>) : null))
       .then((j) => {
         if (j) setHistory(j.correlations);
@@ -1549,7 +1787,9 @@ export function CorrelationCard({
     return (
       <section>
         <SectionLabel title="Correlations" />
-        <p className="text-[11px] text-txt-3 mt-1.5">no correlations in window</p>
+        <p className="text-[11px] text-txt-3 mt-1.5">
+          no correlations in window
+        </p>
       </section>
     );
   }
@@ -1560,18 +1800,24 @@ export function CorrelationCard({
   // and are shown elsewhere: AisGapCard reads track.gaps straight from the
   // dossier — app/intel/dossier.py _track_stats — never synthesized.)
   const top = matches[0]!;
-  const heroTone: 'alert' | 'warn' =
-    top.severity === 'critical' || top.severity === 'high' ? 'alert' : 'warn';
+  const heroTone: "alert" | "warn" =
+    top.severity === "critical" || top.severity === "high" ? "alert" : "warn";
 
   return (
     <section className="space-y-2">
       <Hero tone={heroTone} title="⚠ Correlation">
-        <p className="text-[11px] text-txt-1 leading-snug mb-2">{top.message}</p>
+        <p className="text-[11px] text-txt-1 leading-snug mb-2">
+          {top.message}
+        </p>
         <div className="flex items-center gap-2 mb-2">
-          <span className={`mono text-[10px] tracking-[0.5px] uppercase ${sevClass(top.severity)}`}>
+          <span
+            className={`mono text-[10px] tracking-[0.5px] uppercase ${sevClass(top.severity)}`}
+          >
             {top.severity}
           </span>
-          <span className="mono text-[10px] text-txt-3 tabular-nums">{top.ruleId}</span>
+          <span className="mono text-[10px] text-txt-3 tabular-nums">
+            {top.ruleId}
+          </span>
           <span className="mono text-[10px] text-txt-3 tabular-nums">
             conf {(top.confidence * 100).toFixed(0)}%
           </span>
@@ -1581,14 +1827,26 @@ export function CorrelationCard({
             <Btn
               tone="accent"
               size="sm"
-              onClick={() => flyToPosition(viewer, entityPos.lon, entityPos.lat, 200_000, 1.0)}
+              onClick={() =>
+                flyToPosition(
+                  viewer,
+                  entityPos.lon,
+                  entityPos.lat,
+                  200_000,
+                  1.0,
+                )
+              }
             >
               → Slew
             </Btn>
           )}
           {onFollow && (
-            <Btn size="sm" onClick={onFollow} className={following ? 'border-accent-line text-accent' : ''}>
-              {following ? '◼ Following' : '⌖ Follow'}
+            <Btn
+              size="sm"
+              onClick={onFollow}
+              className={following ? "border-accent-line text-accent" : ""}
+            >
+              {following ? "◼ Following" : "⌖ Follow"}
             </Btn>
           )}
         </div>
@@ -1598,19 +1856,28 @@ export function CorrelationCard({
         <SectionLabel title="Correlations" count={matches.length} />
         <ul className="mt-1.5 space-y-1.5">
           {matches.map((a) => (
-            <li key={a.id} className="border border-line rounded-sm p-2 bg-bg-2/60">
+            <li
+              key={a.id}
+              className="border border-line rounded-sm p-2 bg-bg-2/60"
+            >
               <div className="flex items-baseline justify-between gap-2">
-                <span className={`mono text-[10px] tracking-[0.5px] uppercase ${sevClass(a.severity)}`}>
+                <span
+                  className={`mono text-[10px] tracking-[0.5px] uppercase ${sevClass(a.severity)}`}
+                >
                   {a.severity}
                 </span>
-                <span className="mono text-[10px] text-txt-3 tabular-nums">{a.ruleId}</span>
+                <span className="mono text-[10px] text-txt-3 tabular-nums">
+                  {a.ruleId}
+                </span>
               </div>
-              <p className="text-[11px] text-txt-1 leading-tight mt-1">{a.message}</p>
+              <p className="text-[11px] text-txt-1 leading-tight mt-1">
+                {a.message}
+              </p>
               <div className="flex items-center gap-2 mt-1.5">
                 <Btn
                   size="sm"
                   onClick={() => {
-                    if (viewer && a.geom?.type === 'Point') {
+                    if (viewer && a.geom?.type === "Point") {
                       const [lon, lat] = a.geom.coordinates as [number, number];
                       flyToPosition(viewer, lon, lat, 200_000, 1.0);
                     }
@@ -1635,33 +1902,40 @@ export function CorrelationCard({
 
 function sevClass(s: string): string {
   switch (s) {
-    case 'critical':
-    case 'high':
-      return 'text-alert';
-    case 'medium':
-      return 'text-warn';
-    case 'low':
+    case "critical":
+    case "high":
+      return "text-alert";
+    case "medium":
+      return "text-warn";
+    case "low":
       // --sev-low ≡ txt-1, kept distinct from the teal selection accent.
-      return 'text-(--sev-low)';
+      return "text-(--sev-low)";
     default:
-      return 'text-txt-2';
+      return "text-txt-2";
   }
 }
 
 function PropRow({ k, v }: { k: string; v: unknown }): JSX.Element {
-  return <KVRow k={k} v={<span className="truncate inline-block max-w-full align-bottom">{format(v)}</span>} />;
+  return (
+    <KVRow
+      k={k}
+      v={
+        <span className="truncate inline-block max-w-full align-bottom">
+          {format(v)}
+        </span>
+      }
+    />
+  );
 }
 
 function format(v: unknown): string {
-  if (v === null || v === undefined) return '—';
-  if (typeof v === 'boolean') return v ? '✓' : '—';
-  if (typeof v === 'number') return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2);
-  if (Array.isArray(v)) return v.join(', ');
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "boolean") return v ? "✓" : "—";
+  if (typeof v === "number")
+    return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2);
+  if (Array.isArray(v)) return v.join(", ");
   return String(v);
 }
-
-
-
 
 function throttle<T extends () => void>(fn: T, ms: number): T {
   let last = 0;

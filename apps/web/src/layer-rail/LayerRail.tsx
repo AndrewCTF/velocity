@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import type * as Cesium from 'cesium';
-import type { LayerDescriptor } from '@osint/shared';
-import type { LayerRegistry } from '../registry/LayerRegistry.js';
-import { useFeeds } from '../state/stores.js';
-import { tracks } from '../intel/tracks.js';
-import { SectionLabel, Toggle, MeterBar } from '../shell/instruments.js';
-import { Icon } from '../normal/Icon.js';
+import { useEffect, useRef, useState } from "react";
+import type * as Cesium from "cesium";
+import type { LayerDescriptor } from "@osint/shared";
+import type { LayerRegistry } from "../registry/LayerRegistry.js";
+import { useFeeds } from "../state/stores.js";
+import { tracks } from "../intel/tracks.js";
+import { SectionLabel, Toggle, MeterBar } from "../shell/instruments.js";
+import { Icon } from "../normal/Icon.js";
 
 interface Props {
   registry: LayerRegistry;
@@ -15,38 +15,38 @@ interface Props {
 // Gotham-style numbered folder labels. Each group maps to a display name;
 // the sequence number is derived from GROUP_ORDER position at render time.
 const GROUP_LABEL: Record<string, string> = {
-  conflict:  'Conflict',
-  aviation:  'Aviation',
-  maritime:  'Maritime',
-  space:     'Space',
-  hazards:   'Hazards',
-  env:       'Environment',
-  news:      'OSINT / Events',
-  cyber:     'Cyber / Intel',
-  infra:     'Infrastructure',
-  rf:        'RF / Signals',
-  signals:   'Signals',
-  imagery:   'Imagery',
-  reference: 'Reference',
-  seismic:   'Seismic',
+  conflict: "Conflict",
+  aviation: "Aviation",
+  maritime: "Maritime",
+  space: "Space",
+  hazards: "Hazards",
+  env: "Environment",
+  news: "OSINT / Events",
+  cyber: "Cyber / Intel",
+  infra: "Infrastructure",
+  rf: "RF / Signals",
+  signals: "Signals",
+  imagery: "Imagery",
+  reference: "Reference",
+  seismic: "Seismic",
 };
 
 // Ordered as Gotham numbered groups: conflict + primary mission layers first.
 const GROUP_ORDER = [
-  'conflict',
-  'aviation',
-  'maritime',
-  'space',
-  'hazards',
-  'env',
-  'news',
-  'cyber',
-  'infra',
-  'rf',
-  'signals',
-  'imagery',
-  'reference',
-  'seismic',
+  "conflict",
+  "aviation",
+  "maritime",
+  "space",
+  "hazards",
+  "env",
+  "news",
+  "cyber",
+  "infra",
+  "rf",
+  "signals",
+  "imagery",
+  "reference",
+  "seismic",
 ];
 
 // One-click mission presets — enable a curated layer set, disable the rest of
@@ -54,20 +54,29 @@ const GROUP_ORDER = [
 // ids are ignored, so a preset stays valid as layers come and go.
 const PRESETS: { label: string; on: string[] }[] = [
   {
-    label: 'Conflict Watch',
-    on: ['intel.incidents.live', 'cyber.ioda.outages', 'aviation.adsb.live.mil', 'news.acled.events'],
+    label: "Conflict Watch",
+    on: [
+      "intel.incidents.live",
+      "cyber.ioda.outages",
+      "aviation.adsb.live.mil",
+      "news.acled.events",
+    ],
   },
   {
-    label: 'Air Picture',
-    on: ['aviation.adsb.global', 'aviation.adsb.live.mil', 'aviation.adsb.live.emergencies'],
+    label: "Air Picture",
+    on: [
+      "aviation.adsb.global",
+      "aviation.adsb.live.mil",
+      "aviation.adsb.live.emergencies",
+    ],
   },
   {
-    label: 'Maritime',
-    on: ['maritime.keyless', 'maritime.sar.hormuz'],
+    label: "Maritime",
+    on: ["maritime.keyless", "maritime.sar.hormuz"],
   },
   {
-    label: 'Cyber',
-    on: ['cyber.ioda.outages', 'env.jamming.nacp'],
+    label: "Cyber",
+    on: ["cyber.ioda.outages", "env.jamming.nacp"],
   },
 ];
 
@@ -75,21 +84,23 @@ const PRESETS: { label: string; on: string[] }[] = [
 // colour we honestly have — there is NO per-layer category colour in the
 // registry, so the swatch shows feed HEALTH, not an invented category hue).
 const STATUS_DOT: Record<string, string> = {
-  green: 'bg-ok',
-  amber: 'bg-warn',
-  red: 'bg-alert',
-  unknown: 'bg-txt-4',
+  green: "bg-ok",
+  amber: "bg-warn",
+  red: "bg-alert",
+  unknown: "bg-txt-4",
 };
 
 export function LayerRail({ registry, viewer }: Props): JSX.Element {
-  const [layers, setLayers] = useState<readonly LayerDescriptor[]>(() => registry.list());
+  const [layers, setLayers] = useState<readonly LayerDescriptor[]>(() =>
+    registry.list(),
+  );
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [countsAt, setCountsAt] = useState<number>(0);
   // The per-second "Xs ago" tick lives inside <RelativeAge/> below — it
   // owns its own setInterval so updating a single age label does NOT
   // re-render the entire rail (audit fix #4).
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState("");
   const feeds = useFeeds((s) => s.feeds);
   const debugLoggedRef = useRef<boolean>(false);
 
@@ -145,14 +156,18 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
     for (let i = 0; i < viewer.dataSources.length; i++) {
       attachDs(viewer.dataSources.get(i));
     }
-    const removeAdded = viewer.dataSources.dataSourceAdded.addEventListener((_c, ds) => {
-      attachDs(ds);
-      recount();
-    });
-    const removeRemoved = viewer.dataSources.dataSourceRemoved.addEventListener((_c, ds) => {
-      detachDs(ds);
-      recount();
-    });
+    const removeAdded = viewer.dataSources.dataSourceAdded.addEventListener(
+      (_c, ds) => {
+        attachDs(ds);
+        recount();
+      },
+    );
+    const removeRemoved = viewer.dataSources.dataSourceRemoved.addEventListener(
+      (_c, ds) => {
+        detachDs(ds);
+        recount();
+      },
+    );
 
     // Initial count + 2s safety net.
     recount();
@@ -169,7 +184,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
       devTimer = window.setTimeout(() => {
         debugLoggedRef.current = true;
         // eslint-disable-next-line no-console
-        console.info('[LayerRail] tracks ring size after 5s:', tracks.size());
+        console.info("[LayerRail] tracks ring size after 5s:", tracks.size());
       }, 5000);
     }
 
@@ -187,7 +202,10 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
   // scanning every folder (one of the "grouping sucks" fixes).
   const q = filter.trim().toLowerCase();
   const shown = q
-    ? layers.filter((l) => l.title.toLowerCase().includes(q) || l.id.toLowerCase().includes(q))
+    ? layers.filter(
+        (l) =>
+          l.title.toLowerCase().includes(q) || l.id.toLowerCase().includes(q),
+      )
     : layers;
   const grouped = shown.reduce<Record<string, LayerDescriptor[]>>((acc, l) => {
     (acc[l.group] ||= []).push(l);
@@ -272,15 +290,19 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
         const list = grouped[group] ?? [];
         const isCollapsed = collapsed[group];
         // Sequence number for Gotham-style "01 Aviation" folder header.
-        const seq = String(groupIdx + 1).padStart(2, '0');
+        const seq = String(groupIdx + 1).padStart(2, "0");
         // Count of enabled layers in this folder — shown in the header badge
         // so the operator knows at a glance how many are active without expanding.
-        const enabledCount = list.filter((l) => registry.isEnabled(l.id)).length;
+        const enabledCount = list.filter((l) =>
+          registry.isEnabled(l.id),
+        ).length;
         return (
           <section key={group}>
             <button
               type="button"
-              onClick={() => setCollapsed((c) => ({ ...c, [group]: !c[group] }))}
+              onClick={() =>
+                setCollapsed((c) => ({ ...c, [group]: !c[group] }))
+              }
               className="group flex items-center gap-1.5 w-full text-left border-t border-[rgba(255,255,255,0.1)] pt-3 hover:border-accent-line/40"
             >
               {/* Sequence number — Gotham numbered-group idiom */}
@@ -304,7 +326,10 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
               </span>
               {/* Collapse chevron */}
               <span className="mono text-[10px] text-txt-4 group-hover:text-accent shrink-0 ml-0.5">
-                <Icon name={isCollapsed ? 'chevron-right' : 'chevron-down'} className="w-3.5 h-3.5" />
+                <Icon
+                  name={isCollapsed ? "chevron-right" : "chevron-down"}
+                  className="w-3.5 h-3.5"
+                />
               </span>
             </button>
             {!isCollapsed && (
@@ -312,7 +337,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
                 {list.map((l) => {
                   const enabled = registry.isEnabled(l.id);
                   const feed = feeds[l.id];
-                  const status = feed?.status ?? 'unknown';
+                  const status = feed?.status ?? "unknown";
                   const count = counts[l.id] ?? 0;
                   const opacityPct = Math.round((l.opacity ?? 1) * 100);
                   return (
@@ -322,21 +347,33 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
                     >
                       <div className="flex items-center gap-2">
                         <span
-                          className={`h-[9px] w-[9px] rounded-sm shrink-0 ${STATUS_DOT[status] ?? 'bg-txt-3'}`}
+                          className={`h-[9px] w-[9px] rounded-sm shrink-0 ${STATUS_DOT[status] ?? "bg-txt-3"}`}
                           aria-hidden="true"
                         />
-                        <span className="text-txt-1 text-[12px] flex-1 truncate" title={l.title}>
+                        <span
+                          className="text-txt-1 text-[12px] flex-1 truncate"
+                          title={l.title}
+                        >
                           {l.title}
                         </span>
                         {enabled && (
-                          <CountBadge count={count} at={countsAt} feedStatus={status} />
+                          <CountBadge
+                            count={count}
+                            at={countsAt}
+                            feedStatus={status}
+                          />
                         )}
                         {enabled && (
-                          <MeterBar pct={opacityPct} className="w-[28px] shrink-0" />
+                          <MeterBar
+                            pct={opacityPct}
+                            className="w-[28px] shrink-0"
+                          />
                         )}
                         <Toggle
                           on={enabled}
-                          onChange={(v) => (v ? registry.enable(l.id) : registry.disable(l.id))}
+                          onChange={(v) =>
+                            v ? registry.enable(l.id) : registry.disable(l.id)
+                          }
                           label={`Toggle ${l.title}`}
                         />
                       </div>
@@ -348,7 +385,12 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
                             max={1}
                             step={0.05}
                             defaultValue={l.opacity}
-                            onChange={(e) => registry.setOpacity(l.id, parseFloat(e.target.value))}
+                            onChange={(e) =>
+                              registry.setOpacity(
+                                l.id,
+                                parseFloat(e.target.value),
+                              )
+                            }
                             className="flex-1 accent-accent h-1"
                             aria-label={`Opacity for ${l.title}`}
                           />
@@ -359,7 +401,10 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
                       )}
                       <div className="pl-[17px] mt-1">
                         <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3">
-                          {l.auth} · {l.refresh.ttlSec ? `${l.refresh.ttlSec}s` : l.refresh.mode}
+                          {l.auth} ·{" "}
+                          {l.refresh.ttlSec
+                            ? `${l.refresh.ttlSec}s`
+                            : l.refresh.mode}
                         </span>
                       </div>
                     </li>
@@ -393,7 +438,7 @@ function CountBadge({
   at: number;
   feedStatus: string;
 }): JSX.Element {
-  if (count === 0 && feedStatus === 'green') {
+  if (count === 0 && feedStatus === "green") {
     return (
       <span
         className="mono micro text-ok tabular-nums border border-line rounded-sm px-1 py-px"
@@ -411,7 +456,7 @@ function CountBadge({
       <span className="text-txt-1">{count.toLocaleString()}</span>
       {at > 0 && (
         <>
-          {' · '}
+          {" · "}
           <RelativeAge t={at} />
         </>
       )}
@@ -432,6 +477,10 @@ function RelativeAge({ t }: { t: number }): JSX.Element {
   }, []);
   const ageSec = Math.max(0, Math.floor((Date.now() - t) / 1000));
   const label =
-    ageSec < 1 ? 'now' : ageSec < 60 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
+    ageSec < 1
+      ? "now"
+      : ageSec < 60
+        ? `${ageSec}s ago`
+        : `${Math.floor(ageSec / 60)}m ago`;
   return <span className="text-txt-3">{label}</span>;
 }

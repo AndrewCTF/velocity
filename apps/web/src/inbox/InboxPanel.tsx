@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { clampCursor, moveCursor } from './queueCursor.js';
-import type * as Cesium from 'cesium';
-import { useAlerts, useSelection } from '../state/stores.js';
-import { useInbox } from '../state/inbox.js';
-import { useSavedSearches } from '../state/savedSearches.js';
-import { useWatchOfficerBriefs, type WatchOfficerBrief } from '../state/watchOfficer.js';
-import { flyToPosition } from '../globe/camera.js';
-import { useReducedMotion } from '../shell/useReducedMotion.js';
-import { Badge, Btn, type BadgeTone } from '../shell/instruments.js';
-import type { Alert, AlertSeverity } from '@osint/shared';
-import { Icon } from '../normal/Icon.js';
-import { apiFetch } from '../transport/http.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { clampCursor, moveCursor } from "./queueCursor.js";
+import type * as Cesium from "cesium";
+import { useAlerts, useSelection } from "../state/stores.js";
+import { useInbox } from "../state/inbox.js";
+import { useSavedSearches } from "../state/savedSearches.js";
+import {
+  useWatchOfficerBriefs,
+  type WatchOfficerBrief,
+} from "../state/watchOfficer.js";
+import { flyToPosition } from "../globe/camera.js";
+import { useReducedMotion } from "../shell/useReducedMotion.js";
+import { Badge, Btn, type BadgeTone } from "../shell/instruments.js";
+import type { Alert, AlertSeverity } from "@osint/shared";
+import { Icon } from "../normal/Icon.js";
+import { apiFetch } from "../transport/http.js";
 
 // Entity-resolution merge review (W2) — intel/resolve.py records a scored
 // merge_candidates row the moment two observations collide and NEVER
@@ -33,7 +36,7 @@ const RESOLVE_POLL_MS = 30_000;
 
 function useResolveCandidates(): {
   candidates: ResolveCandidate[];
-  decide: (c: ResolveCandidate, verdict: 'approve' | 'reject') => void;
+  decide: (c: ResolveCandidate, verdict: "approve" | "reject") => void;
   error: string | null;
 } {
   const [candidates, setCandidates] = useState<ResolveCandidate[]>([]);
@@ -41,7 +44,7 @@ function useResolveCandidates(): {
 
   const load = useCallback(async (): Promise<void> => {
     try {
-      const r = await apiFetch('/api/resolve/candidates?status=open');
+      const r = await apiFetch("/api/resolve/candidates?status=open");
       if (!r.ok) {
         setError(`Merge review unavailable (HTTP ${r.status})`);
         return;
@@ -49,7 +52,7 @@ function useResolveCandidates(): {
       setCandidates((await r.json()) as ResolveCandidate[]);
       setError(null);
     } catch {
-      setError('Merge review unavailable (network error)');
+      setError("Merge review unavailable (network error)");
     }
   }, []);
 
@@ -60,12 +63,12 @@ function useResolveCandidates(): {
   }, [load]);
 
   const decide = useCallback(
-    (c: ResolveCandidate, verdict: 'approve' | 'reject'): void => {
+    (c: ResolveCandidate, verdict: "approve" | "reject"): void => {
       void (async () => {
         try {
           const r = await apiFetch(
             `/api/resolve/candidates/${encodeURIComponent(c.id_a)}/${encodeURIComponent(c.id_b)}/${verdict}`,
-            { method: 'POST' },
+            { method: "POST" },
           );
           if (!r.ok) {
             setError(`Merge ${verdict} failed (HTTP ${r.status})`);
@@ -84,31 +87,41 @@ function useResolveCandidates(): {
 }
 
 const SEV_BADGE: Record<string, BadgeTone> = {
-  critical: 'alert',
-  high: 'alert',
-  medium: 'warn',
-  low: 'neutral',
-  info: 'neutral',
+  critical: "alert",
+  high: "alert",
+  medium: "warn",
+  low: "neutral",
+  info: "neutral",
 };
 const SEV_BAR: Record<string, string> = {
-  critical: 'var(--alert)',
-  high: 'var(--alert)',
-  medium: 'var(--warn)',
-  low: 'var(--sev-low)',
-  info: 'var(--txt-2)',
+  critical: "var(--alert)",
+  high: "var(--alert)",
+  medium: "var(--warn)",
+  low: "var(--sev-low)",
+  info: "var(--txt-2)",
 };
-const SEVERITIES: readonly AlertSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
+const SEVERITIES: readonly AlertSeverity[] = [
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "info",
+];
 
 /** Coarse channel from a rule id — the family before the first underscore group. */
 function channelOf(ruleId: string): string {
-  return ruleId.split('_').slice(0, 2).join('_') || ruleId;
+  return ruleId.split("_").slice(0, 2).join("_") || ruleId;
 }
 
 // Inbox (design §6.5) — the single triage surface consolidating the old rail list,
 // slide-over, and ticker. Every alert deep-links to the map (slew-to) and can be
 // read/archived; state persists across reloads. Alerts come from the real
 // geofence / correlation / pattern pipeline via useAlerts.
-export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
+export function InboxPanel({
+  viewer,
+}: {
+  viewer: Cesium.Viewer | null;
+}): JSX.Element {
   const alerts = useAlerts((s) => s.alerts);
   const archived = useInbox((s) => s.archived);
   const read = useInbox((s) => s.read);
@@ -117,8 +130,16 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
   const archive = useInbox((s) => s.archive);
   const savedSearches = useSavedSearches((s) => s.searches);
   const removeSaved = useSavedSearches((s) => s.remove);
-  const { briefs: woBriefs, dismiss: woDismiss, ack: woAck } = useWatchOfficerBriefs();
-  const { candidates: mergeCandidates, decide: decideMerge, error: mergeError } = useResolveCandidates();
+  const {
+    briefs: woBriefs,
+    dismiss: woDismiss,
+    ack: woAck,
+  } = useWatchOfficerBriefs();
+  const {
+    candidates: mergeCandidates,
+    decide: decideMerge,
+    error: mergeError,
+  } = useResolveCandidates();
   const reduced = useReducedMotion();
   const [sev, setSev] = useState<AlertSeverity | null>(null);
   const [channel, setChannel] = useState<string | null>(null);
@@ -127,27 +148,41 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
   const [cursor, setCursor] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
 
-  const active = useMemo(() => alerts.filter((a) => !archived.has(a.id)), [alerts, archived]);
-  const unread = useMemo(() => active.filter((a) => !read.has(a.id)).length, [active, read]);
+  const active = useMemo(
+    () => alerts.filter((a) => !archived.has(a.id)),
+    [alerts, archived],
+  );
+  const unread = useMemo(
+    () => active.filter((a) => !read.has(a.id)).length,
+    [active, read],
+  );
   const channels = useMemo(() => {
     const set = new Set<string>();
     for (const a of active) set.add(channelOf(a.ruleId));
     return [...set].sort();
   }, [active]);
   const filtered = useMemo(
-    () => active.filter((a) => (!sev || a.severity === sev) && (!channel || channelOf(a.ruleId) === channel)),
+    () =>
+      active.filter(
+        (a) =>
+          (!sev || a.severity === sev) &&
+          (!channel || channelOf(a.ruleId) === channel),
+      ),
     [active, sev, channel],
   );
 
-  const open = useCallback((a: Alert): void => {
-    markRead(a.id);
-    const first = a.contributingObservations?.[0];
-    if (first) useSelection.getState().select(first);
-    if (viewer && a.geom?.type === 'Point') {
-      const [lon, lat] = a.geom.coordinates as [number, number];
-      flyToPosition(viewer, lon, lat, 250_000, reduced ? 0 : 1.0);
-    }
-  }, [markRead, viewer, reduced]);
+  const open = useCallback(
+    (a: Alert): void => {
+      markRead(a.id);
+      const first = a.contributingObservations?.[0];
+      if (first) useSelection.getState().select(first);
+      if (viewer && a.geom?.type === "Point") {
+        const [lon, lat] = a.geom.coordinates as [number, number];
+        flyToPosition(viewer, lon, lat, 250_000, reduced ? 0 : 1.0);
+      }
+    },
+    [markRead, viewer, reduced],
+  );
 
   // j/k move, enter opens and slews, e archives, g/G jump to the ends. The
   // bindings every mail and code-review client already trained the operator on,
@@ -162,38 +197,45 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
   useEffect(() => {
     const typing = (t: EventTarget | null): boolean => {
       const el = t as HTMLElement | null;
-      if (!el || typeof el.tagName !== 'string') return false;
+      if (!el || typeof el.tagName !== "string") return false;
       if (el.isContentEditable) return true;
-      return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+      return ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
     };
     const onKey = (e: KeyboardEvent): void => {
-      if (e.defaultPrevented || typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (
+        e.defaultPrevented ||
+        typing(e.target) ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey
+      )
+        return;
       if (visible.length === 0) return;
       const at = visible[Math.min(cursor, visible.length - 1)];
       switch (e.key) {
-        case 'j':
+        case "j":
           e.preventDefault();
           setCursor((c) => moveCursor(c, 1, visible.length));
           break;
-        case 'k':
+        case "k":
           e.preventDefault();
           setCursor((c) => moveCursor(c, -1, visible.length));
           break;
-        case 'g':
+        case "g":
           e.preventDefault();
           setCursor(0);
           break;
-        case 'G':
+        case "G":
           e.preventDefault();
           setCursor(visible.length - 1);
           break;
-        case 'Enter':
+        case "Enter":
           if (at) {
             e.preventDefault();
             open(at);
           }
           break;
-        case 'e':
+        case "e":
           if (at) {
             e.preventDefault();
             archive(at.id);
@@ -206,16 +248,15 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
           break;
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [visible, cursor, archive, open]);
 
   // Keep the cursor row on screen when it moves off the top or bottom.
   useEffect(() => {
     const el = listRef.current?.children[cursor] as HTMLElement | undefined;
-    el?.scrollIntoView({ block: 'nearest' });
+    el?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
-
 
   const slewToBrief = (b: WatchOfficerBrief): void => {
     const { lon, lat } = b.centroid;
@@ -228,7 +269,7 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
     <div className="p-3 flex flex-col gap-2.5">
       <div className="flex items-center justify-between">
         <span className="font-label uppercase tracking-[0.8px] text-[11px] text-txt-1">
-          Inbox{' '}
+          Inbox{" "}
           {unread > 0 && (
             <span className="ml-1 mono text-[10px] px-1.5 py-0.5 rounded-sm bg-alert text-(--on-alert) font-semibold">
               {unread}
@@ -256,35 +297,57 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
             {woBriefs.slice(0, 20).map((b) => (
               <li key={b.id} className="px-2 py-2">
                 <div className="flex items-center gap-2">
-                  <Badge tone={b.threat_level === 'high' ? 'alert' : b.threat_level === 'elevated' ? 'warn' : 'neutral'}>
+                  <Badge
+                    tone={
+                      b.threat_level === "high"
+                        ? "alert"
+                        : b.threat_level === "elevated"
+                          ? "warn"
+                          : "neutral"
+                    }
+                  >
                     {b.threat_level}
                   </Badge>
                   <span className="mono text-[10px] uppercase tracking-[0.4px] text-txt-3 truncate">
-                    {b.domains.join(' · ')}
+                    {b.domains.join(" · ")}
                   </span>
                 </div>
                 {b.narrative && (
-                  <p className="text-[11px] leading-snug mt-1.5 text-txt-1 line-clamp-3">{b.narrative}</p>
+                  <p className="text-[11px] leading-snug mt-1.5 text-txt-1 line-clamp-3">
+                    {b.narrative}
+                  </p>
                 )}
                 {b.evidence.slice(0, 2).map((e, i) => (
-                  <div key={i} className="mono text-[10px] text-txt-3 mt-1 truncate">
-                    <span className={e.kind === 'inferred' ? 'text-warn' : 'text-txt-2'}>
-                      [{e.kind ?? 'measured'}]
-                    </span>{' '}
+                  <div
+                    key={i}
+                    className="mono text-[10px] text-txt-3 mt-1 truncate"
+                  >
+                    <span
+                      className={
+                        e.kind === "inferred" ? "text-warn" : "text-txt-2"
+                      }
+                    >
+                      [{e.kind ?? "measured"}]
+                    </span>{" "}
                     {e.summary}
                   </div>
                 ))}
                 {b.follow_up.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {b.follow_up.slice(0, 3).map((f, i) => (
-                      <span key={i} className="mono text-[9px] px-1 py-0.5 rounded-sm border border-line text-txt-3">
+                      <span
+                        key={i}
+                        className="mono text-[9px] px-1 py-0.5 rounded-sm border border-line text-txt-3"
+                      >
                         {f}
                       </span>
                     ))}
                   </div>
                 )}
                 <div className="flex items-center gap-2 mt-1.5">
-                  <Btn size="sm" onClick={() => slewToBrief(b)}>slew to</Btn>
+                  <Btn size="sm" onClick={() => slewToBrief(b)}>
+                    slew to
+                  </Btn>
                   <button
                     type="button"
                     onClick={() => woAck(b.id)}
@@ -331,10 +394,12 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
                   {c.reason} · {Math.round(c.score * 100)}%
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <Btn size="sm" onClick={() => decideMerge(c, 'approve')}>approve</Btn>
+                  <Btn size="sm" onClick={() => decideMerge(c, "approve")}>
+                    approve
+                  </Btn>
                   <button
                     type="button"
-                    onClick={() => decideMerge(c, 'reject')}
+                    onClick={() => decideMerge(c, "reject")}
                     className="mono text-[10px] uppercase tracking-[0.4px] text-txt-3 hover:text-alert"
                   >
                     reject
@@ -355,10 +420,15 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
             onClick={() => setSev((c) => (c === s ? null : s))}
             aria-pressed={sev === s}
             className={`mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-0.5 border rounded-sm ${
-              sev === s ? 'border-accent-line bg-accent-dim text-accent' : 'border-line text-txt-3 hover:text-txt-1'
+              sev === s
+                ? "border-accent-line bg-accent-dim text-accent"
+                : "border-line text-txt-3 hover:text-txt-1"
             }`}
           >
-            {s} <span className="tabular-nums text-txt-2">{active.filter((a) => a.severity === s).length}</span>
+            {s}{" "}
+            <span className="tabular-nums text-txt-2">
+              {active.filter((a) => a.severity === s).length}
+            </span>
           </button>
         ))}
       </div>
@@ -370,18 +440,28 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
             Subscriptions · {savedSearches.length}
           </div>
           {savedSearches.map((s) => (
-            <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 border-b border-line/50 last:border-0">
+            <div
+              key={s.id}
+              className="flex items-center gap-2 px-2 py-1.5 border-b border-line/50 last:border-0"
+            >
               <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-              <span className="text-[11px] text-txt-1 flex-1 truncate" title={s.label}>{s.label}</span>
+              <span
+                className="text-[11px] text-txt-1 flex-1 truncate"
+                title={s.label}
+              >
+                {s.label}
+              </span>
               <span className="mono text-[10px] tabular-nums text-txt-3">
-                {s.lastCount >= 0 ? s.lastCount.toLocaleString() : '…'}
+                {s.lastCount >= 0 ? s.lastCount.toLocaleString() : "…"}
               </span>
               <button
                 type="button"
                 onClick={() => removeSaved(s.id)}
                 aria-label="Remove subscription"
                 className="mono text-[10px] text-txt-3 hover:text-alert"
-              ><Icon name="x" className="w-3 h-3" /></button>
+              >
+                <Icon name="x" className="w-3 h-3" />
+              </button>
             </div>
           ))}
         </div>
@@ -397,7 +477,9 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
               onClick={() => setChannel((cur) => (cur === c ? null : c))}
               aria-pressed={channel === c}
               className={`mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
-                channel === c ? 'border-accent-line text-accent bg-accent-dim' : 'border-line text-txt-3 hover:text-txt-1'
+                channel === c
+                  ? "border-accent-line text-accent bg-accent-dim"
+                  : "border-line text-txt-3 hover:text-txt-1"
               }`}
             >
               {c}
@@ -409,59 +491,71 @@ export function InboxPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.El
       {filtered.length === 0 ? (
         <p className="text-[11px] leading-snug text-txt-3">
           {active.length === 0
-            ? 'Inbox clear. Geofence, watch, and correlation subscriptions post here when they fire.'
-            : 'Nothing matches this filter.'}
+            ? "Inbox clear. Geofence, watch, and correlation subscriptions post here when they fire."
+            : "Nothing matches this filter."}
         </p>
       ) : (
         <>
-        <p className="mono text-[10px] text-txt-4 mb-1">
-          j/k move · enter slews · e archives
-        </p>
-        <ul ref={listRef} className="divide-y divide-line border-y border-line">
-          {visible.map((a, i) => {
-            const isUnread = !read.has(a.id);
-            const atCursor = i === cursor;
-            return (
-              <li
-                key={a.id}
-                className={`relative ${atCursor ? 'bg-bg-2 outline-solid outline-1 -outline-offset-1 outline-accent/40' : ''}`}
-                aria-current={atCursor ? 'true' : undefined}
-              >
-                <span className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: SEV_BAR[a.severity] }} />
-                <div className={`pl-3 pr-1 py-2 ${isUnread ? '' : 'opacity-60'}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <Badge tone={SEV_BADGE[a.severity] ?? 'neutral'}>{a.severity}</Badge>
-                    <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-3 truncate">{channelOf(a.ruleId)}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => open(a)}
-                    className={`text-left text-[11px] leading-snug mt-1.5 line-clamp-2 hover:text-txt-0 ${
-                      isUnread ? 'text-txt-0 font-medium' : 'text-txt-2'
-                    }`}
+          <p className="mono text-[10px] text-txt-4 mb-1">
+            j/k move · enter slews · e archives
+          </p>
+          <ul
+            ref={listRef}
+            className="divide-y divide-line border-y border-line"
+          >
+            {visible.map((a, i) => {
+              const isUnread = !read.has(a.id);
+              const atCursor = i === cursor;
+              return (
+                <li
+                  key={a.id}
+                  className={`relative ${atCursor ? "bg-bg-2 outline-solid outline-1 -outline-offset-1 outline-accent/40" : ""}`}
+                  aria-current={atCursor ? "true" : undefined}
+                >
+                  <span
+                    className="absolute left-0 top-0 bottom-0 w-[2px]"
+                    style={{ background: SEV_BAR[a.severity] }}
+                  />
+                  <div
+                    className={`pl-3 pr-1 py-2 ${isUnread ? "" : "opacity-60"}`}
                   >
-                    {a.message}
-                  </button>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <Btn size="sm" onClick={() => open(a)}>
-                      slew to
-                    </Btn>
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge tone={SEV_BADGE[a.severity] ?? "neutral"}>
+                        {a.severity}
+                      </Badge>
+                      <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-3 truncate">
+                        {channelOf(a.ruleId)}
+                      </span>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => archive(a.id)}
-                      className="mono text-[10px] uppercase tracking-[0.4px] text-txt-3 hover:text-txt-1"
+                      onClick={() => open(a)}
+                      className={`text-left text-[11px] leading-snug mt-1.5 line-clamp-2 hover:text-txt-0 ${
+                        isUnread ? "text-txt-0 font-medium" : "text-txt-2"
+                      }`}
                     >
-                      archive
+                      {a.message}
                     </button>
-                    <span className="mono text-[10px] tabular-nums text-txt-3 ml-auto">
-                      {new Date(a.t).toISOString().slice(11, 19)}Z
-                    </span>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Btn size="sm" onClick={() => open(a)}>
+                        slew to
+                      </Btn>
+                      <button
+                        type="button"
+                        onClick={() => archive(a.id)}
+                        className="mono text-[10px] uppercase tracking-[0.4px] text-txt-3 hover:text-txt-1"
+                      >
+                        archive
+                      </button>
+                      <span className="mono text-[10px] tabular-nums text-txt-3 ml-auto">
+                        {new Date(a.t).toISOString().slice(11, 19)}Z
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
         </>
       )}
     </div>

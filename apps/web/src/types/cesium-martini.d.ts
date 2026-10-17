@@ -1,7 +1,7 @@
 // Minimal local typings for @macrostrat/cesium-martini@1.6.0 (no bundled
 // .d.ts). Surface kept to what GlobeCanvas uses — extend if more is needed.
-declare module '@macrostrat/cesium-martini' {
-  import type { TerrainProvider, TilingScheme, Ellipsoid } from 'cesium';
+declare module "@macrostrat/cesium-martini" {
+  import type { TerrainProvider, TilingScheme, Ellipsoid } from "cesium";
 
   export interface DefaultHeightmapResourceOpts {
     url?: string;
@@ -30,11 +30,14 @@ declare module '@macrostrat/cesium-martini' {
     constructor(opts: MartiniTerrainOpts);
   }
 
-  export interface MapboxTerrainOpts extends Omit<MartiniTerrainOpts, 'resource'> {
+  export interface MapboxTerrainOpts extends Omit<
+    MartiniTerrainOpts,
+    "resource"
+  > {
     urlTemplate?: string;
     accessToken?: string;
     highResolution?: boolean;
-    imageFormat?: 'webp' | 'png' | 'pngraw';
+    imageFormat?: "webp" | "png" | "pngraw";
     maxZoom?: number;
     tileSize?: number;
     skipOddLevels?: boolean;

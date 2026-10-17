@@ -3,11 +3,17 @@
 // portals, traps focus, or owns open-state lives here. Token-driven chrome
 // only; z-(--z-modal) (600) stacks above the AppSurface (--z-overlay 400)
 // so a dialog opened from a full-surface app is never buried.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { Btn } from './instruments.js';
-import { useReducedMotion } from './useReducedMotion.js';
-import { Icon } from '../normal/Icon.js';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
+import { Btn } from "./instruments.js";
+import { useReducedMotion } from "./useReducedMotion.js";
+import { Icon } from "../normal/Icon.js";
 
 // Shared portal chrome: backdrop (click closes), Escape closes, dialog a11y
 // contract, focus moves into the panel on open and back to the opener on close.
@@ -29,14 +35,14 @@ function DialogShell({
     const opener = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.stopPropagation();
         onClose();
       }
     };
-    document.addEventListener('keydown', onKey, true);
+    document.addEventListener("keydown", onKey, true);
     return () => {
-      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener("keydown", onKey, true);
       opener?.focus?.();
     };
   }, [onClose]);
@@ -65,7 +71,13 @@ function DialogShell({
   );
 }
 
-function DialogHeader({ title, onClose }: { title: ReactNode; onClose: () => void }): JSX.Element {
+function DialogHeader({
+  title,
+  onClose,
+}: {
+  title: ReactNode;
+  onClose: () => void;
+}): JSX.Element {
   return (
     <div className="flex items-center justify-between gap-2 px-3.5 h-9 shrink-0 border-b border-line-2 bg-bg-1">
       <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-0 truncate">
@@ -76,7 +88,9 @@ function DialogHeader({ title, onClose }: { title: ReactNode; onClose: () => voi
         onClick={onClose}
         aria-label="Close"
         className="mono text-[13px] text-txt-2 hover:text-txt-0 px-1.5 py-0.5"
-      ><Icon name="x" className="w-3 h-3" /></button>
+      >
+        <Icon name="x" className="w-3 h-3" />
+      </button>
     </div>
   );
 }
@@ -100,7 +114,7 @@ export function Modal({
   return (
     <DialogShell
       onClose={onClose}
-      label={typeof title === 'string' ? title : 'Dialog'}
+      label={typeof title === "string" ? title : "Dialog"}
       panelClass="absolute left-1/2 top-[12vh] -translate-x-1/2 max-w-[calc(100vw-32px)] max-h-[76vh] flex flex-col rounded-md border border-line-2 bg-bg-1 shadow-2xl outline-hidden"
       panelStyle={{ width }}
     >
@@ -126,7 +140,7 @@ export function Drawer({
   open: boolean;
   onClose: () => void;
   title: ReactNode;
-  side?: 'right';
+  side?: "right";
   size?: number;
   children: ReactNode;
   footer?: ReactNode;
@@ -145,10 +159,10 @@ export function Drawer({
   return (
     <DialogShell
       onClose={onClose}
-      label={typeof title === 'string' ? title : 'Drawer'}
+      label={typeof title === "string" ? title : "Drawer"}
       panelClass={`absolute right-0 top-[68px] bottom-0 max-w-[calc(100vw-44px)] flex flex-col border-l border-line-2 bg-bg-1 shadow-2xl outline-hidden ${
-        reduced ? '' : 'transition-transform duration-200 ease-out'
-      } ${entered || reduced ? 'translate-x-0' : 'translate-x-full'}`}
+        reduced ? "" : "transition-transform duration-200 ease-out"
+      } ${entered || reduced ? "translate-x-0" : "translate-x-full"}`}
       panelStyle={{ width: size }}
     >
       <DialogHeader title={title} onClose={onClose} />
@@ -170,16 +184,16 @@ interface ConfirmOpts {
   title: string;
   body?: ReactNode;
   confirmLabel?: string;
-  tone?: 'danger' | 'neutral';
+  tone?: "danger" | "neutral";
 }
 
 export function useConfirm(): {
   confirm: (opts: ConfirmOpts) => Promise<boolean>;
   confirmElement: JSX.Element | null;
 } {
-  const [pending, setPending] = useState<(ConfirmOpts & { resolve: (v: boolean) => void }) | null>(
-    null,
-  );
+  const [pending, setPending] = useState<
+    (ConfirmOpts & { resolve: (v: boolean) => void }) | null
+  >(null);
   const confirm = useCallback(
     (opts: ConfirmOpts) =>
       new Promise<boolean>((resolve) => {
@@ -202,20 +216,20 @@ export function useConfirm(): {
           <Btn onClick={() => settle(false)}>Cancel</Btn>
           <Btn
             onClick={() => settle(true)}
-            tone={pending.tone === 'danger' ? 'neutral' : 'accent'}
+            tone={pending.tone === "danger" ? "neutral" : "accent"}
             className={
-              pending.tone === 'danger'
-                ? 'border-[rgba(255,90,82,0.38)] bg-alert-bg text-[#ffc9c5] hover:border-alert'
-                : ''
+              pending.tone === "danger"
+                ? "border-[rgba(255,90,82,0.38)] bg-alert-bg text-[#ffc9c5] hover:border-alert"
+                : ""
             }
           >
-            {pending.confirmLabel ?? 'Confirm'}
+            {pending.confirmLabel ?? "Confirm"}
           </Btn>
         </>
       }
     >
       <div className="mono text-[11px] text-txt-1 leading-relaxed">
-        {pending.body ?? 'This action cannot be undone.'}
+        {pending.body ?? "This action cannot be undone."}
       </div>
     </Modal>
   ) : null;

@@ -10,12 +10,12 @@ against a backend running this code.
 
 ## The four claims the code made and did not keep
 
-| # | Claim in the code | Reality before | Now |
-|---|---|---|---|
-| 1 | `ai_selection.py`: "a bracket form we can verify against the real ids below" | No verification below. `llm.is_grounded` had zero callers repo-wide | Called. A brief citing an id that was not in the evidence is withheld, naming the id |
-| 2 | `timeline.py` docstring: `gaps` is "a placeholder" | Served as `[0] * bins` unconditionally — an absent measurement indistinguishable from a measured zero | `null` + `gaps_status: "unmeasured"` |
-| 3 | "An unaudited action must not silently succeed" | True, but `/api/audit` 503'd without Supabase while governed actions wrote to a local DB no route could read | Keyless deployments read their own log |
-| 4 | README: "every contact carries which independent sources reported it" | 94% of contacts carried no `sources` at all | 100% attributed |
+| #   | Claim in the code                                                            | Reality before                                                                                               | Now                                                                                  |
+| --- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| 1   | `ai_selection.py`: "a bracket form we can verify against the real ids below" | No verification below. `llm.is_grounded` had zero callers repo-wide                                          | Called. A brief citing an id that was not in the evidence is withheld, naming the id |
+| 2   | `timeline.py` docstring: `gaps` is "a placeholder"                           | Served as `[0] * bins` unconditionally — an absent measurement indistinguishable from a measured zero        | `null` + `gaps_status: "unmeasured"`                                                 |
+| 3   | "An unaudited action must not silently succeed"                              | True, but `/api/audit` 503'd without Supabase while governed actions wrote to a local DB no route could read | Keyless deployments read their own log                                               |
+| 4   | README: "every contact carries which independent sources reported it"        | 94% of contacts carried no `sources` at all                                                                  | 100% attributed                                                                      |
 
 ## Provenance, the numbers
 
@@ -64,12 +64,12 @@ the multi-tier union; the number will then move, and it will mean something.
 A guard that has never failed is not a guard. Each was run against the code as
 it stood before its fix:
 
-| Guard | Reverted target | Result |
-|---|---|---|
-| `test_readme_claims.py` | each of the four numbers drifted in turn | 1 failed, 2 passed — each time the right one |
-| `test_selection_grounding.py` | `unknown_citations` neutered to `[]` | 2 failed (both withhold cases), 6 passed |
-| `test_audit_keyless.py` | route restored from `HEAD` | 4 failed |
-| `test_adsb_sidecar_provenance.py` | `adsb.py` restored from `HEAD` | 2 failed |
+| Guard                             | Reverted target                          | Result                                       |
+| --------------------------------- | ---------------------------------------- | -------------------------------------------- |
+| `test_readme_claims.py`           | each of the four numbers drifted in turn | 1 failed, 2 passed — each time the right one |
+| `test_selection_grounding.py`     | `unknown_citations` neutered to `[]`     | 2 failed (both withhold cases), 6 passed     |
+| `test_audit_keyless.py`           | route restored from `HEAD`               | 4 failed                                     |
+| `test_adsb_sidecar_provenance.py` | `adsb.py` restored from `HEAD`           | 2 failed                                     |
 
 And after the provenance change, the union's own invariants were re-run
 together — `test_adsb_no_reverse`, `test_adsb_cached_age`, `test_adsb_hot_blob`,

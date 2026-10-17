@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 
-import { Icon } from '../normal/Icon.js';
+import { Icon } from "../normal/Icon.js";
 
 // A full-screen deck for briefing off the live picture.
 //
@@ -41,16 +41,17 @@ export function SlidesDeck({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose();
-      else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') go(1);
-      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(-1);
-      else if (e.key === 'Home') setI(0);
-      else if (e.key === 'End') setI(last);
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ")
+        go(1);
+      else if (e.key === "ArrowLeft" || e.key === "PageUp") go(-1);
+      else if (e.key === "Home") setI(0);
+      else if (e.key === "End") setI(last);
       else return;
       e.preventDefault();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [go, last, onClose]);
 
   if (slides.length === 0) return null;
@@ -79,7 +80,9 @@ export function SlidesDeck({
       `}</style>
 
       <header className="slides-chrome flex items-center justify-between gap-3 px-6 h-10 border-b border-line-2 shrink-0">
-        <span className="mono text-[10px] uppercase tracking-[0.18em] text-txt-3">{classification}</span>
+        <span className="mono text-[10px] uppercase tracking-[0.18em] text-txt-3">
+          {classification}
+        </span>
         <span className="flex items-center gap-2">
           <span className="mono text-[10px] text-txt-3 tabular-nums">
             {i + 1} / {slides.length}
@@ -147,7 +150,9 @@ function SlideBody({ slide }: { slide: Slide }): JSX.Element {
       <h2 className="text-[22px] font-semibold tracking-[-0.01em] text-txt-0 border-b border-line-2 pb-2">
         {slide.title}
       </h2>
-      <div className="mt-5 text-[14px] leading-relaxed text-txt-1">{slide.body}</div>
+      <div className="mt-5 text-[14px] leading-relaxed text-txt-1">
+        {slide.body}
+      </div>
     </>
   );
 }

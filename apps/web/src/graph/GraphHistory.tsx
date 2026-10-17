@@ -3,8 +3,8 @@
 // the chosen revision; any live mutation snaps back to live. Class vocabulary
 // mirrors InvestigationCanvas.tsx (mono text-[10px], border-line, text-txt-*,
 // text-accent) plus the shared MicroLabel idiom.
-import { useInvestigation } from './investigationStore.js';
-import { MicroLabel } from '../shell/instruments.js';
+import { useInvestigation } from "./investigationStore.js";
+import { MicroLabel } from "../shell/instruments.js";
 
 export function GraphHistory(): JSX.Element | null {
   const revisions = useInvestigation((s) => s.revisions);
@@ -29,16 +29,27 @@ export function GraphHistory(): JSX.Element | null {
           aria-label="Graph history scrubber"
         />
         {viewRev !== null && (
-          <button type="button" className="text-accent" onClick={() => setViewRev(null)}>
+          <button
+            type="button"
+            className="text-accent"
+            onClick={() => setViewRev(null)}
+          >
             live
           </button>
         )}
       </div>
       <ol className="mt-1 max-h-24 overflow-y-auto">
         {revisions.map((r, i) => (
-          <li key={r.ts + ':' + i} className={i === at ? 'text-txt-1' : 'text-txt-3'}>
-            <button type="button" onClick={() => setViewRev(i === revisions.length - 1 ? null : i)}>
-              {new Date(r.ts).toLocaleTimeString()} · {r.author} · {r.label} · {r.nodeIds.length} nodes
+          <li
+            key={r.ts + ":" + i}
+            className={i === at ? "text-txt-1" : "text-txt-3"}
+          >
+            <button
+              type="button"
+              onClick={() => setViewRev(i === revisions.length - 1 ? null : i)}
+            >
+              {new Date(r.ts).toLocaleTimeString()} · {r.author} · {r.label} ·{" "}
+              {r.nodeIds.length} nodes
             </button>
           </li>
         ))}

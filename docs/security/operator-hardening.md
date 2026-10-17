@@ -1,13 +1,13 @@
 # Operator hardening checklist
 
-| Field | Value |
-| --- | --- |
-| Covers | Every OWASP ASVS 5.0 Level 2 requirement the assessment marked **Operator** (§5), plus the operator-side conditions of accepted risks R27–R30; ISO/IEC 27001:2022 A.8.9, A.8.20, A.8.21, A.8.24 |
-| Version | 1.0 (Draft until merged to `master`) |
-| Adopted | 2026-09-13 |
-| Owner | Maintainer (content); Operator (doing it, per deployment) |
-| Review | Yearly with the SoA, and when the ASVS assessment is repeated |
-| Code citations | Working tree of branch `compliance-2026-09`, read on 2026-09-13 (base commit `56db34f`). Lines marked `<!-- recheck -->` sit in files parallel work was changing |
+| Field          | Value                                                                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Covers         | Every OWASP ASVS 5.0 Level 2 requirement the assessment marked **Operator** (§5), plus the operator-side conditions of accepted risks R27–R30; ISO/IEC 27001:2022 A.8.9, A.8.20, A.8.21, A.8.24 |
+| Version        | 1.0 (Draft until merged to `master`)                                                                                                                                                            |
+| Adopted        | 2026-09-13                                                                                                                                                                                      |
+| Owner          | Maintainer (content); Operator (doing it, per deployment)                                                                                                                                       |
+| Review         | Yearly with the SoA, and when the ASVS assessment is repeated                                                                                                                                   |
+| Code citations | Working tree of branch `compliance-2026-09`, read on 2026-09-13 (base commit `56db34f`). Lines marked `<!-- recheck -->` sit in files parallel work was changing                                |
 
 These controls cannot be set from this repository. The production compose file serves plain HTTP on
 `127.0.0.1:8080` and expects a TLS reverse proxy on the host in front of it
@@ -38,7 +38,7 @@ and repeat the check after upgrades and yearly.
       browsers cannot set headers on an upgrade. The bundled nginx and the api already keep it out of their
       own logs ([`logging.md`](logging.md), L2, L3 and L9); the host proxy's log (L11) is yours. Examples:
       nginx `log_format` using `$uri` instead of `$request`; Caddy `log { format filter { request>uri
-      query { delete key } } }`. (Condition of R27; V10.1.1)
+    query { delete key } } }`. (Condition of R27; V10.1.1)
 - [ ] **Timeouts.** Read timeout at least 330 s for `/api/workflows/`, and long (hours) for `/ws/`, `/mcp`
       and the SSE routes `/api/intel/agent` and recon job events
       ([`input-and-files.md`](input-and-files.md) §3.1). (V15.1.3)
@@ -121,16 +121,16 @@ and may move; they are not verifiable from this repository.
 
 ## 5. ASVS requirements assessed as Operator
 
-| ASVS 5.0 | Level | Requirement area | Where on this page |
-| --- | --- | --- | --- |
-| 4.1.2 | 2 | HTTP to HTTPS redirect only for user-facing endpoints | §1 TLS on every path |
-| 6.2.1 | 1 | Minimum password length | §2 Password length |
-| 6.2.4 | 1 | Check against common passwords | §2 Leaked-password protection |
-| 6.2.12 | 2 | Check against breached passwords | §2 Leaked-password protection |
-| 10.4.1 | 1 | Exact redirect URI allowlist | §2 Redirect URL allowlist |
-| 10.4.5 | 1 | Refresh token replay protection | §2 Refresh token reuse detection |
-| 10.4.8 | 2 | Absolute refresh token lifetime | §2 Session time-box |
-| 12.1.1 | 1 | TLS 1.2 minimum, 1.3 preferred | §1 Protocol versions |
-| 12.1.2 | 2 | Recommended cipher suites only | §1 Cipher suites |
-| 12.2.1 | 1 | TLS for all external HTTP connectivity | §1 TLS on every path |
-| 12.2.2 | 1 | Publicly trusted certificates | §1 Certificate |
+| ASVS 5.0 | Level | Requirement area                                      | Where on this page               |
+| -------- | ----- | ----------------------------------------------------- | -------------------------------- |
+| 4.1.2    | 2     | HTTP to HTTPS redirect only for user-facing endpoints | §1 TLS on every path             |
+| 6.2.1    | 1     | Minimum password length                               | §2 Password length               |
+| 6.2.4    | 1     | Check against common passwords                        | §2 Leaked-password protection    |
+| 6.2.12   | 2     | Check against breached passwords                      | §2 Leaked-password protection    |
+| 10.4.1   | 1     | Exact redirect URI allowlist                          | §2 Redirect URL allowlist        |
+| 10.4.5   | 1     | Refresh token replay protection                       | §2 Refresh token reuse detection |
+| 10.4.8   | 2     | Absolute refresh token lifetime                       | §2 Session time-box              |
+| 12.1.1   | 1     | TLS 1.2 minimum, 1.3 preferred                        | §1 Protocol versions             |
+| 12.1.2   | 2     | Recommended cipher suites only                        | §1 Cipher suites                 |
+| 12.2.1   | 1     | TLS for all external HTTP connectivity                | §1 TLS on every path             |
+| 12.2.2   | 1     | Publicly trusted certificates                         | §1 Certificate                   |

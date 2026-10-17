@@ -1,7 +1,7 @@
-import { apiFetch } from './http.js';
+import { apiFetch } from "./http.js";
 
 export interface SearchResult {
-  kind: 'aircraft' | 'vessel' | 'place' | 'airport' | 'port' | 'chokepoint';
+  kind: "aircraft" | "vessel" | "place" | "airport" | "port" | "chokepoint";
   id: string;
   label: string;
   lon: number;
@@ -18,20 +18,20 @@ export interface SearchResult {
 // warn-bg / alert-bg / mag-dim, see CommandBar/NewsPanel/App).
 
 /** Short uppercase glyph shown in the badge, keyed by result kind. */
-export const KIND_BADGE_LABEL: Record<SearchResult['kind'], string> = {
-  aircraft: 'AIR',
-  vessel: 'SHIP',
-  place: 'PLACE',
-  airport: 'ARPT',
-  port: 'PORT',
-  chokepoint: 'CHOKE',
+export const KIND_BADGE_LABEL: Record<SearchResult["kind"], string> = {
+  aircraft: "AIR",
+  vessel: "SHIP",
+  place: "PLACE",
+  airport: "ARPT",
+  port: "PORT",
+  chokepoint: "CHOKE",
 };
 
 const BADGE_BASE =
-  'mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-sm border text-center shrink-0 w-[54px]';
+  "mono text-[10px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-sm border text-center shrink-0 w-[54px]";
 
 /** Full className for the kind badge — pill base + a subtly-colored tone. */
-export const KIND_BADGE_CLASS: Record<SearchResult['kind'], string> = {
+export const KIND_BADGE_CLASS: Record<SearchResult["kind"], string> = {
   // moving live contacts → cool data tones (blue / green)
   aircraft: `${BADGE_BASE} border-accent-line text-accent bg-accent-dim`,
   vessel: `${BADGE_BASE} border-ok/40 text-ok bg-ok/10`,
@@ -47,15 +47,18 @@ export const KIND_BADGE_CLASS: Record<SearchResult['kind'], string> = {
  * click clears the selection and just flies the camera. Aircraft/vessel are
  * the only kinds that resolve to a selectable entity id.
  */
-export const LOCATION_KINDS: ReadonlySet<SearchResult['kind']> = new Set<SearchResult['kind']>([
-  'place',
-  'airport',
-  'port',
-  'chokepoint',
-]);
+export const LOCATION_KINDS: ReadonlySet<SearchResult["kind"]> = new Set<
+  SearchResult["kind"]
+>(["place", "airport", "port", "chokepoint"]);
 
-export async function search(q: string, signal?: AbortSignal): Promise<SearchResult[]> {
-  const r = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`, signal ? { signal } : {});
+export async function search(
+  q: string,
+  signal?: AbortSignal,
+): Promise<SearchResult[]> {
+  const r = await apiFetch(
+    `/api/search?q=${encodeURIComponent(q)}`,
+    signal ? { signal } : {},
+  );
   if (!r.ok) return [];
   const j = (await r.json()) as { results: SearchResult[] };
   return j.results;
@@ -96,19 +99,22 @@ export async function searchObjects(
   signal?: AbortSignal,
 ): Promise<ObjectSearch> {
   const p = new URLSearchParams();
-  if (f.type && f.type !== 'all') p.set('type', f.type);
-  if (f.q && f.q.trim()) p.set('q', f.q.trim());
+  if (f.type && f.type !== "all") p.set("type", f.type);
+  if (f.q && f.q.trim()) p.set("q", f.q.trim());
   if (f.bbox) {
-    p.set('min_lon', String(f.bbox[0]));
-    p.set('min_lat', String(f.bbox[1]));
-    p.set('max_lon', String(f.bbox[2]));
-    p.set('max_lat', String(f.bbox[3]));
+    p.set("min_lon", String(f.bbox[0]));
+    p.set("min_lat", String(f.bbox[1]));
+    p.set("max_lon", String(f.bbox[2]));
+    p.set("max_lat", String(f.bbox[3]));
   }
-  if (f.sinceS != null) p.set('since_s', String(Math.round(f.sinceS)));
-  if (f.startS != null) p.set('start_s', String(Math.round(f.startS)));
-  if (f.endS != null) p.set('end_s', String(Math.round(f.endS)));
-  if (f.limit != null) p.set('limit', String(f.limit));
-  const r = await apiFetch(`/api/search/objects?${p.toString()}`, signal ? { signal } : {});
+  if (f.sinceS != null) p.set("since_s", String(Math.round(f.sinceS)));
+  if (f.startS != null) p.set("start_s", String(Math.round(f.startS)));
+  if (f.endS != null) p.set("end_s", String(Math.round(f.endS)));
+  if (f.limit != null) p.set("limit", String(f.limit));
+  const r = await apiFetch(
+    `/api/search/objects?${p.toString()}`,
+    signal ? { signal } : {},
+  );
   if (!r.ok) return { results: [], count: 0, by_type: {} };
   return (await r.json()) as ObjectSearch;
 }

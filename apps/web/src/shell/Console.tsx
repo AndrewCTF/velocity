@@ -7,9 +7,14 @@ import {
   useState,
   type CSSProperties,
   type ReactNode,
-} from 'react';
-import { Icon } from '../normal/Icon.js';
-import { LEFT_PANELS, RIGHT_PANELS, type LeftPanelId, type RightPanelId } from './panels.js';
+} from "react";
+import { Icon } from "../normal/Icon.js";
+import {
+  LEFT_PANELS,
+  RIGHT_PANELS,
+  type LeftPanelId,
+  type RightPanelId,
+} from "./panels.js";
 
 // Console — the rebuilt shell.
 //
@@ -73,16 +78,17 @@ export interface ConsoleProps {
   onPanelWhileBleed?: () => void;
 }
 
-const PANEL_ICON: Record<LeftPanelId, 'layers' | 'search' | 'chart' | 'info'> = {
-  layers: 'layers',
-  find: 'search',
-  histogram: 'chart',
-  info: 'info',
-};
+const PANEL_ICON: Record<LeftPanelId, "layers" | "search" | "chart" | "info"> =
+  {
+    layers: "layers",
+    find: "search",
+    histogram: "chart",
+    info: "info",
+  };
 
 export function Console({
   brand,
-  initialPanel = 'layers',
+  initialPanel = "layers",
   menu,
   documentTitle,
   systemState,
@@ -99,13 +105,13 @@ export function Console({
   bleed = false,
   onPanelWhileBleed,
 }: ConsoleProps): JSX.Element {
-  const [left, setLeft] = useState<LeftPanelId | 'more'>(initialPanel);
-  const [right, setRight] = useState<RightPanelId>('selection');
+  const [left, setLeft] = useState<LeftPanelId | "more">(initialPanel);
+  const [right, setRight] = useState<RightPanelId>("selection");
 
   // Selecting a panel. In full-bleed the panel column does not exist, so the
   // request also has to get the operator back to a surface that has one.
   const openPanel = useCallback(
-    (id: LeftPanelId | 'more'): void => {
+    (id: LeftPanelId | "more"): void => {
       setLeft(id);
       if (bleed) onPanelWhileBleed?.();
     },
@@ -128,18 +134,18 @@ export function Console({
         return;
       const i = Number(e.key);
       if (!Number.isInteger(i) || i < 1 || i > LEFT_PANELS.length + 1) return;
-      const target = LEFT_PANELS[i - 1]?.id ?? 'more';
-      if (target === 'more' && !extraCount) return;
+      const target = LEFT_PANELS[i - 1]?.id ?? "more";
+      if (target === "more" && !extraCount) return;
       e.preventDefault();
       openPanel(target);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
     // openPanel closes over `bleed` and `onPanelWhileBleed`; rebind when either
     // changes so the key never routes to a column that is no longer there.
   }, [openPanel, extraCount]);
 
-  const leftBody = left === 'more' ? extra : leftPanels[left];
+  const leftBody = left === "more" ? extra : leftPanels[left];
   const rightBody = rightPanels[right];
   const rightTabs = RIGHT_PANELS.filter((p) => rightPanels[p.id] !== undefined);
 
@@ -152,8 +158,9 @@ export function Console({
   // Explorer's `Types 47 · Properties 332 · Links 14 · Timeline` row is a tab
   // strip inside a panel.
   const sections = Children.toArray(leftBody).filter(
-    (n): n is React.ReactElement<{ 'aria-label'?: string }> =>
-      isValidElement<{ 'aria-label'?: string }>(n) && typeof n.props['aria-label'] === 'string',
+    (n): n is React.ReactElement<{ "aria-label"?: string }> =>
+      isValidElement<{ "aria-label"?: string }>(n) &&
+      typeof n.props["aria-label"] === "string",
   );
   const sectioned = sections.length > 1;
   const [section, setSection] = useState(0);
@@ -175,7 +182,10 @@ export function Console({
     const host = mapRef.current;
     if (!el || !host) return;
     const apply = (): void => {
-      host.style.setProperty('--dock-clear', `${Math.round(el.getBoundingClientRect().height) + 10}px`);
+      host.style.setProperty(
+        "--dock-clear",
+        `${Math.round(el.getBoundingClientRect().height) + 10}px`,
+      );
     };
     apply();
     const ro = new ResizeObserver(apply);
@@ -190,8 +200,8 @@ export function Console({
         {
           // The map column already excludes both rails, so overlays inside it
           // must not offset past them a second time.
-          '--rail-left-w': '0px',
-          '--rail-right-w': '0px',
+          "--rail-left-w": "0px",
+          "--rail-right-w": "0px",
         } as CSSProperties
       }
     >
@@ -203,7 +213,9 @@ export function Console({
             split via an internal flex-1; adding a second one pushed the brand
             and the File/Edit menus into the middle of the bar. A slot that
             hosts a full-width child must not also try to lay it out. */}
-        {(brand || menu || documentTitle) && !systemState ? <span style={{ flex: 1 }} /> : null}
+        {(brand || menu || documentTitle) && !systemState ? (
+          <span style={{ flex: 1 }} />
+        ) : null}
         {systemState}
         {marking}
       </header>
@@ -225,7 +237,9 @@ export function Console({
           >
             <Icon name={PANEL_ICON[p.id]} className="h-3 w-3" />
             {p.label}
-            {leftBadges?.[p.id] ? <span className="csl2-badge">{leftBadges[p.id]}</span> : null}
+            {leftBadges?.[p.id] ? (
+              <span className="csl2-badge">{leftBadges[p.id]}</span>
+            ) : null}
           </button>
         ))}
         {extraCount > 0 && (
@@ -233,9 +247,9 @@ export function Console({
             type="button"
             role="tab"
             className="csl2-tab"
-            aria-selected={left === 'more' && !bleed}
+            aria-selected={left === "more" && !bleed}
             title="Surfaces not yet re-homed"
-            onClick={() => openPanel('more')}
+            onClick={() => openPanel("more")}
           >
             More<span className="csl2-badge">{extraCount}</span>
           </button>
@@ -244,13 +258,15 @@ export function Console({
 
       <div
         className="csl2-body"
-        data-left={bleed ? '0' : '1'}
-        data-right={bleed || rightTabs.length === 0 ? '0' : '1'}
+        data-left={bleed ? "0" : "1"}
+        data-right={bleed || rightTabs.length === 0 ? "0" : "1"}
       >
         {!bleed && (
           <aside className="csl2-panel" aria-label="Left panel">
             <div className="csl2-panel-head">
-              {left === 'more' ? 'More' : LEFT_PANELS.find((p) => p.id === left)?.label}
+              {left === "more"
+                ? "More"
+                : LEFT_PANELS.find((p) => p.id === left)?.label}
               {sectioned ? (
                 <span className="csl2-panel-head-count">
                   {activeSection + 1} of {sections.length}
@@ -258,7 +274,11 @@ export function Console({
               ) : null}
             </div>
             {sectioned && (
-              <div className="csl2-subtabs" role="tablist" aria-label="Panel sections">
+              <div
+                className="csl2-subtabs"
+                role="tablist"
+                aria-label="Panel sections"
+              >
                 {sections.map((s, i) => (
                   <button
                     key={s.key ?? i}
@@ -268,7 +288,7 @@ export function Console({
                     aria-selected={activeSection === i}
                     onClick={() => setSection(i)}
                   >
-                    {s.props['aria-label']}
+                    {s.props["aria-label"]}
                   </button>
                 ))}
               </div>
@@ -300,20 +320,23 @@ export function Console({
               <div className="csl2-panel-head">{rightTabs[0].label}</div>
             )}
             {rightTabs.length > 1 && (
-            <div className="csl2-tabs" style={{ borderBottom: '1px solid var(--line)' }}>
-              {rightTabs.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  role="tab"
-                  className="csl2-tab"
-                  aria-selected={right === p.id}
-                  onClick={() => setRight(p.id)}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+              <div
+                className="csl2-tabs"
+                style={{ borderBottom: "1px solid var(--line)" }}
+              >
+                {rightTabs.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="tab"
+                    className="csl2-tab"
+                    aria-selected={right === p.id}
+                    onClick={() => setRight(p.id)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
             )}
             <div className="csl2-panel-body">{rightBody ?? <Empty />}</div>
           </aside>
@@ -331,8 +354,8 @@ function Empty(): JSX.Element {
       <Icon name="search" className="w-6 h-6 text-txt-3" />
       <div className="text-[13px] text-txt-1">Nothing to show here yet</div>
       <p className="max-w-[220px] text-[12px] leading-relaxed text-txt-3">
-        This panel has no content wired to it. Pick another tab, or open the app that owns this
-        surface.
+        This panel has no content wired to it. Pick another tab, or open the app
+        that owns this surface.
       </p>
     </div>
   );

@@ -37,6 +37,12 @@ coverage/
 # Workflows store (saved DAGs + run history + per-workflow memory; runtime).
 **/data/workflows.db
 **/data/workflows.db-*
+# Per-spawn sidecar bearer tokens (app/sidecar_token.py): credentials.
+**/data/sidecar-tokens/
+# Instability, news-history and entity-resolution caches: runtime, refill.
+**/data/instability.db*
+**/data/news_history.db*
+**/data/resolve.db*
 .playwright-mcp/
 # Dev screenshots / scratch images at the repo root — keep the tree tidy.
 # (Real product art lives in code as SVG, or under docs/ if ever needed.)

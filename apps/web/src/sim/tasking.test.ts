@@ -1,11 +1,18 @@
-import { describe, it, expect } from 'vitest';
-import { passesOverAoi, skyView, coverageStats, type Window } from './tasking.js';
+import { describe, it, expect } from "vitest";
+import {
+  passesOverAoi,
+  skyView,
+  coverageStats,
+  type Window,
+} from "./tasking.js";
 
 // Same known-good ISS TLE used by SatelliteAdapter.orbit.test.ts. Mean motion
 // 15.51 rev/day → ~93 min period, 51.6° inclination. Over a 6h window an ISS
 // orbit makes multiple passes near any observer within its inclination band.
-const ISS_L1 = '1 25544U 98067A   19156.50900463  .00003075  00000-0  59442-4 0  9992';
-const ISS_L2 = '2 25544  51.6433  59.2583 0008217  16.4489 347.6017 15.51174618173442';
+const ISS_L1 =
+  "1 25544U 98067A   19156.50900463  .00003075  00000-0  59442-4 0  9992";
+const ISS_L2 =
+  "2 25544  51.6433  59.2583 0008217  16.4489 347.6017 15.51174618173442";
 
 // Mid-latitude observer (Madrid-ish, ~40.4N) — comfortably inside the ISS
 // inclination band, so passes are guaranteed over 6h. Near the TLE epoch
@@ -16,13 +23,13 @@ const WIN: Window = {
   endMs: Date.UTC(2019, 5, 5, 18, 0, 0), // +6h
 };
 
-describe('passesOverAoi', () => {
-  it('finds at least one pass over a mid-latitude AOI in 6h', () => {
+describe("passesOverAoi", () => {
+  it("finds at least one pass over a mid-latitude AOI in 6h", () => {
     const passes = passesOverAoi(ISS_L1, ISS_L2, AOI, WIN, 30, 10);
     expect(passes.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('each pass has a physically plausible max elevation (0 < el <= 90)', () => {
+  it("each pass has a physically plausible max elevation (0 < el <= 90)", () => {
     const passes = passesOverAoi(ISS_L1, ISS_L2, AOI, WIN, 30, 10);
     for (const p of passes) {
       expect(p.maxElevDeg).toBeGreaterThan(0);
@@ -32,13 +39,13 @@ describe('passesOverAoi', () => {
     }
   });
 
-  it('returns no passes for a garbage TLE instead of throwing', () => {
-    expect(passesOverAoi('not', 'a tle', AOI, WIN)).toEqual([]);
+  it("returns no passes for a garbage TLE instead of throwing", () => {
+    expect(passesOverAoi("not", "a tle", AOI, WIN)).toEqual([]);
   });
 });
 
-describe('skyView', () => {
-  it('produces az/el samples above the horizon within the window', () => {
+describe("skyView", () => {
+  it("produces az/el samples above the horizon within the window", () => {
     const sky = skyView(ISS_L1, ISS_L2, AOI, WIN, 30);
     expect(sky.length).toBeGreaterThan(0);
     for (const s of sky) {
@@ -50,8 +57,8 @@ describe('skyView', () => {
   });
 });
 
-describe('coverageStats', () => {
-  it('reports finite, bounded stats for real passes', () => {
+describe("coverageStats", () => {
+  it("reports finite, bounded stats for real passes", () => {
     const passes = passesOverAoi(ISS_L1, ISS_L2, AOI, WIN, 30, 10);
     const stats = coverageStats(passes, WIN);
     expect(Number.isFinite(stats.passCount)).toBe(true);
@@ -63,7 +70,7 @@ describe('coverageStats', () => {
     expect(stats.passCount).toBe(passes.length);
   });
 
-  it('returns a full-window gap and zero coverage for no passes', () => {
+  it("returns a full-window gap and zero coverage for no passes", () => {
     const stats = coverageStats([], WIN);
     expect(stats.passCount).toBe(0);
     expect(stats.coveragePct).toBe(0);

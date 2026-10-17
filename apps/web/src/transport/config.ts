@@ -1,5 +1,5 @@
-import type { RuntimeConfig } from '@osint/shared';
-import { apiFetch } from './http.js';
+import type { RuntimeConfig } from "@osint/shared";
+import { apiFetch } from "./http.js";
 
 // Boot config fetch, resilient to the backend's cold-start window. On a cold
 // boot the API lifespan blocks `accept` until its ADS-B snapshot warms — and
@@ -15,11 +15,11 @@ let latest: RuntimeConfig | null = null;
 
 /** What a caller the backend will not give keys to boots with: every keyed layer off. */
 export const KEYLESS_CONFIG: RuntimeConfig = {
-  cesiumIonToken: '',
-  googleApiKey: '',
+  cesiumIonToken: "",
+  googleApiKey: "",
   features: { enableGoogle3D: false },
-  classification: 'UNCLAS',
-  buildId: '',
+  classification: "UNCLAS",
+  buildId: "",
 };
 
 /** The last config the backend returned, for readers that must not refetch it. */
@@ -34,7 +34,7 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
     try {
       // Per-attempt timeout: a queued (not refused) connection would otherwise
       // hang one attempt indefinitely and stall the whole loop.
-      r = await apiFetch('/api/config', { signal: AbortSignal.timeout(4000) });
+      r = await apiFetch("/api/config", { signal: AbortSignal.timeout(4000) });
     } catch {
       // network refusal / timeout (backend not accepting yet) → retry
     }

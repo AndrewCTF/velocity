@@ -34,14 +34,14 @@ breach → `threat`, cert → `cert`, ASN → `asn`, officers/people → `person
 
 ### Canonical id schemes
 
-| kind | id scheme | example |
-|------|-----------|---------|
-| url | `url:<normalised-url>` (scheme+host+path, lowercased, ≤200 char) | `url:http://evil.test/x` |
-| file | `file:<sha256>` (or sha1/md5 lowercased) | `file:ab12…` |
-| wallet | `wallet:<chain>:<address>` | `wallet:btc:1A1z…`, `wallet:eth:0xabc…` |
-| tx | `tx:<chain>:<txid>` | `tx:btc:9f2c…` |
-| asn | `asn:AS<n>` (already used) | `asn:AS15169` |
-| org (company) | `ext:organization:<slug>` (already used) | `ext:organization:acme-corp` |
+| kind          | id scheme                                                        | example                                 |
+| ------------- | ---------------------------------------------------------------- | --------------------------------------- |
+| url           | `url:<normalised-url>` (scheme+host+path, lowercased, ≤200 char) | `url:http://evil.test/x`                |
+| file          | `file:<sha256>` (or sha1/md5 lowercased)                         | `file:ab12…`                            |
+| wallet        | `wallet:<chain>:<address>`                                       | `wallet:btc:1A1z…`, `wallet:eth:0xabc…` |
+| tx            | `tx:<chain>:<txid>`                                              | `tx:btc:9f2c…`                          |
+| asn           | `asn:AS<n>` (already used)                                       | `asn:AS15169`                           |
+| org (company) | `ext:organization:<slug>` (already used)                         | `ext:organization:acme-corp`            |
 
 ### New link relations (documented in `KNOWN_RELS` comment, not enforced)
 
@@ -55,7 +55,7 @@ breach → `threat`, cert → `cert`, ASN → `asn`, officers/people → `person
 Owns `app/osint/fetch.py` and `app/api/app/intel/ontology.py`. Deliverables:
 
 1. `fetch_json_post(url, ttl, *, data=None, json_body=None, headers=None,
-   browser_ua=False) -> Any` — mirrors `fetch_json` (semaphore + cache + degrade to
+browser_ua=False) -> Any` — mirrors `fetch_json` (semaphore + cache + degrade to
    None) but issues a POST (form `data` or `json_body`). Cache key = url + a stable
    hash of the body. Keep GET `fetch_json` unchanged (backward compat).
 2. New normalisers, each `-> str | None`:
@@ -85,61 +85,67 @@ monkeypatches `fetch_json`/`fetch_json_post` and asserts the normalised dict sha
 (no live network in tests). Follow the connector docstring style of `connectors.py`.
 
 ### A1 `sources/infra.py` — domain/ip infrastructure enrichment
-| fn | endpoint | auth | returns |
-|----|----------|------|---------|
-| `wayback_urls(domain)` | `http://web.archive.org/cdx/search/cdx?url={d}&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500` | keyless | `{domain, urls:[…], subdomains:[…], count}` (derive subdomains from url hosts) |
-| `hackertarget_hosts(domain)` | `https://api.hackertarget.com/hostsearch/?q={d}` (plaintext `host,ip` lines) | keyless (50/day) | `{domain, hosts:[{host,ip}], count, note?}` |
-| `anubis_subdomains(domain)` | `https://jldc.me/anubis/subdomains/{d}` | keyless | `{domain, subdomains:[…], count}` |
-| `columbus_subdomains(domain)` | `https://columbus.elmasy.com/api/lookup/{d}` | keyless | `{domain, subdomains:[…], count}` |
-| `certspotter_issuances(domain)` | `https://api.certspotter.com/v1/issuances?domain={d}&include_subdomains=true&expand=dns_names` | key-optional (`CERTSPOTTER_API_KEY`) | `{domain, subdomains:[…], certs:[{issuer,not_before,not_after}], count}` |
-| `urlscan_domain(domain)` | `https://urlscan.io/api/v1/search/?q=domain:{d}` | key-optional (`URLSCAN_API_KEY`) | `{domain, scans:[{url,ip,asn,time}], ips:[…], count}` |
+
+| fn                              | endpoint                                                                                                           | auth                                 | returns                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------ |
+| `wayback_urls(domain)`          | `http://web.archive.org/cdx/search/cdx?url={d}&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500` | keyless                              | `{domain, urls:[…], subdomains:[…], count}` (derive subdomains from url hosts) |
+| `hackertarget_hosts(domain)`    | `https://api.hackertarget.com/hostsearch/?q={d}` (plaintext `host,ip` lines)                                       | keyless (50/day)                     | `{domain, hosts:[{host,ip}], count, note?}`                                    |
+| `anubis_subdomains(domain)`     | `https://jldc.me/anubis/subdomains/{d}`                                                                            | keyless                              | `{domain, subdomains:[…], count}`                                              |
+| `columbus_subdomains(domain)`   | `https://columbus.elmasy.com/api/lookup/{d}`                                                                       | keyless                              | `{domain, subdomains:[…], count}`                                              |
+| `certspotter_issuances(domain)` | `https://api.certspotter.com/v1/issuances?domain={d}&include_subdomains=true&expand=dns_names`                     | key-optional (`CERTSPOTTER_API_KEY`) | `{domain, subdomains:[…], certs:[{issuer,not_before,not_after}], count}`       |
+| `urlscan_domain(domain)`        | `https://urlscan.io/api/v1/search/?q=domain:{d}`                                                                   | key-optional (`URLSCAN_API_KEY`)     | `{domain, scans:[{url,ip,asn,time}], ips:[…], count}`                          |
 
 ### A2 `sources/netblock.py` — ip/asn routing + reputation
-| fn | endpoint | auth | returns |
-|----|----------|------|---------|
-| `bgpview_ip(ip)` | `https://api.bgpview.io/ip/{ip}` | keyless | `{ip, prefixes:[…], asns:[{asn,name,country}]}` |
-| `bgpview_asn(asn)` | `https://api.bgpview.io/asn/{n}` + `/asn/{n}/prefixes` | keyless | `{asn, name, description, country, prefixes:[…], peers:[…], upstreams:[…]}` |
-| `ripestat_network(ip)` | `https://stat.ripe.net/data/network-info/data.json?resource={ip}` + `abuse-contact-finder` | keyless (add `sourceapp=velocity-osint`) | `{ip, asns:[…], prefix, abuse_email}` |
-| `greynoise_community(ip)` | `https://api.greynoise.io/v3/community/{ip}` | key-optional (`GREYNOISE_API_KEY`) | `{ip, classification, name, tags:[…], last_seen, noise:bool}` |
-| `onionoo_exit(ip)` | `https://onionoo.torproject.org/details?type=relay&running=true&search={ip}` | keyless | `{ip, is_tor_exit:bool, nickname, country}` |
-| `feodo_listed(ip)` | `https://feodotracker.abuse.ch/downloads/ipblocklist.json` (cache 1h, scan for ip) | keyless | `{ip, listed:bool, malware, first_seen}` |
+
+| fn                        | endpoint                                                                                   | auth                                     | returns                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------- | --------------------------------------------------------------------------- |
+| `bgpview_ip(ip)`          | `https://api.bgpview.io/ip/{ip}`                                                           | keyless                                  | `{ip, prefixes:[…], asns:[{asn,name,country}]}`                             |
+| `bgpview_asn(asn)`        | `https://api.bgpview.io/asn/{n}` + `/asn/{n}/prefixes`                                     | keyless                                  | `{asn, name, description, country, prefixes:[…], peers:[…], upstreams:[…]}` |
+| `ripestat_network(ip)`    | `https://stat.ripe.net/data/network-info/data.json?resource={ip}` + `abuse-contact-finder` | keyless (add `sourceapp=velocity-osint`) | `{ip, asns:[…], prefix, abuse_email}`                                       |
+| `greynoise_community(ip)` | `https://api.greynoise.io/v3/community/{ip}`                                               | key-optional (`GREYNOISE_API_KEY`)       | `{ip, classification, name, tags:[…], last_seen, noise:bool}`               |
+| `onionoo_exit(ip)`        | `https://onionoo.torproject.org/details?type=relay&running=true&search={ip}`               | keyless                                  | `{ip, is_tor_exit:bool, nickname, country}`                                 |
+| `feodo_listed(ip)`        | `https://feodotracker.abuse.ch/downloads/ipblocklist.json` (cache 1h, scan for ip)         | keyless                                  | `{ip, listed:bool, malware, first_seen}`                                    |
 
 ### A3 `sources/threat_feeds.py` — url/hash/email threat
-| fn | endpoint | auth | returns |
-|----|----------|------|---------|
-| `urlhaus_host(host)` | POST `https://urlhaus-api.abuse.ch/v1/host/` form `host={host}`, header `Auth-Key` if set | key-optional (`ABUSECH_AUTH_KEY`) | `{host, urls:[…], url_count, note?}` |
-| `urlhaus_url(url)` | POST `https://urlhaus-api.abuse.ch/v1/url/` form `url={url}` | key-optional | `{url, threat, tags:[…], payloads:[sha256], status}` |
-| `malwarebazaar_hash(hash)` | POST `https://mb-api.abuse.ch/api/v1/` form `query=get_info&hash={h}` | key-optional | `{hash, family, file_type, tags:[…], first_seen, signature}` |
-| `yaraify_hash(hash)` | POST `https://yaraify-api.abuse.ch/api/v1/` form `query=lookup_hash&search_term={h}` | keyless | `{hash, yara:[…], clamav:[…]}` |
-| `emailrep(email)` | `https://emailrep.io/{email}` (browser_ua) | keyless (key-optional `EMAILREP_API_KEY`) | `{email, reputation, suspicious:bool, malicious:bool, breach:bool, profiles:[…]}` |
-| `phishstats_url(url)` | `https://phishstats.info:2096/api/phishing?_where=(url,eq,{url})` | keyless | `{url, score, tld, ip, count}` |
+
+| fn                         | endpoint                                                                                  | auth                                      | returns                                                                           |
+| -------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------- |
+| `urlhaus_host(host)`       | POST `https://urlhaus-api.abuse.ch/v1/host/` form `host={host}`, header `Auth-Key` if set | key-optional (`ABUSECH_AUTH_KEY`)         | `{host, urls:[…], url_count, note?}`                                              |
+| `urlhaus_url(url)`         | POST `https://urlhaus-api.abuse.ch/v1/url/` form `url={url}`                              | key-optional                              | `{url, threat, tags:[…], payloads:[sha256], status}`                              |
+| `malwarebazaar_hash(hash)` | POST `https://mb-api.abuse.ch/api/v1/` form `query=get_info&hash={h}`                     | key-optional                              | `{hash, family, file_type, tags:[…], first_seen, signature}`                      |
+| `yaraify_hash(hash)`       | POST `https://yaraify-api.abuse.ch/api/v1/` form `query=lookup_hash&search_term={h}`      | keyless                                   | `{hash, yara:[…], clamav:[…]}`                                                    |
+| `emailrep(email)`          | `https://emailrep.io/{email}` (browser_ua)                                                | keyless (key-optional `EMAILREP_API_KEY`) | `{email, reputation, suspicious:bool, malicious:bool, breach:bool, profiles:[…]}` |
+| `phishstats_url(url)`      | `https://phishstats.info:2096/api/phishing?_where=(url,eq,{url})`                         | keyless                                   | `{url, score, tld, ip, count}`                                                    |
 
 ### A4 `sources/crypto.py` — wallet/tx (BTC + EVM)
-| fn | endpoint | auth | returns |
-|----|----------|------|---------|
-| `mempool_btc_address(addr)` | `https://mempool.space/api/address/{a}` + `/address/{a}/txs` | keyless | `{address, chain:"btc", funded, spent, balance, tx_count, txs:[{txid,value,in:[addr],out:[addr]}]}` (≤25 txs) |
-| `blockstream_btc(addr)` | `https://blockstream.info/api/address/{a}` | keyless | `{address, chain:"btc", funded, spent, tx_count}` (cross-check/fallback) |
-| `blockchair_address(chain, addr)` | `https://api.blockchair.com/{chain}/dashboards/address/{a}` | key-optional (`BLOCKCHAIR_API_KEY`) | `{address, chain, balance, tx_count, txs:[…]}` |
-| `blockscout_evm(addr, host?)` | `https://eth.blockscout.com/api/v2/addresses/{a}` + `/token-balances` | keyless | `{address, chain:"eth", balance, tokens:[…]}` |
+
+| fn                                | endpoint                                                              | auth                                | returns                                                                                                       |
+| --------------------------------- | --------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `mempool_btc_address(addr)`       | `https://mempool.space/api/address/{a}` + `/address/{a}/txs`          | keyless                             | `{address, chain:"btc", funded, spent, balance, tx_count, txs:[{txid,value,in:[addr],out:[addr]}]}` (≤25 txs) |
+| `blockstream_btc(addr)`           | `https://blockstream.info/api/address/{a}`                            | keyless                             | `{address, chain:"btc", funded, spent, tx_count}` (cross-check/fallback)                                      |
+| `blockchair_address(chain, addr)` | `https://api.blockchair.com/{chain}/dashboards/address/{a}`           | key-optional (`BLOCKCHAIR_API_KEY`) | `{address, chain, balance, tx_count, txs:[…]}`                                                                |
+| `blockscout_evm(addr, host?)`     | `https://eth.blockscout.com/api/v2/addresses/{a}` + `/token-balances` | keyless                             | `{address, chain:"eth", balance, tokens:[…]}`                                                                 |
 
 Wallet/tx linking: mint `wallet:<chain>:<addr>`; for each tx mint `tx:<chain>:<txid>`
 and link counterparties `wallet -sends_to-> tx -receives_from-> wallet` (bounded).
 
 ### A5 `sources/corp.py` — company / person / sanctions / entity-resolution
-| fn | endpoint | auth | returns |
-|----|----------|------|---------|
-| `sec_edgar_company(name)` | `https://efts.sec.gov/LATEST/search-index?q="{name}"` then `https://data.sec.gov/submissions/CIK{cik}.json` (browser_ua + descriptive UA) | keyless | `{name, cik, ticker, sic, filings:[{form,date,accession}], officers?}` |
-| `opensanctions_search(name)` | `https://api.opensanctions.org/search/default?q={name}` | keyless (key-optional) | `{query, matches:[{id,name,schema,topics,datasets}], count}` |
-| `opencorporates_search(name)` | `https://api.opencorporates.com/v0.4/companies/search?q={name}` | key-optional (`OPENCORPORATES_API_KEY`) | `{query, companies:[{name,number,jurisdiction,status}], count, note?}` |
-| `openownership_search(name)` | `https://register.openownership.org/statements?query={name}` (or api) | keyless | `{query, owners:[{name,type}], count}` |
-| `aleph_search(name)` | `https://aleph.occrp.org/api/2/entities?q={name}` | key-optional (`ALEPH_API_KEY`) | `{query, entities:[{id,name,schema,collection}], count}` |
-| `wikidata_search(name)` | `https://www.wikidata.org/w/api.php?action=wbsearchentities&search={name}&format=json&language=en` | keyless | `{query, entities:[{qid,label,description}], count}` |
+
+| fn                            | endpoint                                                                                                                                  | auth                                    | returns                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------- |
+| `sec_edgar_company(name)`     | `https://efts.sec.gov/LATEST/search-index?q="{name}"` then `https://data.sec.gov/submissions/CIK{cik}.json` (browser_ua + descriptive UA) | keyless                                 | `{name, cik, ticker, sic, filings:[{form,date,accession}], officers?}` |
+| `opensanctions_search(name)`  | `https://api.opensanctions.org/search/default?q={name}`                                                                                   | keyless (key-optional)                  | `{query, matches:[{id,name,schema,topics,datasets}], count}`           |
+| `opencorporates_search(name)` | `https://api.opencorporates.com/v0.4/companies/search?q={name}`                                                                           | key-optional (`OPENCORPORATES_API_KEY`) | `{query, companies:[{name,number,jurisdiction,status}], count, note?}` |
+| `openownership_search(name)`  | `https://register.openownership.org/statements?query={name}` (or api)                                                                     | keyless                                 | `{query, owners:[{name,type}], count}`                                 |
+| `aleph_search(name)`          | `https://aleph.occrp.org/api/2/entities?q={name}`                                                                                         | key-optional (`ALEPH_API_KEY`)          | `{query, entities:[{id,name,schema,collection}], count}`               |
+| `wikidata_search(name)`       | `https://www.wikidata.org/w/api.php?action=wbsearchentities&search={name}&format=json&language=en`                                        | keyless                                 | `{query, entities:[{qid,label,description}], count}`                   |
 
 ### A6 `sources/social.py` — username/email social enrichment
-| fn | endpoint | auth | returns |
-|----|----------|------|---------|
-| `pullpush_reddit(username)` | `https://api.pullpush.io/reddit/search/submission/?author={u}&size=25` | keyless | `{username, submissions:[{subreddit,title,created}], subreddits:[…], count}` |
-| `libravatar_exists(email)` | `https://seccdn.libravatar.org/avatar/{md5}?d=404&s=80` (HEAD/GET, 200=exists) | keyless | `{email, has_avatar:bool}` |
+
+| fn                          | endpoint                                                                       | auth    | returns                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------ | ------- | ---------------------------------------------------------------------------- |
+| `pullpush_reddit(username)` | `https://api.pullpush.io/reddit/search/submission/?author={u}&size=25`         | keyless | `{username, submissions:[{subreddit,title,created}], subreddits:[…], count}` |
+| `libravatar_exists(email)`  | `https://seccdn.libravatar.org/avatar/{md5}?d=404&s=80` (HEAD/GET, 200=exists) | keyless | `{email, has_avatar:bool}`                                                   |
 
 ## Phase B — integration (ONE agent, after Phase A)
 
@@ -206,36 +212,34 @@ Owns `app/routes/osint.py`, `apps/web/src/osint/InvestigatePanel.tsx`, and
   isMalicious, SikkerAPI, Validin, ODIN, DFIR-Platform, etc.): not built until an
   endpoint is confirmed — too flaky for a batch.
 - Twitter/X unofficial scrapers (TwitterAPI.io, GetXAPI, SocialData, Xquik): ToS/
-  stability risk, all key+paid → skipped.
+stability risk, all key+paid → skipped.
 </content>
-
 
 ## 2026-08-29 addition — OSINT Techniques 11th ed. wave
 
 Three keyless sources, each probed live before it was written:
 
-| Connector | Endpoint | Auth | Answers |
-| --- | --- | --- | --- |
-| `stealer.hudsonrock_email` | `cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-email` | none | was this address on an info-stealer'd machine |
-| `stealer.hudsonrock_username` | `…/search-by-username` | none | same, for a handle |
-| `stealer.hudsonrock_domain` | `…/search-by-domain` | none | how much of a domain's user/employee estate is in stealer logs |
-| `corp.littlesis_search` | `littlesis.org/api/entities/search` | none (CC BY-SA) | person/org in the US power-network register |
-| `corp.littlesis_relationships` | `littlesis.org/api/entities/{id}/relationships` | none | who that entity is tied to, and how |
+| Connector                      | Endpoint                                                          | Auth            | Answers                                                        |
+| ------------------------------ | ----------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
+| `stealer.hudsonrock_email`     | `cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-email` | none            | was this address on an info-stealer'd machine                  |
+| `stealer.hudsonrock_username`  | `…/search-by-username`                                            | none            | same, for a handle                                             |
+| `stealer.hudsonrock_domain`    | `…/search-by-domain`                                              | none            | how much of a domain's user/employee estate is in stealer logs |
+| `corp.littlesis_search`        | `littlesis.org/api/entities/search`                               | none (CC BY-SA) | person/org in the US power-network register                    |
+| `corp.littlesis_relationships` | `littlesis.org/api/entities/{id}/relationships`                   | none            | who that entity is tied to, and how                            |
 
 Plus `app/osint/pivots.py`: 170 manual-pivot URL templates over ten selector
 kinds, no network at all. Everything dropped from the book's lists, and every
 endpoint probed and rejected, is recorded in
 `docs/decisions.md#selector-pivots-stealer-logs-and-the-phone-kind-2026-08-29`.
 
-
 ## 2026-08-29 wave 2 — coordinates, ransomware, video
 
-| Connector | Endpoint | Auth | Answers |
-| --- | --- | --- | --- |
-| `ransomware.ransomware_domain` | `api.ransomware.live/v2/searchvictims/{q}` | none | leak-site posts naming this domain, exact-matched |
-| `ransomware.ransomware_search` | same | none | free-text victim search (fuzzy: matches crew blurbs too) |
-| `ransomware.ransomware_group` | `api.ransomware.live/v2/group/{name}` | none | one crew's leak sites, tooling and TTPs |
-| `video.youtube_video` | `youtube.com/oembed` + `img.youtube.com` | none | is the video live, who posted it, did it ever exist |
+| Connector                      | Endpoint                                   | Auth | Answers                                                  |
+| ------------------------------ | ------------------------------------------ | ---- | -------------------------------------------------------- |
+| `ransomware.ransomware_domain` | `api.ransomware.live/v2/searchvictims/{q}` | none | leak-site posts naming this domain, exact-matched        |
+| `ransomware.ransomware_search` | same                                       | none | free-text victim search (fuzzy: matches crew blurbs too) |
+| `ransomware.ransomware_group`  | `api.ransomware.live/v2/group/{name}`      | none | one crew's leak sites, tooling and TTPs                  |
+| `video.youtube_video`          | `youtube.com/oembed` + `img.youtube.com`   | none | is the video live, who posted it, did it ever exist      |
 
 New `classify_target` kind: **`coordinate`** (decimal degrees or DMS, either
 axis order). New pivot kinds: `coordinate` (ch. 27), `document` (ch. 28),

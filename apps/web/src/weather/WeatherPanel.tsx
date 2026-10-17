@@ -1,9 +1,9 @@
 // Weather right-rail tab. Reads current conditions for the centre of the view
 // (no AOI needed). Hit "use view" after panning to re-sample.
-import type * as Cesium from 'cesium';
-import { Widget, MicroLabel } from '../shell/instruments.js';
-import { useCenter, CenterHeader } from '../globe/center.js';
-import { WeatherCard } from './WeatherCard.js';
+import type * as Cesium from "cesium";
+import { Widget, MicroLabel } from "../shell/instruments.js";
+import { useCenter, CenterHeader } from "../globe/center.js";
+import { WeatherCard } from "./WeatherCard.js";
 
 export function WeatherPanel({ viewer }: { viewer: unknown }): JSX.Element {
   const { center, sync } = useCenter(viewer as Cesium.Viewer | null);

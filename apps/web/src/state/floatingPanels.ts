@@ -3,7 +3,7 @@
 // free-floating window the operator can drag anywhere over the globe. The store
 // only tracks WHICH panels are floating and WHERE; the panel content is rendered
 // by whoever owns it (LeftIconRail, App, …) so there is no content duplication.
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface FloatingRect {
   x: number;
@@ -26,7 +26,11 @@ interface FloatingState {
 // other. Deterministic (count-based), so it stays test-friendly.
 function cascade(count: number): FloatingRect {
   const step = 28 * (count % 6);
-  return { ...DEFAULT_RECT, x: DEFAULT_RECT.x + step, y: DEFAULT_RECT.y + step };
+  return {
+    ...DEFAULT_RECT,
+    x: DEFAULT_RECT.x + step,
+    y: DEFAULT_RECT.y + step,
+  };
 }
 
 export const useFloatingPanels = create<FloatingState>((set) => ({
@@ -56,6 +60,8 @@ export function isDetached(id: string): boolean {
   return Boolean(useFloatingPanels.getState().panels[id]);
 }
 
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useFloatingPanels: typeof useFloatingPanels }).__useFloatingPanels = useFloatingPanels;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (
+    window as unknown as { __useFloatingPanels: typeof useFloatingPanels }
+  ).__useFloatingPanels = useFloatingPanels;
 }

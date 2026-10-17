@@ -15,7 +15,7 @@
 // constellation purely by name substring". Where a real, stable NORAD id is
 // known for a representative satellite it's filled in (best-effort, public).
 
-export type SensorKind = 'SAR' | 'EO' | 'MSI' | 'RF';
+export type SensorKind = "SAR" | "EO" | "MSI" | "RF";
 
 export interface SensorSat {
   norad: number; // 0 = match by name substring only (no pinned catalogue id)
@@ -28,42 +28,216 @@ export interface SensorSat {
 // ~30 representative entries across the major commercial constellations.
 export const SENSOR_SATS: readonly SensorSat[] = [
   // ── SAR (Synthetic Aperture Radar) — all-weather, day/night imaging ────────
-  { norad: 43800, name: 'ICEYE-X2', match: 'iceye', sensor: 'SAR', operator: 'ICEYE' },
-  { norad: 44389, name: 'ICEYE-X4', match: 'iceye', sensor: 'SAR', operator: 'ICEYE' },
-  { norad: 46497, name: 'ICEYE-X6', match: 'iceye', sensor: 'SAR', operator: 'ICEYE' },
-  { norad: 48918, name: 'ICEYE-X8', match: 'iceye', sensor: 'SAR', operator: 'ICEYE' },
-  { norad: 0, name: 'ICEYE (constellation)', match: 'iceye', sensor: 'SAR', operator: 'ICEYE' },
-  { norad: 46266, name: 'CAPELLA-2 (Sequoia)', match: 'capella', sensor: 'SAR', operator: 'Capella Space' },
-  { norad: 48601, name: 'CAPELLA-3 (Whitney)', match: 'capella', sensor: 'SAR', operator: 'Capella Space' },
-  { norad: 48602, name: 'CAPELLA-4 (Whitney)', match: 'capella', sensor: 'SAR', operator: 'Capella Space' },
-  { norad: 0, name: 'CAPELLA (constellation)', match: 'capella', sensor: 'SAR', operator: 'Capella Space' },
-  { norad: 56212, name: 'UMBRA-04', match: 'umbra', sensor: 'SAR', operator: 'Umbra' },
-  { norad: 56216, name: 'UMBRA-05', match: 'umbra', sensor: 'SAR', operator: 'Umbra' },
-  { norad: 0, name: 'UMBRA (constellation)', match: 'umbra', sensor: 'SAR', operator: 'Umbra' },
+  {
+    norad: 43800,
+    name: "ICEYE-X2",
+    match: "iceye",
+    sensor: "SAR",
+    operator: "ICEYE",
+  },
+  {
+    norad: 44389,
+    name: "ICEYE-X4",
+    match: "iceye",
+    sensor: "SAR",
+    operator: "ICEYE",
+  },
+  {
+    norad: 46497,
+    name: "ICEYE-X6",
+    match: "iceye",
+    sensor: "SAR",
+    operator: "ICEYE",
+  },
+  {
+    norad: 48918,
+    name: "ICEYE-X8",
+    match: "iceye",
+    sensor: "SAR",
+    operator: "ICEYE",
+  },
+  {
+    norad: 0,
+    name: "ICEYE (constellation)",
+    match: "iceye",
+    sensor: "SAR",
+    operator: "ICEYE",
+  },
+  {
+    norad: 46266,
+    name: "CAPELLA-2 (Sequoia)",
+    match: "capella",
+    sensor: "SAR",
+    operator: "Capella Space",
+  },
+  {
+    norad: 48601,
+    name: "CAPELLA-3 (Whitney)",
+    match: "capella",
+    sensor: "SAR",
+    operator: "Capella Space",
+  },
+  {
+    norad: 48602,
+    name: "CAPELLA-4 (Whitney)",
+    match: "capella",
+    sensor: "SAR",
+    operator: "Capella Space",
+  },
+  {
+    norad: 0,
+    name: "CAPELLA (constellation)",
+    match: "capella",
+    sensor: "SAR",
+    operator: "Capella Space",
+  },
+  {
+    norad: 56212,
+    name: "UMBRA-04",
+    match: "umbra",
+    sensor: "SAR",
+    operator: "Umbra",
+  },
+  {
+    norad: 56216,
+    name: "UMBRA-05",
+    match: "umbra",
+    sensor: "SAR",
+    operator: "Umbra",
+  },
+  {
+    norad: 0,
+    name: "UMBRA (constellation)",
+    match: "umbra",
+    sensor: "SAR",
+    operator: "Umbra",
+  },
 
   // ── EO / MSI (Electro-Optical / Multispectral) — visible-light imaging ─────
   // Planet SkySat — sub-metre EO; Planet Dove/Flock — ~3 m daily MSI.
-  { norad: 39418, name: 'SKYSAT-1', match: 'skysat', sensor: 'EO', operator: 'Planet' },
-  { norad: 40072, name: 'SKYSAT-2', match: 'skysat', sensor: 'EO', operator: 'Planet' },
-  { norad: 41601, name: 'SKYSAT-C1', match: 'skysat', sensor: 'EO', operator: 'Planet' },
-  { norad: 0, name: 'SKYSAT (constellation)', match: 'skysat', sensor: 'EO', operator: 'Planet' },
-  { norad: 0, name: 'Planet DOVE / FLOCK', match: 'flock', sensor: 'MSI', operator: 'Planet' },
-  { norad: 0, name: 'Planet DOVE', match: 'dove', sensor: 'MSI', operator: 'Planet' },
-  { norad: 0, name: 'Planet SuperDove', match: 'superdove', sensor: 'MSI', operator: 'Planet' },
+  {
+    norad: 39418,
+    name: "SKYSAT-1",
+    match: "skysat",
+    sensor: "EO",
+    operator: "Planet",
+  },
+  {
+    norad: 40072,
+    name: "SKYSAT-2",
+    match: "skysat",
+    sensor: "EO",
+    operator: "Planet",
+  },
+  {
+    norad: 41601,
+    name: "SKYSAT-C1",
+    match: "skysat",
+    sensor: "EO",
+    operator: "Planet",
+  },
+  {
+    norad: 0,
+    name: "SKYSAT (constellation)",
+    match: "skysat",
+    sensor: "EO",
+    operator: "Planet",
+  },
+  {
+    norad: 0,
+    name: "Planet DOVE / FLOCK",
+    match: "flock",
+    sensor: "MSI",
+    operator: "Planet",
+  },
+  {
+    norad: 0,
+    name: "Planet DOVE",
+    match: "dove",
+    sensor: "MSI",
+    operator: "Planet",
+  },
+  {
+    norad: 0,
+    name: "Planet SuperDove",
+    match: "superdove",
+    sensor: "MSI",
+    operator: "Planet",
+  },
   // BlackSky Global — rapid-revisit high-res EO.
-  { norad: 46106, name: 'BLACKSKY GLOBAL 7', match: 'blacksky', sensor: 'EO', operator: 'BlackSky' },
-  { norad: 46107, name: 'BLACKSKY GLOBAL 8', match: 'blacksky', sensor: 'EO', operator: 'BlackSky' },
-  { norad: 48270, name: 'BLACKSKY GLOBAL 9', match: 'blacksky', sensor: 'EO', operator: 'BlackSky' },
-  { norad: 0, name: 'BLACKSKY (constellation)', match: 'blacksky', sensor: 'EO', operator: 'BlackSky' },
+  {
+    norad: 46106,
+    name: "BLACKSKY GLOBAL 7",
+    match: "blacksky",
+    sensor: "EO",
+    operator: "BlackSky",
+  },
+  {
+    norad: 46107,
+    name: "BLACKSKY GLOBAL 8",
+    match: "blacksky",
+    sensor: "EO",
+    operator: "BlackSky",
+  },
+  {
+    norad: 48270,
+    name: "BLACKSKY GLOBAL 9",
+    match: "blacksky",
+    sensor: "EO",
+    operator: "BlackSky",
+  },
+  {
+    norad: 0,
+    name: "BLACKSKY (constellation)",
+    match: "blacksky",
+    sensor: "EO",
+    operator: "BlackSky",
+  },
 
   // ── RF (Radio-Frequency geolocation) — emitter mapping, AIS/RF survey ──────
   // HawkEye 360 flies in clusters; Spire LEMUR does RF (AIS/ADS-B) + GNSS-RO.
-  { norad: 43799, name: 'HAWK-A (HawkEye 360)', match: 'hawk', sensor: 'RF', operator: 'HawkEye 360' },
-  { norad: 43797, name: 'HAWK-B (HawkEye 360)', match: 'hawk', sensor: 'RF', operator: 'HawkEye 360' },
-  { norad: 43798, name: 'HAWK-C (HawkEye 360)', match: 'hawk', sensor: 'RF', operator: 'HawkEye 360' },
-  { norad: 0, name: 'HAWKEYE 360 (constellation)', match: 'hawkeye', sensor: 'RF', operator: 'HawkEye 360' },
-  { norad: 0, name: 'Spire LEMUR', match: 'lemur', sensor: 'RF', operator: 'Spire Global' },
-  { norad: 0, name: 'Spire (constellation)', match: 'spire', sensor: 'RF', operator: 'Spire Global' },
+  {
+    norad: 43799,
+    name: "HAWK-A (HawkEye 360)",
+    match: "hawk",
+    sensor: "RF",
+    operator: "HawkEye 360",
+  },
+  {
+    norad: 43797,
+    name: "HAWK-B (HawkEye 360)",
+    match: "hawk",
+    sensor: "RF",
+    operator: "HawkEye 360",
+  },
+  {
+    norad: 43798,
+    name: "HAWK-C (HawkEye 360)",
+    match: "hawk",
+    sensor: "RF",
+    operator: "HawkEye 360",
+  },
+  {
+    norad: 0,
+    name: "HAWKEYE 360 (constellation)",
+    match: "hawkeye",
+    sensor: "RF",
+    operator: "HawkEye 360",
+  },
+  {
+    norad: 0,
+    name: "Spire LEMUR",
+    match: "lemur",
+    sensor: "RF",
+    operator: "Spire Global",
+  },
+  {
+    norad: 0,
+    name: "Spire (constellation)",
+    match: "spire",
+    sensor: "RF",
+    operator: "Spire Global",
+  },
 ] as const;
 
 // Build a fast NORAD→sensor lookup once (skips the 0 sentinels).
@@ -85,7 +259,7 @@ export function sensorOf(name: string, norad?: number): SensorSat | undefined {
     const hit = BY_NORAD.get(norad);
     if (hit) return hit;
   }
-  const lc = (name || '').toLowerCase();
+  const lc = (name || "").toLowerCase();
   if (!lc) return undefined;
   // Match on whole ALPHA tokens, NOT a bare substring — an unanchored includes()
   // mis-classifies unrelated active-group sats (GLOBALHAWK→"hawk", INSPIRESAT→
@@ -104,4 +278,4 @@ export function sensorOf(name: string, norad?: number): SensorSat | undefined {
 }
 
 // Distinct sensor kinds present in the catalogue (for chip rendering).
-export const SENSOR_KINDS: readonly SensorKind[] = ['EO', 'MSI', 'SAR', 'RF'];
+export const SENSOR_KINDS: readonly SensorKind[] = ["EO", "MSI", "SAR", "RF"];

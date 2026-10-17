@@ -5,11 +5,12 @@ actual codebase (recon 2026-06-21). Scope chosen by operator: **all four** —
 Satellite Tasking, Target Lifecycle Kanban, Gotham visual reskin, FMV+onboard-AI.
 
 Honesty notes up front (per repo rules — no "global/complete" without a count):
+
 - **Velocity already has a Gotham-ready substrate** (ink palette, IBM Plex Mono
   IDs, MIL-STD-ish SVG icons, instrument primitives, dark COP globe). Three of
-  the four pillars are *additive*, not rebuilds.
+  the four pillars are _additive_, not rebuilds.
 - **FMV+onboard-AI is the weak pillar for an OSINT tool**: there is no real video
-  feed and no on-board CV model. It can only be an honest *mock* driven by the
+  feed and no on-board CV model. It can only be an honest _mock_ driven by the
   existing sim drones. Sized and flagged as such.
 - **Satellite Tasking is the strongest** and is the recommended first build: the
   SGP4 math and TLE source already exist; the look-angle function needed for the
@@ -17,12 +18,12 @@ Honesty notes up front (per repo rules — no "global/complete" without a count)
 
 ## Recommended sequencing
 
-| Phase | Pillar | Why this order | Rough size |
-|---|---|---|---|
-| 1 | **Satellite Tasking** | Highest capability-per-effort; reuses existing SGP4+TLE; Gotham's lead pillar; pure client math, no new data dependency | M |
-| 2 | **Visual reskin** (classification + layer-tree + status bar) | Cheap, additive, makes every other pillar read as "Gotham"; no new deps | S |
-| 3 | **Target Lifecycle Kanban** | Self-contained; needs a Supabase table + route (follows `alert_rules.py`) | M |
-| 4 | **FMV + onboard-AI mock** | Most speculative; gated on honest "notional" framing; reuses sim drones + `followEntity` | M (mock) |
+| Phase | Pillar                                                       | Why this order                                                                                                          | Rough size |
+| ----- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1     | **Satellite Tasking**                                        | Highest capability-per-effort; reuses existing SGP4+TLE; Gotham's lead pillar; pure client math, no new data dependency | M          |
+| 2     | **Visual reskin** (classification + layer-tree + status bar) | Cheap, additive, makes every other pillar read as "Gotham"; no new deps                                                 | S          |
+| 3     | **Target Lifecycle Kanban**                                  | Self-contained; needs a Supabase table + route (follows `alert_rules.py`)                                               | M          |
+| 4     | **FMV + onboard-AI mock**                                    | Most speculative; gated on honest "notional" framing; reuses sim drones + `followEntity`                                | M (mock)   |
 
 Each phase ships independently behind its own tab/toggle. Stop after any phase.
 
@@ -57,7 +58,7 @@ polyline `#d946ef`. `pnpm -r typecheck` + `pytest -q` green at every commit.
 
 ---
 
-## Pillar 1 — Satellite Tasking / Collection Planner  ★ build first
+## Pillar 1 — Satellite Tasking / Collection Planner ★ build first
 
 **Gotham reference** (`GothamCard02`): pick AOI + mission time window + sensor
 type (MSI/SAR/RF) → "Simulation Results": coverage %, average revisit, pass
@@ -69,17 +70,19 @@ requests; night globe with ground-tracks + timeline scrubber.
 sensor filter and gets the pass schedule, revisit/coverage stats, and a sky-view.
 
 ### Data model — sensor type
+
 CelesTrak groups are by operator/purpose, NOT sensor type. Bridge with a small
 curated catalog (no completeness claim — title it "known commercial sensors"):
 
 - `apps/web/src/registry/sensorSats.ts` (NEW): `{ norad: number, name, sensor:
-  'SAR'|'EO'|'MSI'|'RF', operator }` for the well-known constellations — ICEYE &
+'SAR'|'EO'|'MSI'|'RF', operator }` for the well-known constellations — ICEYE &
   Capella & Umbra (SAR), Planet Doves/SkySat & BlackSky (EO/MSI), HawkEye 360 &
   Spire (RF). Fall back to group-level class for everything else.
 - Sensor filter = union of the relevant CelesTrak groups (`planet`, `spire`,
   `military`, `geo`, `active`) intersected with the curated catalog.
 
 ### Compute (client-side, reuse SGP4)
+
 - Reuse `SatelliteAdapter.sampleOrbit(rec, startMs, stepSec, windowSec)` to walk
   each candidate sat across the window.
 - **NEW** `apps/web/src/sim/tasking.ts`: pure functions
@@ -89,12 +92,13 @@ curated catalog (no completeness claim — title it "known commercial sensors"):
     mask) — **the function already bundled, just unused**.
   - `skyView(rec, aoi, window, stepSec)` → az/el samples for the polar plot.
   - `coverageStats(passes, window)` → `{coveragePct, avgRevisitMin, passCount,
-    maxGapMin}`.
+maxGapMin}`.
 - Chunk across frames (per-frame budget, like the adapter) so a 4 k-sat sweep
   never hits the ~100 ms main-thread hitch the guardrail warns about. If it's
   still heavy, move to a Web Worker (TLEs are tiny to post).
 
 ### UI
+
 - `apps/web/src/tasking/TaskingPanel.tsx` (NEW): params (AoiSelector or
   map-click + radius; `From` datetime + `for N hours`; sensor chips MSI/SAR/RF;
   min revisit). Results: `Widget`s for the stats (`KVRow` coverage/revisit/
@@ -107,6 +111,7 @@ curated catalog (no completeness claim — title it "known commercial sensors"):
   to `rightTabs`. Hotkey precedent in `App.tsx` keydown.
 
 ### Optional backend
+
 None required (client SGP4). If sweeps get heavy, add
 `GET /api/space/tasking` (pre-computed pass tables) following `space.py` cache
 pattern — defer until measured.
@@ -120,7 +125,7 @@ ground station / time → assert a pass with sane max-elevation). One vitest fil
 
 ---
 
-## Pillar 2 — Gotham visual reskin (additive)  ★ build second
+## Pillar 2 — Gotham visual reskin (additive) ★ build second
 
 **Gotham reference**: ordered **layer-tree** folders ("1. Obj TDRN CANVAS…
 Recognised Maritime Picture… OSINT"); pervasive **classification caveats**
@@ -130,13 +135,13 @@ Connected"); monospace IDs; restraint.
 **Reality**: Velocity already has the palette, fonts, icons, status dots, and the
 `UNCLAS` pill (`CommandBar.tsx:107-112`). This pillar is small + additive.
 
-| Change | File | Note |
-|---|---|---|
-| **Classification component** | `shell/instruments.tsx` (NEW `Caveat`) | Configurable banner `UNCLAS//FOUO` / `NOTIONAL` / commercial-mode notice; reuse in panel headers + card footers |
-| Expand caveat in command bar | `command-bar/CommandBar.tsx:107` | Use new `Caveat`; show data-posture (commercial vs keyless) |
-| **Layer-tree folders** | `layer-rail/LayerRail.tsx` | Add optional named, ordered, collapsible groups over the flat layer list (Gotham's numbered folders). Group metadata in `registry/defaults.ts` |
-| **Status bar** | `shell/ConsoleShell.tsx` (NEW thin bottom-or-top strip) | Consolidate WS pill + feed health + replay state + entity/FPS into one "Map health" bar |
-| Card caveat footer | `entity-panel/*`, new Kanban cards | `MTS//MNF`-style classification line on dossier/target cards |
+| Change                       | File                                                    | Note                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Classification component** | `shell/instruments.tsx` (NEW `Caveat`)                  | Configurable banner `UNCLAS//FOUO` / `NOTIONAL` / commercial-mode notice; reuse in panel headers + card footers                                |
+| Expand caveat in command bar | `command-bar/CommandBar.tsx:107`                        | Use new `Caveat`; show data-posture (commercial vs keyless)                                                                                    |
+| **Layer-tree folders**       | `layer-rail/LayerRail.tsx`                              | Add optional named, ordered, collapsible groups over the flat layer list (Gotham's numbered folders). Group metadata in `registry/defaults.ts` |
+| **Status bar**               | `shell/ConsoleShell.tsx` (NEW thin bottom-or-top strip) | Consolidate WS pill + feed health + replay state + entity/FPS into one "Map health" bar                                                        |
+| Card caveat footer           | `entity-panel/*`, new Kanban cards                      | `MTS//MNF`-style classification line on dossier/target cards                                                                                   |
 
 **Immutable** (do NOT touch): `styles.ts` icon dispatch + colors, `labelStyle.ts`
 font/colors, selection polyline, motion models, `requestRenderMode`.
@@ -157,16 +162,18 @@ borders; `MTS//MNF` caveat; drag between stages.
 through the lifecycle, persisted per user.
 
 ### State + persistence (copy `alert_rules.py`)
+
 - `apps/web/src/state/targetBoard.ts` (NEW): `useTargetBoard` Zustand —
   `entries: TargetEntry[]`, `{ id, entityId, stage, priority, note }`, with
   add/move/remove + load/save.
 - `apps/api/app/routes/targets.py` (NEW): `GET/POST/PATCH/DELETE /api/targets/board`,
   Supabase REST + RLS, mirroring `alert_rules.py` exactly.
 - Supabase migration `target_board` table (`site/supabase-schema.sql`): `id,
-  user_id, entity_id, stage, priority, note, created_at, updated_at`, unique
+user_id, entity_id, stage, priority, note, created_at, updated_at`, unique
   `(user_id, entity_id)`, RLS `auth.uid() = user_id`.
 
 ### UI
+
 - `apps/web/src/target-kanban/TargetKanbanPanel.tsx` (NEW): horizontal columns
   (the 7 F2T2EA stages) using `SectionLabel` headers w/ counts; cards = entity
   icon + label + stage pips (`MeterBar`/dots) + threat border (`--alert/--warn`
@@ -186,18 +193,19 @@ vitest for stage-move reducer; typecheck.
 
 ---
 
-## Pillar 4 — FMV + onboard-AI (honest mock)  ⚠ speculative
+## Pillar 4 — FMV + onboard-AI (honest mock) ⚠ speculative
 
 **Gotham reference** (`GothamFullBleed03`): down-looking sensor feed, AI
 bounding boxes (vehicle/structure/flagged), class counts, platform attitude +
 sensor az/el telemetry, archived-video scrubber.
 
 **Reality check**: OSINT has **no drone video** and **no on-board CV model**.
-This can only be a *notional* reconstruction driven by sim drones + a static
+This can only be a _notional_ reconstruction driven by sim drones + a static
 overhead image. Build it clearly labeled "NOTIONAL / SIMULATED" (matches
 Gotham's own "All data shown is notional" footer). Do not imply a live feed.
 
 ### What it can honestly be
+
 - Select a **sim drone** → `followEntity()` down-looking camera (recon: exists).
 - HUD panel (absolute React div over Cesium, the `SimulationOverlay` pattern):
   - **Telemetry** from `RtAgent` (already has lat/lon/alt/heading/link/mode/
@@ -205,8 +213,8 @@ Gotham's own "All data shown is notional" footer). Do not imply a live feed.
     geometry). `KV`/`KVRow`.
   - **Frame**: a static overhead tile from `imagery.py` (`/api/imagery/...`)
     under the AOI as the "sensor image".
-  - **Detections**: synthesize boxes from *other sim entities / known map
-    features within the footprint* (not a CV claim) → `detections[]` +
+  - **Detections**: synthesize boxes from _other sim entities / known map
+    features within the footprint_ (not a CV claim) → `detections[]` +
     class-count badges. Clearly "sim-derived".
 - Scrubber: reuse `Timeline` clock (`viewer.clock.onTick`) for archived playback.
 
@@ -239,9 +247,9 @@ cadence, `FORMAT=tle`. Any pillar PR that touches these is wrong.
 
 ## Effort / risk
 
-| Pillar | New files | Backend | Deps | Risk |
-|---|---|---|---|---|
-| Sat Tasking | ~4 fe | none (opt later) | none | low (math is exact, testable) |
-| Reskin | ~1 fe + edits | none | none | low (additive; guardrail-bounded) |
-| Kanban | ~3 fe + 1 route + migration | Supabase table | none (HTML5 dnd) | med (auth/RLS) |
-| FMV mock | ~2 fe | none | none | med (honesty/over-claim) |
+| Pillar      | New files                   | Backend          | Deps             | Risk                              |
+| ----------- | --------------------------- | ---------------- | ---------------- | --------------------------------- |
+| Sat Tasking | ~4 fe                       | none (opt later) | none             | low (math is exact, testable)     |
+| Reskin      | ~1 fe + edits               | none             | none             | low (additive; guardrail-bounded) |
+| Kanban      | ~3 fe + 1 route + migration | Supabase table   | none (HTML5 dnd) | med (auth/RLS)                    |
+| FMV mock    | ~2 fe                       | none             | none             | med (honesty/over-claim)          |

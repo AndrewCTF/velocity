@@ -4,9 +4,9 @@
 // to the same localStorage key ConsoleShell has always used (`csl.rightW`) so a
 // user's existing width carries over. ConsoleShell still publishes it as the
 // `--rail-right-w` CSS var (guard-tested) — this store is only the source value.
-import { create } from 'zustand';
+import { create } from "zustand";
 
-const LS_RIGHT = 'csl.rightW';
+const LS_RIGHT = "csl.rightW";
 export const RIGHT_MIN = 260;
 export const RIGHT_MAX = 680;
 export const RIGHT_DEFAULT = 360;
@@ -15,7 +15,8 @@ const DEFAULT = RIGHT_DEFAULT;
 // two columns (see theme/reflow.css `@container` breakpoint at 500px content).
 export const RIGHT_WIDE = 560;
 
-const clamp = (n: number): number => Math.max(RIGHT_MIN, Math.min(RIGHT_MAX, n));
+const clamp = (n: number): number =>
+  Math.max(RIGHT_MIN, Math.min(RIGHT_MAX, n));
 
 function read(): number {
   try {

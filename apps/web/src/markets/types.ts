@@ -48,4 +48,8 @@ export interface PredictionsResponse {
 }
 
 // Generic fetch state, mirroring country/shared.tsx's FetchState.
-export type FetchState<T> = { loading: boolean; error: string | null; data: T | null };
+export type FetchState<T> = {
+  loading: boolean;
+  error: string | null;
+  data: T | null;
+};

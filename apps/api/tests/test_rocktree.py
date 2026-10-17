@@ -186,13 +186,44 @@ def test_tileset_links_branches_and_never_leaves_a_hole() -> None:
     filler = uris["n0.glb?keep=252"]
     assert filler["geometricError"] == 0 and "children" not in filler
     assert filler["boundingVolume"] == zero["boundingVolume"]
-    by_uri = {c["content"]["uri"]: c for c in uris["n00.glb"]["children"]}
+    assert uris["n01.glb"]["geometricError"] == 0  # a real leaf stops refining
+    # A document is two levels deep. "00" refines, so the next two hang off it
+    # as their own document: a bulk in one piece made the browser build a tile
+    # for every node in it to draw a handful.
+    (link,) = uris["n00.glb"]["children"]
+    assert link["content"]["uri"] == "t00.json"
+    assert link["boundingVolume"] == uris["n00.glb"]["boundingVolume"]
+
+    below = rt.tileset("", bulk, None, under="00")["root"]
+    assert below["refine"] == "REPLACE" and "content" not in below
+    assert below["boundingVolume"] == uris["n00.glb"]["boundingVolume"]
+    by_uri = {c["content"]["uri"]: c for c in below["children"]}
+    # The leftovers of "00" ride in the document its children are in.
     assert set(by_uri) == {"n000.glb", "n00.glb?keep=254"}
     deep = by_uri["n000.glb"]["children"]
     assert {c["content"]["uri"] for c in deep} == {"n0000.glb", "n000.glb?keep=254"}
     link = next(c for c in deep if c["content"]["uri"] == "n0000.glb")["children"][0]
-    assert link["content"]["uri"] == "t0000.json"
-    assert uris["n01.glb"]["geometricError"] == 0  # a real leaf stops refining
+    assert link["content"]["uri"] == "t0000.json"  # the next bulk
+    with pytest.raises(LookupError):
+        rt.tileset("", bulk, None, under="77")
+
+
+def test_a_filler_known_to_be_empty_is_not_linked() -> None:
+    """Over a city a quarter of the tiles were fillers with nothing in them, and
+    an empty tile still costs the browser a request and a model."""
+    bulk = _bulk(_node_meta("0"), _node_meta("00"), _node_meta("01"))
+    asked: list[tuple[str, int]] = []
+
+    def known_empty(node: str, keep: int) -> bool:
+        asked.append((node, keep))
+        return True
+
+    (zero,) = rt.tileset("", bulk, None, known_empty=known_empty)["root"]["children"]
+    assert {c["content"]["uri"] for c in zero["children"]} == {"n00.glb", "n01.glb"}
+    assert asked == [("0", 252)]
+    # Not known to be empty: it stays. A hole is worse than a request.
+    (zero,) = rt.tileset("", bulk, None, known_empty=lambda *_: False)["root"]["children"]
+    assert "n0.glb?keep=252" in {c["content"]["uri"] for c in zero["children"]}
 
 
 def test_split_finds_the_bulk_that_describes_a_node() -> None:
@@ -229,7 +260,7 @@ def test_route_is_dark_unless_the_operator_opted_in(
 
     # Control: with the switch on the same URL is served, so the 404s above
     # were the gate and not a missing route.
-    async def tree(head: str, detail: float) -> bytes:
+    async def tree(head: str, detail: float, empty: object) -> bytes:
         return b'{"asset":{"version":"1.0"}}'
 
     monkeypatch.setattr(rt, "tileset_json", tree)

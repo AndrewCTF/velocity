@@ -8,10 +8,10 @@
 // CallbackPositionProperty/CallbackProperty reading the mutable struct, so there
 // is NO per-tick entity churn (the refresh-smoothness guardrail).
 
-import * as Cesium from 'cesium';
-import { bearingDeg, destPoint, haversineKm } from './engine.js';
-import type { GroundDetection } from '../ground/types.js';
-import type { Capture } from '../state/captures.js';
+import * as Cesium from "cesium";
+import { bearingDeg, destPoint, haversineKm } from "./engine.js";
+import type { GroundDetection } from "../ground/types.js";
+import type { Capture } from "../state/captures.js";
 
 export interface CamInfo {
   cam_id: string;
@@ -30,7 +30,7 @@ interface Vehicle {
   way: Way; // the road this vehicle drives (real-data mode spans many roads)
 }
 
-const VEHICLE_CLASSES = new Set(['car', 'truck', 'bus', 'motorcycle']);
+const VEHICLE_CLASSES = new Set(["car", "truck", "bus", "motorcycle"]);
 function vehCount(dets: GroundDetection[]): number {
   return dets.filter((d) => VEHICLE_CLASSES.has(d.cls)).length;
 }
@@ -43,8 +43,8 @@ interface Way {
   total: number; // total length (m)
 }
 
-const HEX_CAR = '#facc15';
-const HEX_TRUCK = '#fb923c';
+const HEX_CAR = "#facc15";
+const HEX_TRUCK = "#fb923c";
 const DEFAULT_SPEED_MPS = 13; // ~47 km/h urban arterial (heuristic; see note)
 const VEHICLE_CAP = 40;
 const ROAD_RADIUS_M = 600;
@@ -76,9 +76,13 @@ function buildWay(coords: { lat: number; lon: number }[]): Way | null {
   return { nodes, cum, total: cum[cum.length - 1]! };
 }
 
-function posAtArc(w: Way, sMeters: number): { lat: number; lon: number; heading: number } {
+function posAtArc(
+  w: Way,
+  sMeters: number,
+): { lat: number; lon: number; heading: number } {
   const total = w.total;
-  if (total <= 0) return { lat: w.nodes[0]!.lat, lon: w.nodes[0]!.lon, heading: 0 };
+  if (total <= 0)
+    return { lat: w.nodes[0]!.lat, lon: w.nodes[0]!.lon, heading: 0 };
   const s = ((sMeters % total) + total) % total;
   // find segment i where cum[i] <= s < cum[i+1]
   let i = 1;
@@ -96,19 +100,25 @@ function posAtArc(w: Way, sMeters: number): { lat: number; lon: number; heading:
 
 /** Keyless Overpass fetch of road ways around a point; cached per (lat,lon) key. */
 const _roadCache = new Map<string, Way[]>();
-async function fetchRoads(lat: number, lon: number, radiusM: number): Promise<Way[]> {
+async function fetchRoads(
+  lat: number,
+  lon: number,
+  radiusM: number,
+): Promise<Way[]> {
   const key = `${lat.toFixed(3)}:${lon.toFixed(3)}:${radiusM}`;
   const cached = _roadCache.get(key);
   if (cached) return cached;
   const q = `[out:json][timeout:10];way[highway](around:${radiusM},${lat},${lon});out geom;`;
   try {
-    const r = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    const r = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: `data=${encodeURIComponent(q)}`,
     });
     if (!r.ok) throw new Error(`overpass ${r.status}`);
-    const j = (await r.json()) as { elements?: Array<{ geometry?: Array<{ lat: number; lon: number }> }> };
+    const j = (await r.json()) as {
+      elements?: Array<{ geometry?: Array<{ lat: number; lon: number }> }>;
+    };
     const ways: Way[] = [];
     for (const el of j.elements ?? []) {
       const coords = el.geometry ?? [];
@@ -154,12 +164,15 @@ export class TrafficController {
   private disposed = false;
 
   constructor(private readonly viewer: Cesium.Viewer) {
-    this.ds = new Cesium.CustomDataSource('sim:traffic');
+    this.ds = new Cesium.CustomDataSource("sim:traffic");
     void viewer.dataSources.add(this.ds);
   }
 
   /** Seed vehicles from a cam + its detections. Replaces any previous sim. */
-  async seed(cam: CamInfo, dets: GroundDetection[]): Promise<{ count: number; road: boolean }> {
+  async seed(
+    cam: CamInfo,
+    dets: GroundDetection[],
+  ): Promise<{ count: number; road: boolean }> {
     const roads = await fetchRoads(cam.lat, cam.lon, ROAD_RADIUS_M);
     const way = nearestWay(roads, cam.lat, cam.lon);
     if (!way) return { count: 0, road: false };
@@ -178,7 +191,15 @@ export class TrafficController {
       // ponytail: per-vehicle speed varies deterministically around the default;
       // bbox-displacement flow tracking is a future upgrade (needs cross-poll track).
       const speed = DEFAULT_SPEED_MPS * (0.8 + ((i * 37) % 7) / 10);
-      const v: Vehicle = { id, lat: p.lat, lon: p.lon, heading: p.heading, speedMps: speed, s, way };
+      const v: Vehicle = {
+        id,
+        lat: p.lat,
+        lon: p.lon,
+        heading: p.heading,
+        speedMps: speed,
+        s,
+        way,
+      };
       this.vehicles.push(v);
       this.addVehicleEntity(v, i % 5 === 0);
     }
@@ -193,11 +214,19 @@ export class TrafficController {
    * traffic-jam prediction. Not desktop-gated: captures already carry detections,
    * so this replays real data on the website too.
    */
-  async seedFromCaptures(caps: Capture[]): Promise<{ count: number; roads: number; jams: number }> {
+  async seedFromCaptures(
+    caps: Capture[],
+  ): Promise<{ count: number; roads: number; jams: number }> {
     this.clearEntities();
     this.vehicles = [];
     let total = 0;
-    const roadStats: { id: string; way: Way; count: number; lat: number; lon: number }[] = [];
+    const roadStats: {
+      id: string;
+      way: Way;
+      count: number;
+      lat: number;
+      lon: number;
+    }[] = [];
     for (const cap of caps) {
       if (total >= GLOBAL_VEHICLE_CAP) break;
       const want = vehCount(cap.dets);
@@ -211,12 +240,26 @@ export class TrafficController {
         const s = (way.total * i) / Math.max(1, n);
         const p = posAtArc(way, s);
         const speed = DEFAULT_SPEED_MPS * (0.7 + ((i * 37) % 7) / 10);
-        const v: Vehicle = { id, lat: p.lat, lon: p.lon, heading: p.heading, speedMps: speed, s, way };
+        const v: Vehicle = {
+          id,
+          lat: p.lat,
+          lon: p.lon,
+          heading: p.heading,
+          speedMps: speed,
+          s,
+          way,
+        };
         this.vehicles.push(v);
         this.addVehicleEntity(v, i % 5 === 0);
       }
       total += n;
-      roadStats.push({ id: cap.srcId, way, count: n, lat: cap.lat, lon: cap.lon });
+      roadStats.push({
+        id: cap.srcId,
+        way,
+        count: n,
+        lat: cap.lat,
+        lon: cap.lon,
+      });
     }
     const jams = this.renderJams(roadStats);
     this.start();
@@ -233,14 +276,20 @@ export class TrafficController {
       billboard: {
         image: isTruck ? TRUCK_ICON : CAR_ICON,
         scale: 0.9,
-        rotation: new Cesium.CallbackProperty(() => -Cesium.Math.toRadians(v.heading), false),
+        rotation: new Cesium.CallbackProperty(
+          () => -Cesium.Math.toRadians(v.heading),
+          false,
+        ),
         alignedAxis: Cesium.Cartesian3.ZERO,
         color: Cesium.Color.WHITE,
         verticalOrigin: Cesium.VerticalOrigin.CENTER,
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2_000_000),
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+          0,
+          2_000_000,
+        ),
       },
-      properties: { kind: 'sim-vehicle', sim: true },
+      properties: { kind: "sim-vehicle", sim: true },
     });
   }
 
@@ -256,20 +305,23 @@ export class TrafficController {
   ): number {
     let jamCount = 0;
     for (const r of roads) {
-      const level = r.count >= 10 ? 'JAM' : r.count >= 5 ? 'HEAVY' : 'FLOW';
-      const hex = level === 'JAM' ? '#ef4444' : level === 'HEAVY' ? '#f59e0b' : '#4ade80';
-      if (level !== 'FLOW') jamCount++;
+      const level = r.count >= 10 ? "JAM" : r.count >= 5 ? "HEAVY" : "FLOW";
+      const hex =
+        level === "JAM" ? "#ef4444" : level === "HEAVY" ? "#f59e0b" : "#4ade80";
+      if (level !== "FLOW") jamCount++;
       this.ds.entities.add({
         id: `sim:traffic:road:${r.id}`,
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(r.way.nodes.flatMap((n) => [n.lon, n.lat])),
+          positions: Cesium.Cartesian3.fromDegreesArray(
+            r.way.nodes.flatMap((n) => [n.lon, n.lat]),
+          ),
           width: 6,
           material: Cesium.Color.fromCssColorString(hex).withAlpha(0.65),
           clampToGround: true,
         },
-        properties: { kind: 'sim-road', sim: true },
+        properties: { kind: "sim-road", sim: true },
       });
-      if (level !== 'FLOW') {
+      if (level !== "FLOW") {
         this.ds.entities.add({
           id: `sim:traffic:jamlbl:${r.id}`,
           position: Cesium.Cartesian3.fromDegrees(r.lon, r.lat, 0),
@@ -278,13 +330,17 @@ export class TrafficController {
             font: '600 11px "IBM Plex Mono", monospace',
             fillColor: Cesium.Color.fromCssColorString(hex),
             showBackground: true,
-            backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.8),
+            backgroundColor:
+              Cesium.Color.fromCssColorString("#0c0e11").withAlpha(0.8),
             backgroundPadding: new Cesium.Cartesian2(6, 3),
             pixelOffset: new Cesium.Cartesian2(0, -22),
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1_500_000),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+              0,
+              1_500_000,
+            ),
           },
-          properties: { kind: 'sim-jam', sim: true },
+          properties: { kind: "sim-jam", sim: true },
         });
       }
     }

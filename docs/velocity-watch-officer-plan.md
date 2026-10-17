@@ -14,12 +14,12 @@ First build target of the 2026-07 roadmap (`~/.claude/plans/if-you-need-to-mello
 ## What already exists (verified this session, file:line)
 
 - `incidents.brief(bbox=None, ...)` → `{incidents: [{id, threat_level, score, domains,
-  centroid:{lon,lat}, narrative, evidence:[{domain,severity,summary,lon,lat,ref,kind,basis?}],
-  follow_up:[...], signal_count, span_km, emitter_estimate}], top_threat_level, ...}`
+centroid:{lon,lat}, narrative, evidence:[{domain,severity,summary,lon,lat,ref,kind,basis?}],
+follow_up:[...], signal_count, span_km, emitter_estimate}], top_threat_level, ...}`
   (`intel/incidents.py:379`). Already narrates + cites; convergence rule = ≥2 domains
   OR a lone high/critical signal.
 - `incident_store` singleton + `record(scope, incidents)` → diff `{new, escalated,
-  deescalated, resolved, ...}` of summaries keyed by stable `incident_key`
+deescalated, resolved, ...}` of summaries keyed by stable `incident_key`
   (0.5° grid + domain set) (`intel/incident_store.py:51`).
 - `cue.run(lon, lat)` → `{status, aoi, ...}` tasks SAR on a point (`intel/cue.py:38`).
 - Background-task idiom: module `_TASK`/`_STARTED` + `start()`/`stop()` + `_run_forever()`
@@ -39,7 +39,7 @@ the loop re-derives them next cycle; same tradeoff as `_PROPOSALS`).
 
 - `_BRIEFS: dict[str, dict]` keyed by `incident_key`; `_MAX_BRIEFS = 100` (drop oldest).
 - Brief record: `{id, key, created, threat_level, domains, centroid, title, narrative,
-  evidence, follow_up, playbook, status: "open"}`.
+evidence, follow_up, playbook, status: "open"}`.
 - `async def run_once() -> int`:
   1. `br = await incidents.brief()` (global).
   2. `by_key = {incident_key(i): i for i in br["incidents"]}`.
@@ -70,7 +70,7 @@ the loop re-derives them next cycle; same tradeoff as `_PROPOSALS`).
 ### Lifespan — `main.py`
 
 - `if background:` after `watch_eval.start()`: `from app.intel import watch_officer;
-  await watch_officer.start()`.
+await watch_officer.start()`.
 - `finally` `if background:`: `await watch_officer.stop()`.
 
 ### Frontend

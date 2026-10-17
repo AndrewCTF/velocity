@@ -5,16 +5,31 @@
 // what the map toolbar's Annotate tool places — the two surfaces used to
 // disagree, and the toolbar could only ever drop an unlabelled yellow dot.
 
-import { useEffect, useRef, useState } from 'react';
-import * as Cesium from 'cesium';
+import { useEffect, useRef, useState } from "react";
+import * as Cesium from "cesium";
 import {
-  MapPin, Minus, Circle, Square, Pentagon, MoveUpRight, PieChart, Type,
-  Eye, EyeOff, Lock, Unlock, Trash2, Pencil, Crosshair, Undo2, Redo2,
-} from 'lucide-react';
-import { Widget, Btn, SectionLabel, MicroLabel } from '../shell/instruments.js';
-import { getDrawController } from '../globe/draw.js';
-import { CoordEntry } from '../globe/CoordEntry.js';
-import { useMapTools } from '../globe/mapTools.js';
+  MapPin,
+  Minus,
+  Circle,
+  Square,
+  Pentagon,
+  MoveUpRight,
+  PieChart,
+  Type,
+  Eye,
+  EyeOff,
+  Lock,
+  Unlock,
+  Trash2,
+  Pencil,
+  Crosshair,
+  Undo2,
+  Redo2,
+} from "lucide-react";
+import { Widget, Btn, SectionLabel, MicroLabel } from "../shell/instruments.js";
+import { getDrawController } from "../globe/draw.js";
+import { CoordEntry } from "../globe/CoordEntry.js";
+import { useMapTools } from "../globe/mapTools.js";
 import {
   useAnnotations,
   useAnnoDraft,
@@ -28,24 +43,24 @@ import {
   THREAT_COLOR,
   type AnnoKind,
   type Threat,
-} from './annotationStore.js';
+} from "./annotationStore.js";
 
-const THREATS: Threat[] = ['hostile', 'friendly', 'neutral', 'unknown'];
+const THREATS: Threat[] = ["hostile", "friendly", "neutral", "unknown"];
 
 // Every kind the store and renderer support, with the draw mode each needs.
 const KINDS: readonly { id: AnnoKind; icon: typeof MapPin; label: string }[] = [
-  { id: 'point', icon: MapPin, label: 'Point' },
-  { id: 'line', icon: Minus, label: 'Line' },
-  { id: 'arrow', icon: MoveUpRight, label: 'Arrow' },
-  { id: 'polygon', icon: Pentagon, label: 'Polygon' },
-  { id: 'rect', icon: Square, label: 'Box' },
-  { id: 'circle', icon: Circle, label: 'Circle' },
-  { id: 'sector', icon: PieChart, label: 'Sector' },
-  { id: 'text', icon: Type, label: 'Text' },
+  { id: "point", icon: MapPin, label: "Point" },
+  { id: "line", icon: Minus, label: "Line" },
+  { id: "arrow", icon: MoveUpRight, label: "Arrow" },
+  { id: "polygon", icon: Pentagon, label: "Polygon" },
+  { id: "rect", icon: Square, label: "Box" },
+  { id: "circle", icon: Circle, label: "Circle" },
+  { id: "sector", icon: PieChart, label: "Sector" },
+  { id: "text", icon: Type, label: "Text" },
 ];
 
 const selectCls =
-  'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-hidden focus:border-accent-line';
+  "bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-hidden focus:border-accent-line";
 
 export function AnnotationPanel(): JSX.Element {
   const annos = useAnnotations((s) => s.annotations);
@@ -64,7 +79,7 @@ export function AnnotationPanel(): JSX.Element {
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -81,14 +96,18 @@ export function AnnotationPanel(): JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key.toLowerCase() !== 'z') return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
+      if (e.key.toLowerCase() !== "z") return;
       e.preventDefault();
       if (e.shiftKey) redo();
       else undo();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
   // Start a draw for the currently-selected kind. The map toolbar's Annotate
@@ -96,20 +115,20 @@ export function AnnotationPanel(): JSX.Element {
   const startDraw = (): void => {
     if (!draw) return;
     const k = draft.kind;
-    if (k === 'line' || k === 'arrow' || k === 'freehand') {
-      setStatus('Click points on the map; right-click to finish.');
+    if (k === "line" || k === "arrow" || k === "freehand") {
+      setStatus("Click points on the map; right-click to finish.");
       draw.drawPolyline((verts) => {
         add({ ...draftBase(), coords: verts.map((v) => [v.lon, v.lat]) });
         setStatus(null);
       });
-    } else if (k === 'polygon' || k === 'corridor') {
-      setStatus('Click the corners; right-click to close the shape.');
+    } else if (k === "polygon" || k === "corridor") {
+      setStatus("Click the corners; right-click to close the shape.");
       draw.drawPolygon((ring) => {
         add({ ...draftBase(), coords: ring.map((v) => [v.lon, v.lat]) });
         setStatus(null);
       });
-    } else if (k === 'rect') {
-      setStatus('Click two opposite corners.');
+    } else if (k === "rect") {
+      setStatus("Click two opposite corners.");
       draw.drawRect((a, b) => {
         add({
           ...draftBase(),
@@ -122,14 +141,18 @@ export function AnnotationPanel(): JSX.Element {
         });
         setStatus(null);
       });
-    } else if (k === 'circle' || k === 'sector') {
-      setStatus('Click the centre, then click again to set the radius.');
+    } else if (k === "circle" || k === "sector") {
+      setStatus("Click the centre, then click again to set the radius.");
       draw.drawCircle((c, r) => {
-        add({ ...draftBase(), center: { lat: c.lat, lon: c.lon }, radiusKm: +r.toFixed(2) });
+        add({
+          ...draftBase(),
+          center: { lat: c.lat, lon: c.lon },
+          radiusKm: +r.toFixed(2),
+        });
         setStatus(null);
       });
     } else {
-      setStatus('Click the map to place it, or type coordinates below.');
+      setStatus("Click the map to place it, or type coordinates below.");
       draw.placePoint((p) => {
         add({ ...draftBase(), coords: [[p.lon, p.lat]] });
         setStatus(null);
@@ -143,17 +166,19 @@ export function AnnotationPanel(): JSX.Element {
     setBusy(false);
     setStatus(
       r.ok
-        ? `Saved ${annos.length} annotation${annos.length === 1 ? '' : 's'}.`
+        ? `Saved ${annos.length} annotation${annos.length === 1 ? "" : "s"}.`
         : r.status === 401 || r.status === 403
-          ? 'Sign in to persist to the workspace. Your drawings are kept on this device.'
-          : `Save failed (HTTP ${r.status || 'no response'}).`,
+          ? "Sign in to persist to the workspace. Your drawings are kept on this device."
+          : `Save failed (HTTP ${r.status || "no response"}).`,
     );
   };
 
   const exportGeoJSON = (): void => {
-    const blob = new Blob([annotationsToGeoJSON()], { type: 'application/geo+json' });
+    const blob = new Blob([annotationsToGeoJSON()], {
+      type: "application/geo+json",
+    });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = `annotations-${new Date().toISOString().slice(0, 10)}.geojson`;
     a.click();
@@ -165,15 +190,15 @@ export function AnnotationPanel(): JSX.Element {
       const n = annotationsFromGeoJSON(t);
       setStatus(
         n > 0
-          ? `Imported ${n} annotation${n === 1 ? '' : 's'}.`
-          : 'Nothing to import from that file.',
+          ? `Imported ${n} annotation${n === 1 ? "" : "s"}.`
+          : "Nothing to import from that file.",
       );
     });
   };
 
   const flyTo = (lon: number, lat: number): void => {
     if (!draw) return;
-    useMapTools.getState().setTool('pan');
+    useMapTools.getState().setTool("pan");
     draw.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lon, lat, 300_000),
       duration: 1.0,
@@ -182,7 +207,9 @@ export function AnnotationPanel(): JSX.Element {
 
   const shown = filter
     ? annos.filter((a) =>
-        `${a.label} ${a.kind} ${a.group ?? ''}`.toLowerCase().includes(filter.toLowerCase()),
+        `${a.label} ${a.kind} ${a.group ?? ""}`
+          .toLowerCase()
+          .includes(filter.toLowerCase()),
       )
     : annos;
 
@@ -203,8 +230,8 @@ export function AnnotationPanel(): JSX.Element {
                 onClick={() => draft.set({ kind: k.id })}
                 className={`flex flex-col items-center gap-0.5 rounded-sm border py-1 transition-colors ${
                   on
-                    ? 'border-accent-line bg-accent-dim text-accent'
-                    : 'border-line text-txt-2 hover:text-txt-0'
+                    ? "border-accent-line bg-accent-dim text-accent"
+                    : "border-line text-txt-2 hover:text-txt-0"
                 }`}
               >
                 <I size={13} strokeWidth={1.75} aria-hidden />
@@ -228,8 +255,8 @@ export function AnnotationPanel(): JSX.Element {
               }}
               className={`flex-1 text-[10px] mono py-1 rounded-sm border capitalize transition-colors ${
                 draft.threat === t && !draft.style.color
-                  ? 'border-accent-line bg-accent-dim text-txt-0'
-                  : 'border-line text-txt-2 hover:text-txt-0'
+                  ? "border-accent-line bg-accent-dim text-txt-0"
+                  : "border-line text-txt-2 hover:text-txt-0"
               }`}
             >
               <span style={{ color: THREAT_COLOR[t] }}>●</span>
@@ -258,7 +285,9 @@ export function AnnotationPanel(): JSX.Element {
               max={10}
               step={1}
               value={style.width}
-              onChange={(e) => draft.setStyle({ width: Number(e.target.value) })}
+              onChange={(e) =>
+                draft.setStyle({ width: Number(e.target.value) })
+              }
               className="w-full accent-(--accent)"
             />
           </label>
@@ -270,7 +299,9 @@ export function AnnotationPanel(): JSX.Element {
               max={100}
               step={5}
               value={Math.round(style.fillOpacity * 100)}
-              onChange={(e) => draft.setStyle({ fillOpacity: Number(e.target.value) / 100 })}
+              onChange={(e) =>
+                draft.setStyle({ fillOpacity: Number(e.target.value) / 100 })
+              }
               className="w-full accent-(--accent)"
             />
           </label>
@@ -279,7 +310,11 @@ export function AnnotationPanel(): JSX.Element {
             <select
               className={selectCls}
               value={style.dash}
-              onChange={(e) => draft.setStyle({ dash: e.target.value as 'solid' | 'dash' | 'dot' })}
+              onChange={(e) =>
+                draft.setStyle({
+                  dash: e.target.value as "solid" | "dash" | "dot",
+                })
+              }
             >
               <option value="solid">solid</option>
               <option value="dash">dashed</option>
@@ -294,7 +329,9 @@ export function AnnotationPanel(): JSX.Element {
               max={22}
               step={1}
               value={style.fontSize}
-              onChange={(e) => draft.setStyle({ fontSize: Number(e.target.value) })}
+              onChange={(e) =>
+                draft.setStyle({ fontSize: Number(e.target.value) })
+              }
               className="w-full accent-(--accent)"
             />
           </label>
@@ -328,8 +365,8 @@ export function AnnotationPanel(): JSX.Element {
           </Btn>
         </div>
         <div className="mt-1 text-[9px] text-txt-3 leading-snug">
-          Or pick Annotate on the map toolbar and click straight onto the globe. Both
-          place whatever is selected here.
+          Or pick Annotate on the map toolbar and click straight onto the globe.
+          Both place whatever is selected here.
         </div>
 
         <CoordEntry
@@ -339,7 +376,7 @@ export function AnnotationPanel(): JSX.Element {
             const base = draftBase();
             add({
               ...base,
-              label: base.label || placeLabel || '',
+              label: base.label || placeLabel || "",
               coords: [[lon, lat]],
             });
           }}
@@ -381,7 +418,10 @@ export function AnnotationPanel(): JSX.Element {
 
         <div className="mt-1 max-h-[240px] overflow-auto flex flex-col gap-0.5">
           {shown.map((a) => (
-            <div key={a.id} className="rounded-sm border border-line px-1.5 py-1">
+            <div
+              key={a.id}
+              className="rounded-sm border border-line px-1.5 py-1"
+            >
               <div className="flex items-center gap-1.5">
                 <span style={{ color: annotationColor(a) }} aria-hidden>
                   ●
@@ -394,7 +434,8 @@ export function AnnotationPanel(): JSX.Element {
                     onChange={(e) => update(a.id, { label: e.target.value })}
                     onBlur={() => setEditId(null)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === 'Escape') setEditId(null);
+                      if (e.key === "Enter" || e.key === "Escape")
+                        setEditId(null);
                     }}
                   />
                 ) : (
@@ -407,7 +448,9 @@ export function AnnotationPanel(): JSX.Element {
                   title="Fly to"
                   aria-label={`Fly to ${a.label || a.kind}`}
                   onClick={() => {
-                    const c = a.coords?.[0] ?? (a.center ? [a.center.lon, a.center.lat] : null);
+                    const c =
+                      a.coords?.[0] ??
+                      (a.center ? [a.center.lon, a.center.lat] : null);
                     if (c) flyTo(c[0]!, c[1]!);
                   }}
                   className="text-txt-3 hover:text-accent"
@@ -416,8 +459,8 @@ export function AnnotationPanel(): JSX.Element {
                 </button>
                 <button
                   type="button"
-                  title={a.hidden ? 'Show' : 'Hide'}
-                  aria-label={a.hidden ? 'Show' : 'Hide'}
+                  title={a.hidden ? "Show" : "Hide"}
+                  aria-label={a.hidden ? "Show" : "Hide"}
                   onClick={() => update(a.id, { hidden: !a.hidden })}
                   className="text-txt-3 hover:text-txt-0"
                 >
@@ -429,8 +472,8 @@ export function AnnotationPanel(): JSX.Element {
                 </button>
                 <button
                   type="button"
-                  title={a.locked ? 'Unlock' : 'Lock'}
-                  aria-label={a.locked ? 'Unlock' : 'Lock'}
+                  title={a.locked ? "Unlock" : "Lock"}
+                  aria-label={a.locked ? "Unlock" : "Lock"}
                   // Lock has to bypass update(), which itself refuses to touch a
                   // locked annotation — otherwise nothing could ever unlock one.
                   onClick={() =>
@@ -487,7 +530,11 @@ export function AnnotationPanel(): JSX.Element {
                     type="color"
                     aria-label="Colour"
                     value={a.style?.color ?? THREAT_COLOR[a.threat]}
-                    onChange={(e) => update(a.id, { style: { ...a.style, color: e.target.value } })}
+                    onChange={(e) =>
+                      update(a.id, {
+                        style: { ...a.style, color: e.target.value },
+                      })
+                    }
                     className="w-7 h-[22px] bg-transparent border border-line rounded-sm cursor-pointer p-0"
                   />
                 </div>
@@ -496,7 +543,9 @@ export function AnnotationPanel(): JSX.Element {
           ))}
           {shown.length === 0 && (
             <div className="text-[10px] text-txt-3 py-2">
-              {annos.length === 0 ? 'Nothing placed yet.' : 'No annotation matches that filter.'}
+              {annos.length === 0
+                ? "Nothing placed yet."
+                : "No annotation matches that filter."}
             </div>
           )}
         </div>
@@ -505,7 +554,7 @@ export function AnnotationPanel(): JSX.Element {
 
         <div className="grid grid-cols-2 gap-1.5 mt-2">
           <Btn tone="accent" onClick={() => void save()} disabled={busy}>
-            {busy ? 'saving…' : 'Save'}
+            {busy ? "saving…" : "Save"}
           </Btn>
           <Btn onClick={exportGeoJSON} disabled={annos.length === 0}>
             Export
@@ -525,7 +574,7 @@ export function AnnotationPanel(): JSX.Element {
             }}
             disabled={annos.length === 0}
           >
-            {confirmClear ? 'Confirm' : 'Clear all'}
+            {confirmClear ? "Confirm" : "Clear all"}
           </Btn>
         </div>
         <input
@@ -536,7 +585,7 @@ export function AnnotationPanel(): JSX.Element {
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) importGeoJSON(f);
-            e.target.value = '';
+            e.target.value = "";
           }}
         />
       </Widget>

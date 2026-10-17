@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import type { Chokepoint } from '../registry/chokepoints.js';
+import { create } from "zustand";
+import type { Chokepoint } from "../registry/chokepoints.js";
 
 interface AoiState {
   active: Chokepoint | null;

@@ -11,6 +11,7 @@ session.
 ## 0. Verified integration points (ground truth)
 
 Frontend shell:
+
 - Tab ids/labels: `apps/web/src/state/appView.ts` — `AppId` union (L12), `APP_IDS`
   (L22), `APP_META` (L36, has `label/hint/chrome`). Switch store `useAppView`
   (L82), persisted to `velocity.appView` + `?app=`.
@@ -20,6 +21,7 @@ Frontend shell:
 - `chrome: 'full'` collapses right rail + timeline via `App.tsx:233`.
 
 Foundry backend (all in `apps/api/app/foundry/` + `apps/api/app/routes/foundry.py`):
+
 - `FoundryStore` (`store.py:178`), SQLite `./data/foundry.db`, WAL, fresh
   connection per op; tables datasets/versions/rows/transforms/builds/
   dead_letter/schedules/bindings/checks/check_results. Caps: 200k rows, 25MB,
@@ -35,8 +37,9 @@ Foundry backend (all in `apps/api/app/foundry/` + `apps/api/app/routes/foundry.p
   `add_version` (`store.py:386`).
 
 LLM / alerts / ontology:
+
 - LLM ladder: `apps/api/app/llm.py` — `chat_json(messages, *, tier="fast", ...)
-  -> tuple[Any|None, LlmResult]` (L792); tiers `fast|reason`; backends
+-> tuple[Any|None, LlmResult]` (L792); tiers `fast|reason`; backends
   minimax→deepseek→ollama, local-first toggle `/api/ai/local`.
 - Tool-loop precedent: `apps/api/app/intel/agent.py` `run_agent` (L646),
   system prompts `_SYS` (L517).
@@ -66,11 +69,12 @@ No SQL query surface exists today (verified: no DuckDB, no user SQL endpoint).
 ## 1. Grouped top tabs (+ two new apps)
 
 `appView.ts`:
+
 - Add `'workflows' | 'city'` to `AppId`, `APP_IDS`, `APP_META`
   (workflows: label "Workflows", chrome 'full'; city: label "City 3D",
   chrome 'full').
 - Add `group` field to `APP_META` entries and export `APP_GROUPS: readonly
-  { id: string; label: string; apps: AppId[] }[]`:
+{ id: string; label: string; apps: AppId[] }[]`:
   - LIVE: map, sim
   - ANALYZE: explorer, graph, targeting, video
   - DATA: foundry, workflows
@@ -97,11 +101,12 @@ BYO-compute, not a hostile-tenant sandbox; documented as such.
 `store.py` — mirror FoundryStore exactly (WAL, fresh conn per op,
 `override_db_path` test hook), path `./data/workflows.db` (new
 `workflows_db_path` in config.py):
+
 - `workflows(id, name, description, spec_json, enabled, created_at, updated_at)`
   — spec = `{blocks: [{id, type, config}], edges: [{from, to}]}` (multi-input
   blocks like join take ordered inputs).
 - `runs(id, workflow_id, status queued|running|succeeded|failed, started_at,
-  finished_at, trigger manual|schedule, log TEXT, error, output_json)` — log is
+finished_at, trigger manual|schedule, log TEXT, error, output_json)` — log is
   append-only lines `[block_id] rows_in→rows_out in Xms`; output_json holds the
   terminal blocks' row samples (cap 200 rows/block).
 - `wf_memory(workflow_id, key, value_json, updated_at, PRIMARY KEY(workflow_id,key))`
@@ -114,6 +119,7 @@ BYO-compute, not a hostile-tenant sandbox; documented as such.
 `run(config, inputs: list[list[dict]], ctx: BlockCtx) -> list[dict]`.
 `BlockCtx` carries user ctx, run logger, workflow memory get/set, row caps.
 Catalog (17 blocks — enough to "do most of the stuff"):
+
 - Sources (0 inputs): `source.aircraft` (global_snapshot → rows w/ icao24,
   callsign, lat, lon, alt, speed, track, mil flag…, optional bbox config),
   `source.vessels` (AIS union rows, optional bbox), `source.countries`
@@ -136,9 +142,10 @@ Catalog (17 blocks — enough to "do most of the stuff"):
   (write value to wf_memory key).
 
 Power blocks:
+
 - `op.python` (`python_exec.py`): config `{code: str, timeout_s<=60}`. Contract
   shown in the FE editor: the script defines `def run(rows: list[dict],
-  memory: dict) -> list[dict] | {"rows": [...], "memory": {...}}`. Execution:
+memory: dict) -> list[dict] | {"rows": [...], "memory": {...}}`. Execution:
   `asyncio.create_subprocess_exec(sys.executable, runner_path)` — runner is a
   static file `apps/api/app/workflows/py_runner.py` that reads one JSON doc
   {code, rows, memory} on stdin, applies `resource.setrlimit` (CPU 30 s,
@@ -152,7 +159,7 @@ Power blocks:
   SELECT/WITH), rows out = fetchall as dicts. 10 s interrupt via
   `conn.interrupt` timer. This is the general SQL surface.
 - `op.llm`: config `{tier: fast|reason, system: str, prompt: str, mode:
-  per_batch|per_row(max 50), json_mode: bool}`. `prompt` is a template with
+per_batch|per_row(max 50), json_mode: bool}`. `prompt` is a template with
   `{rows}` (JSON, capped 100 rows/20 KB) and `{memory}`. Calls
   `llm.chat_json`/`chat`. Output: per_batch → one row `{result...}`; per_row →
   input row + `llm` column. Degrade to error row on LLM failure, never crash
@@ -164,6 +171,7 @@ per-block timing/row counts into run log, memory snapshot loaded once and
 persisted at end, total wall budget 5 min, row cap 200k between blocks.
 
 Routes (keyless `current_user_or_local`, mounted in main.py like foundry):
+
 - `GET/POST /api/workflows`, `GET/PUT/DELETE /api/workflows/{id}`
 - `GET /api/workflows/blocks` — catalog (types + config schemas + docs)
 - `POST /api/workflows/{id}/run` — execute now (await, return run)
@@ -172,8 +180,8 @@ Routes (keyless `current_user_or_local`, mounted in main.py like foundry):
 - `GET /api/workflows/{id}/runs`, `GET /api/workflows/runs/{run_id}`
 - `GET/POST/PUT/DELETE /api/workflows/schedules...` mirror foundry
 - `GET/PUT /api/workflows/{id}/memory` — inspect/reset memory
-Scheduler started in main.py lifespan behind OSINT_DISABLE_BACKGROUND, mirroring
-foundry's.
+  Scheduler started in main.py lifespan behind OSINT_DISABLE_BACKGROUND, mirroring
+  foundry's.
 
 Tests `apps/api/tests/test_workflows.py`: store CRUD; engine topo+cycle; steps
 block reusing foundry DSL; geo block; sql block (SELECT ok, INSERT rejected,
@@ -187,6 +195,7 @@ TestClient.
 Mirror the foundry FE architecture (nav zustand store w/ URL params `wv/wid`,
 `useFoundryPoll`-style polling, `ui.tsx` primitives reused via import from
 foundry or small local copies):
+
 - `WorkflowsApp.tsx`: left rail — Workflows | Runs | Blocks (docs).
 - `EditorView.tsx`: DAG canvas (reuse PipelineView's pan/zoom SVG pattern);
   block palette grouped Sources/Transforms/Power/Sinks; click block → right
@@ -203,9 +212,10 @@ foundry or small local copies):
 ## 3. Foundry deepening — from lists to a workbench
 
 Backend additions (routes in `routes/foundry.py`, logic in `app/foundry/`):
+
 - `GET /api/foundry/datasets/{id}/geo` — auto-detect lat/lon columns (name
   heuristics + numeric range check), return `{lat_col, lon_col, features:
-  GeoJSON FeatureCollection}` capped 5k points. 404-shaped `{ok:false}` if no
+GeoJSON FeatureCollection}` capped 5k points. 404-shaped `{ok:false}` if no
   geo columns.
 - `POST /api/foundry/sql` — `{dataset_ids: [..], query}` → load latest-version
   rows of each dataset into in-memory sqlite tables named by slugified dataset
@@ -214,8 +224,8 @@ Backend additions (routes in `routes/foundry.py`, logic in `app/foundry/`):
   foundry owns it).
 - Monitors (`monitors.py` + store tables `monitors`, `monitor_events`):
   monitor = `{id, dataset_id, trigger: build_failed|check_failed|row_condition|
-  new_version, condition_expr (safe DSL expr for row_condition), action:
-  alert|llm|both, llm_tier, llm_system, llm_prompt, severity, enabled}`.
+new_version, condition_expr (safe DSL expr for row_condition), action:
+alert|llm|both, llm_tier, llm_system, llm_prompt, severity, enabled}`.
   Evaluated after add_version / builds (hook where auto_sync_dataset runs) and
   from the foundry scheduler tick. Actions: publish bus Alert
   (`rule_id="foundry:monitor:{id}"`); llm → `chat_json` over up to 50
@@ -227,6 +237,7 @@ Backend additions (routes in `routes/foundry.py`, logic in `app/foundry/`):
   chat_json monkeypatched, events recorded, alert published to bus ring.
 
 Frontend:
+
 - DatasetDetail gains tabs `map` (maplibre-gl already in deps? verify — else
   lightweight SVG equirect plot of /geo points; whichever, plus "View on
   globe" button that upserts a temporary CustomDataSource via the captures
@@ -242,6 +253,7 @@ Frontend:
 ## 4. City 3D (keyless gaussian splats)
 
 New app `apps/web/src/city/CityApp.tsx` (full chrome):
+
 - Reuse the Spark `SplatView` — extract it from `StudioPage.tsx` into
   `apps/web/src/studio/SplatView.tsx` and import from both (do NOT duplicate).
 - Scene sources (all keyless): (a) recon job results — list via existing

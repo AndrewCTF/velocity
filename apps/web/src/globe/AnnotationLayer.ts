@@ -1,10 +1,10 @@
-import * as Cesium from 'cesium';
+import * as Cesium from "cesium";
 import {
   useAnnotations,
   annotationColor,
   annotationStyle,
   type Annotation,
-} from '../annotations/annotationStore.js';
+} from "../annotations/annotationStore.js";
 
 // Renders the annotation store into its own CustomDataSource.
 //
@@ -26,7 +26,7 @@ function labelGraphics(
     font: `600 ${fontSize}px "IBM Plex Mono", monospace`,
     fillColor: color,
     showBackground: true,
-    backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.78),
+    backgroundColor: Cesium.Color.fromCssColorString("#0c0e11").withAlpha(0.78),
     backgroundPadding: new Cesium.Cartesian2(6, 3),
     pixelOffset: new Cesium.Cartesian2(0, -12),
     verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
@@ -42,7 +42,9 @@ function sectorRing(
   bearingDeg: number,
   sweepDeg: number,
 ): Cesium.Cartesian3[] {
-  const pts: Cesium.Cartesian3[] = [Cesium.Cartesian3.fromDegrees(center.lon, center.lat)];
+  const pts: Cesium.Cartesian3[] = [
+    Cesium.Cartesian3.fromDegrees(center.lon, center.lat),
+  ];
   const steps = Math.max(8, Math.min(96, Math.round(sweepDeg / 3)));
   const half = sweepDeg / 2;
   const R = 6371.0088;
@@ -52,7 +54,8 @@ function sectorRing(
   for (let i = 0; i <= steps; i++) {
     const brg = ((bearingDeg - half + (sweepDeg * i) / steps) * Math.PI) / 180;
     const lat2 = Math.asin(
-      Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brg),
+      Math.sin(lat1) * Math.cos(d) +
+        Math.cos(lat1) * Math.sin(d) * Math.cos(brg),
     );
     const lon2 =
       lon1 +
@@ -60,7 +63,12 @@ function sectorRing(
         Math.sin(brg) * Math.sin(d) * Math.cos(lat1),
         Math.cos(d) - Math.sin(lat1) * Math.sin(lat2),
       );
-    pts.push(Cesium.Cartesian3.fromDegrees((lon2 * 180) / Math.PI, (lat2 * 180) / Math.PI));
+    pts.push(
+      Cesium.Cartesian3.fromDegrees(
+        (lon2 * 180) / Math.PI,
+        (lat2 * 180) / Math.PI,
+      ),
+    );
   }
   return pts;
 }
@@ -78,15 +86,18 @@ function arrowHead(coords: [number, number][]): Cesium.Cartesian3[] {
   const baseX = head[0] - ux * h;
   const baseY = head[1] - uy * h;
   return Cesium.Cartesian3.fromDegreesArray([
-    head[0], head[1],
-    baseX - uy * w, baseY + ux * w,
-    baseX + uy * w, baseY - ux * w,
+    head[0],
+    head[1],
+    baseX - uy * w,
+    baseY + ux * w,
+    baseX + uy * w,
+    baseY - ux * w,
   ]);
 }
 
 function dashPattern(dash: string): number | undefined {
-  if (dash === 'dash') return 0b1111000011110000;
-  if (dash === 'dot') return 0b1010101010101010;
+  if (dash === "dash") return 0b1111000011110000;
+  if (dash === "dot") return 0b1010101010101010;
   return undefined;
 }
 
@@ -97,32 +108,37 @@ function buildEntity(a: Annotation): Cesium.Entity.ConstructorOptions | null {
   const fill = color.withAlpha(st.fillOpacity);
   const pattern = dashPattern(st.dash);
   const lineMaterial = pattern
-    ? new Cesium.PolylineDashMaterialProperty({ color: stroke, dashPattern: pattern })
+    ? new Cesium.PolylineDashMaterialProperty({
+        color: stroke,
+        dashPattern: pattern,
+      })
     : (stroke as unknown as Cesium.MaterialProperty);
 
   const base: Cesium.Entity.ConstructorOptions = { id: a.id };
-  const withLabel = (o: Cesium.Entity.ConstructorOptions): Cesium.Entity.ConstructorOptions => {
+  const withLabel = (
+    o: Cesium.Entity.ConstructorOptions,
+  ): Cesium.Entity.ConstructorOptions => {
     if (a.label) o.label = labelGraphics(a.label, color, st.fontSize);
     return o;
   };
 
   switch (a.kind) {
-    case 'point':
-    case 'symbol':
-    case 'text': {
+    case "point":
+    case "symbol":
+    case "text": {
       const c = a.coords?.[0];
       if (!c) return null;
       const o: Cesium.Entity.ConstructorOptions = {
         ...base,
         position: Cesium.Cartesian3.fromDegrees(c[0], c[1]),
       };
-      if (a.kind === 'symbol' && a.symbolSvg) {
+      if (a.kind === "symbol" && a.symbolSvg) {
         o.billboard = {
           image: a.symbolSvg,
           scale: 1,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
         };
-      } else if (a.kind !== 'text') {
+      } else if (a.kind !== "text") {
         o.point = {
           pixelSize: st.pointSize,
           color: color.withAlpha(st.opacity),
@@ -132,14 +148,14 @@ function buildEntity(a: Annotation): Cesium.Entity.ConstructorOptions | null {
       }
       // A text annotation is its label — always show it, even unlabelled, so a
       // freshly placed one is visible and editable rather than invisible.
-      if (a.kind === 'text') {
-        o.label = labelGraphics(a.label || 'text', color, st.fontSize);
+      if (a.kind === "text") {
+        o.label = labelGraphics(a.label || "text", color, st.fontSize);
         return o;
       }
       return withLabel(o);
     }
-    case 'line':
-    case 'freehand': {
+    case "line":
+    case "freehand": {
       if (!a.coords || a.coords.length < 2) return null;
       return {
         ...base,
@@ -152,7 +168,7 @@ function buildEntity(a: Annotation): Cesium.Entity.ConstructorOptions | null {
         },
       };
     }
-    case 'arrow': {
+    case "arrow": {
       if (!a.coords || a.coords.length < 2) return null;
       return {
         ...base,
@@ -172,9 +188,9 @@ function buildEntity(a: Annotation): Cesium.Entity.ConstructorOptions | null {
         },
       };
     }
-    case 'polygon':
-    case 'rect':
-    case 'corridor': {
+    case "polygon":
+    case "rect":
+    case "corridor": {
       if (!a.coords || a.coords.length < 3) return null;
       return withLabel({
         ...base,
@@ -190,7 +206,7 @@ function buildEntity(a: Annotation): Cesium.Entity.ConstructorOptions | null {
         },
       });
     }
-    case 'circle': {
+    case "circle": {
       if (!a.center || !a.radiusKm) return null;
       return withLabel({
         ...base,
@@ -206,14 +222,19 @@ function buildEntity(a: Annotation): Cesium.Entity.ConstructorOptions | null {
         },
       });
     }
-    case 'sector': {
+    case "sector": {
       if (!a.center || !a.radiusKm) return null;
       return withLabel({
         ...base,
         position: Cesium.Cartesian3.fromDegrees(a.center.lon, a.center.lat),
         polygon: {
           hierarchy: new Cesium.PolygonHierarchy(
-            sectorRing(a.center, a.radiusKm, a.bearingDeg ?? 0, a.sweepDeg ?? 60),
+            sectorRing(
+              a.center,
+              a.radiusKm,
+              a.bearingDeg ?? 0,
+              a.sweepDeg ?? 60,
+            ),
           ),
           material: fill,
           outline: st.outline,
@@ -228,7 +249,7 @@ function buildEntity(a: Annotation): Cesium.Entity.ConstructorOptions | null {
 }
 
 export function installAnnotations(viewer: Cesium.Viewer): () => void {
-  const ds = new Cesium.CustomDataSource('__annotations');
+  const ds = new Cesium.CustomDataSource("__annotations");
   void viewer.dataSources.add(ds);
   const seen = new Set<string>();
 
@@ -250,9 +271,12 @@ export function installAnnotations(viewer: Cesium.Viewer): () => void {
         // instances, so these casts are describing what is already true — the
         // Entity setters accept the union and TS cannot narrow it here.
         type Opts<T> = T extends object ? T : never;
-        existing.position = (opts.position as Cesium.PositionProperty | undefined) ?? undefined;
+        existing.position =
+          (opts.position as Cesium.PositionProperty | undefined) ?? undefined;
         existing.point = opts.point
-          ? new Cesium.PointGraphics(opts.point as Opts<Cesium.PointGraphics.ConstructorOptions>)
+          ? new Cesium.PointGraphics(
+              opts.point as Opts<Cesium.PointGraphics.ConstructorOptions>,
+            )
           : undefined;
         existing.billboard = opts.billboard
           ? new Cesium.BillboardGraphics(
@@ -275,14 +299,20 @@ export function installAnnotations(viewer: Cesium.Viewer): () => void {
             )
           : undefined;
         existing.label = opts.label
-          ? new Cesium.LabelGraphics(opts.label as Opts<Cesium.LabelGraphics.ConstructorOptions>)
+          ? new Cesium.LabelGraphics(
+              opts.label as Opts<Cesium.LabelGraphics.ConstructorOptions>,
+            )
           : undefined;
       } else {
         ds.entities.add(opts);
       }
       // Line/freehand/arrow carry their label on a separate entity at the
       // midpoint, since a polyline has no anchor position of its own.
-      if ((a.kind === 'line' || a.kind === 'freehand' || a.kind === 'arrow') && a.label && a.coords) {
+      if (
+        (a.kind === "line" || a.kind === "freehand" || a.kind === "arrow") &&
+        a.label &&
+        a.coords
+      ) {
         const mid = a.coords[Math.floor(a.coords.length / 2)]!;
         const lid = `${a.id}:lbl`;
         seen.add(lid);

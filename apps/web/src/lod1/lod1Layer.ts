@@ -1,6 +1,6 @@
-import * as Cesium from 'cesium';
+import * as Cesium from "cesium";
 
-import { apiFetch } from '../transport/http.js';
+import { apiFetch } from "../transport/http.js";
 
 let current: Cesium.GeoJsonDataSource | null = null;
 
@@ -49,13 +49,15 @@ function clampBasesToTerrain(
   };
   apply(); // best-effort immediately with whatever terrain is already loaded
   let stop = (): void => {};
-  const remove = globe.tileLoadProgressEvent.addEventListener((queued: number) => {
-    // queued === 0 means the terrain tiles for the current view have finished
-    // loading — re-sample so bases follow each refinement. apply() returns
-    // false once the layer is gone, at which point we unsubscribe.
-    if (queued > 0) return;
-    if (!apply()) stop();
-  });
+  const remove = globe.tileLoadProgressEvent.addEventListener(
+    (queued: number) => {
+      // queued === 0 means the terrain tiles for the current view have finished
+      // loading — re-sample so bases follow each refinement. apply() returns
+      // false once the layer is gone, at which point we unsubscribe.
+      if (queued > 0) return;
+      if (!apply()) stop();
+    },
+  );
   // Hard stop after a generous window so we don't re-clamp forever as the user
   // pans elsewhere; refinement over an AOI settles well within this.
   const timer = setTimeout(() => stop(), 45_000);
@@ -68,14 +70,17 @@ function clampBasesToTerrain(
 // Extrude an LOD1 GeoJSON FeatureCollection in place: height from properties,
 // damaged buildings red and knocked down to a rubble height. Returns the data
 // source so the caller can decide whether to fly to it.
-async function extrude(viewer: Cesium.Viewer, gj: unknown): Promise<Cesium.GeoJsonDataSource> {
+async function extrude(
+  viewer: Cesium.Viewer,
+  gj: unknown,
+): Promise<Cesium.GeoJsonDataSource> {
   if (current) {
     viewer.dataSources.remove(current, true);
     current = null;
   }
   const ds = await Cesium.GeoJsonDataSource.load(gj, { clampToGround: false });
-  const intact = Cesium.Color.fromCssColorString('#b8ad97');
-  const dmgCol = Cesium.Color.fromCssColorString('#e23b2e');
+  const intact = Cesium.Color.fromCssColorString("#b8ad97");
+  const dmgCol = Cesium.Color.fromCssColorString("#e23b2e");
   const now = Cesium.JulianDate.now();
   const items: BuildingItem[] = [];
   for (const e of ds.entities.values) {
@@ -85,11 +90,15 @@ async function extrude(viewer: Cesium.Viewer, gj: unknown): Promise<Cesium.GeoJs
     const ext = dmg ? h * 0.25 : h;
     e.polygon.height = new Cesium.ConstantProperty(0);
     e.polygon.extrudedHeight = new Cesium.ConstantProperty(ext);
-    e.polygon.material = new Cesium.ColorMaterialProperty(dmg ? dmgCol : intact);
+    e.polygon.material = new Cesium.ColorMaterialProperty(
+      dmg ? dmgCol : intact,
+    );
     e.polygon.outline = new Cesium.ConstantProperty(false);
-    const hierarchy = e.polygon.hierarchy?.getValue(now) as Cesium.PolygonHierarchy | undefined;
+    const hierarchy = e.polygon.hierarchy?.getValue(now) as
+      Cesium.PolygonHierarchy | undefined;
     const p0 = hierarchy?.positions?.[0];
-    if (p0) items.push({ e, ext, carto: Cesium.Cartographic.fromCartesian(p0) });
+    if (p0)
+      items.push({ e, ext, carto: Cesium.Cartographic.fromCartesian(p0) });
   }
   await viewer.dataSources.add(ds);
   current = ds;
@@ -101,13 +110,20 @@ async function extrude(viewer: Cesium.Viewer, gj: unknown): Promise<Cesium.GeoJs
 
 // Load a curated war-damage AOI (footprints + Sentinel-1 damage flag) and fly
 // the camera in tilted. Used by the named presets (e.g. Beirut Dahieh).
-export async function loadLod1(viewer: Cesium.Viewer, aoi: string): Promise<number> {
+export async function loadLod1(
+  viewer: Cesium.Viewer,
+  aoi: string,
+): Promise<number> {
   const r = await apiFetch(`/api/intel/lod1?aoi=${encodeURIComponent(aoi)}`);
   if (!r.ok) throw new Error(`lod1 ${r.status}`);
   const ds = await extrude(viewer, await r.json());
   await viewer.flyTo(ds, {
     duration: 2.5,
-    offset: new Cesium.HeadingPitchRange(Cesium.Math.toRadians(20), Cesium.Math.toRadians(-32), 2200),
+    offset: new Cesium.HeadingPitchRange(
+      Cesium.Math.toRadians(20),
+      Cesium.Math.toRadians(-32),
+      2200,
+    ),
   });
   return ds.entities.values.length;
 }
@@ -119,7 +135,7 @@ export async function loadLod1Bbox(
   viewer: Cesium.Viewer,
   bbox: [number, number, number, number],
 ): Promise<number> {
-  const r = await apiFetch(`/api/intel/lod1?bbox=${bbox.join(',')}`);
+  const r = await apiFetch(`/api/intel/lod1?bbox=${bbox.join(",")}`);
   if (!r.ok) throw new Error(`lod1 ${r.status}`);
   const ds = await extrude(viewer, await r.json());
   viewer.scene.requestRender();

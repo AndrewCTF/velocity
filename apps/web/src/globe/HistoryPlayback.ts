@@ -1,9 +1,9 @@
-import * as Cesium from 'cesium';
-import { aircraftStyle, vesselStyle } from './adapters/styles.js';
-import { labelFor } from './adapters/labelStyle.js';
-import { apiFetch } from '../transport/http.js';
-import { haversineKm } from './draw.js';
-import { createHeatmapDecoder, type HeatmapDecoder } from './heatmapWorker.js';
+import * as Cesium from "cesium";
+import { aircraftStyle, vesselStyle } from "./adapters/styles.js";
+import { labelFor } from "./adapters/labelStyle.js";
+import { apiFetch } from "../transport/http.js";
+import { haversineKm } from "./draw.js";
+import { createHeatmapDecoder, type HeatmapDecoder } from "./heatmapWorker.js";
 import {
   chunkKeyForMs,
   chunkStartMs,
@@ -11,7 +11,7 @@ import {
   nextChunk,
   CHUNK_MS,
   type DecodedHeatmapChunk,
-} from './heatmapChunk.js';
+} from "./heatmapChunk.js";
 
 // Historical playback — the one transport that actually drives the Cesium
 // clock, built on tar1090's chunk mechanism (docs plan "Wave 0").
@@ -62,7 +62,7 @@ interface TracksResponse {
   tracks: Track[];
 }
 
-export type PlaybackSource = 'own' | 'upstream' | 'mixed' | 'none';
+export type PlaybackSource = "own" | "upstream" | "mixed" | "none";
 
 export interface PlaybackInfo {
   tracks: number;
@@ -76,15 +76,19 @@ export interface PlaybackInfo {
 
 export interface PlaybackController {
   load(windowSec: number, onlyId?: string): Promise<PlaybackInfo | null>;
-  loadAt(startMs: number, endMs: number, onInfo?: (info: PlaybackInfo) => void): Promise<PlaybackInfo | null>;
+  loadAt(
+    startMs: number,
+    endMs: number,
+    onInfo?: (info: PlaybackInfo) => void,
+  ): Promise<PlaybackInfo | null>;
   clear(): void;
   isActive(): boolean;
   destroy(): void;
 }
 
-const AIR_TRAIL = Cesium.Color.fromCssColorString('#facc15').withAlpha(0.55);
-const SEA_TRAIL = Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.55);
-const DWELL = Cesium.Color.fromCssColorString('#d946ef'); // pattern-of-life dwell highlight
+const AIR_TRAIL = Cesium.Color.fromCssColorString("#facc15").withAlpha(0.55);
+const SEA_TRAIL = Cesium.Color.fromCssColorString("#38bdf8").withAlpha(0.55);
+const DWELL = Cesium.Color.fromCssColorString("#d946ef"); // pattern-of-life dwell highlight
 const DWELL_KM = 0.6; // cluster radius
 const DWELL_S = 240; // min seconds stationary to count as a dwell
 const CHUNK_SEC = CHUNK_MS / 1000;
@@ -97,7 +101,9 @@ function julian(seconds: number): Cesium.JulianDate {
 /** A [w,s,e,n] rectangle (degrees) widened 1.2x around its own center, or null
  *  when the viewer has no computable view (headless / off-globe camera) — a
  *  null rect means "don't filter", matching the original unfiltered load(). */
-function widenedViewDeg(viewer: Cesium.Viewer): [number, number, number, number] | null {
+function widenedViewDeg(
+  viewer: Cesium.Viewer,
+): [number, number, number, number] | null {
   const rect = viewer.camera.computeViewRectangle();
   if (!rect) return null;
   const w = Cesium.Math.toDegrees(rect.west);
@@ -110,13 +116,15 @@ function widenedViewDeg(viewer: Cesium.Viewer): [number, number, number, number]
 }
 
 function bboxQueryParam(rect: [number, number, number, number] | null): string {
-  if (!rect) return '';
+  if (!rect) return "";
   const [w, s, e, n] = rect;
   return `&min_lon=${w}&min_lat=${s}&max_lon=${e}&max_lat=${n}`;
 }
 
-export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackController {
-  const ds = new Cesium.CustomDataSource('history-replay');
+export function installHistoryPlayback(
+  viewer: Cesium.Viewer,
+): PlaybackController {
+  const ds = new Cesium.CustomDataSource("history-replay");
   void viewer.dataSources.add(ds);
   let hiddenLive: Cesium.DataSource[] = [];
   let active = false;
@@ -164,7 +172,12 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
     trackDeg: number | null,
     trailTimeSec: number,
   ): void {
-    if (!Number.isFinite(lon) || !Number.isFinite(lat) || !Number.isFinite(tSec)) return;
+    if (
+      !Number.isFinite(lon) ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(tSec)
+    )
+      return;
 
     let tr = tracks.get(id);
     if (!tr) {
@@ -182,14 +195,16 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
     if (trackDeg != null) tr.lastTrackDeg = trackDeg;
     totalPointsAppended++;
 
-    const isAir = kind === 'aircraft';
+    const isAir = kind === "aircraft";
     const style = isAir
       ? aircraftStyle({ track_deg: tr.lastTrackDeg })
       : vesselStyle({ cog: tr.lastTrackDeg });
 
     const entity = ds.entities.getById(`hist:${id}`);
     if (!entity) {
-      const labelText = isAir ? id.replace(/^aircraft:/, '') : id.replace(/^vessel:/, '');
+      const labelText = isAir
+        ? id.replace(/^aircraft:/, "")
+        : id.replace(/^vessel:/, "");
       ds.entities.add({
         id: `hist:${id}`,
         position: tr.spp,
@@ -203,7 +218,9 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
         },
         label: labelFor(labelText),
         path: {
-          material: new Cesium.ColorMaterialProperty(isAir ? AIR_TRAIL : SEA_TRAIL),
+          material: new Cesium.ColorMaterialProperty(
+            isAir ? AIR_TRAIL : SEA_TRAIL,
+          ),
           width: 2,
           leadTime: 0,
           trailTime: trailTimeSec,
@@ -214,7 +231,9 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
       // Reassigned as a constant property on each new sample — never a
       // per-frame callback. Heading updates at sample granularity, not per
       // frame: the icon points the way its last recorded fix did.
-      entity.billboard.rotation = new Cesium.ConstantProperty(style.rotationRad);
+      entity.billboard.rotation = new Cesium.ConstantProperty(
+        style.rotationRad,
+      );
     }
   }
 
@@ -237,7 +256,8 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
       let cnt = 1;
       while (j < pts.length) {
         const [lon, lat] = pts[j]!;
-        if (haversineKm({ lat: lat0, lon: lon0 }, { lat, lon }) > DWELL_KM) break;
+        if (haversineKm({ lat: lat0, lon: lon0 }, { lat, lon }) > DWELL_KM)
+          break;
         sumLon += lon;
         sumLat += lat;
         cnt++;
@@ -262,7 +282,8 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
             font: '600 10px "IBM Plex Mono", monospace',
             fillColor: DWELL,
             showBackground: true,
-            backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.78),
+            backgroundColor:
+              Cesium.Color.fromCssColorString("#0c0e11").withAlpha(0.78),
             backgroundPadding: new Cesium.Cartesian2(5, 3),
             pixelOffset: new Cesium.Cartesian2(0, -10),
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
@@ -291,7 +312,10 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
   }
 
   // ── Legacy single-shot path (Pattern-of-life) ─────────────────────────────
-  async function load(windowSec: number, onlyId?: string): Promise<PlaybackInfo | null> {
+  async function load(
+    windowSec: number,
+    onlyId?: string,
+  ): Promise<PlaybackInfo | null> {
     chunkActive = false; // pattern-of-life pre-empts any running chunk replay
     const now = Date.now() / 1000;
     const from = now - windowSec;
@@ -344,8 +368,8 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
       points: pts,
       from,
       to,
-      source: 'own',
-      label: 'own archive',
+      source: "own",
+      label: "own archive",
       maxMultiplier: 3600,
     };
   }
@@ -361,14 +385,19 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
   // "own:<day> <index>:<kindFilter>". `null` caches a 404/empty answer so a
   // scrub back over an unreachable half hour does not refetch it every time.
   const chunkCache = new Map<string, DecodedHeatmapChunk | Track[] | null>();
-  function cacheGet(key: string): DecodedHeatmapChunk | Track[] | null | undefined {
+  function cacheGet(
+    key: string,
+  ): DecodedHeatmapChunk | Track[] | null | undefined {
     if (!chunkCache.has(key)) return undefined;
     const v = chunkCache.get(key) ?? null;
     chunkCache.delete(key);
     chunkCache.set(key, v); // bump to most-recently-used
     return v;
   }
-  function cacheSet(key: string, v: DecodedHeatmapChunk | Track[] | null): void {
+  function cacheSet(
+    key: string,
+    v: DecodedHeatmapChunk | Track[] | null,
+  ): void {
     chunkCache.set(key, v);
     if (chunkCache.size > CHUNK_CACHE_MAX) {
       const oldest = chunkCache.keys().next().value;
@@ -385,7 +414,7 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
     if (!oldestPromise) {
       oldestPromise = (async (): Promise<OldestState> => {
         try {
-          const r = await apiFetch('/api/history/stats');
+          const r = await apiFetch("/api/history/stats");
           if (!r.ok) return { ms: 0, day: null };
           // Two backends, two shapes (apps/api/app/history.py stats()):
           //   sqlite    — an explicit shard day list, no oldest_ts.
@@ -395,15 +424,21 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
           // "everything is own archive" and silently killed upstream replay,
           // so prefer the backend-neutral oldest_ts and keep the shard list
           // as the SQLite fallback.
-          const s = (await r.json()) as { shards?: { day: string }[]; oldest_ts?: number | null };
-          const oldestTs = typeof s.oldest_ts === 'number' && s.oldest_ts > 0 ? s.oldest_ts : null;
+          const s = (await r.json()) as {
+            shards?: { day: string }[];
+            oldest_ts?: number | null;
+          };
+          const oldestTs =
+            typeof s.oldest_ts === "number" && s.oldest_ts > 0
+              ? s.oldest_ts
+              : null;
           if (oldestTs !== null) {
             const ms = oldestTs * 1000;
             return { ms, day: dayUtc(ms) };
           }
           const days = (s.shards ?? [])
             .map((x) => x.day)
-            .filter((d) => d !== 'legacy')
+            .filter((d) => d !== "legacy")
             .sort();
           if (days.length === 0) return { ms: 0, day: null };
           const day = days[0]!;
@@ -419,7 +454,7 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
   async function fetchOwnChunk(
     startSec: number,
     endSec: number,
-    kindFilter: 'aircraft' | 'vessel',
+    kindFilter: "aircraft" | "vessel",
   ): Promise<Track[]> {
     const key = `own:${startSec}:${kindFilter}`;
     const cached = cacheGet(key);
@@ -443,12 +478,17 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
     }
   }
 
-  async function fetchUpstreamChunk(day: string, index: number): Promise<DecodedHeatmapChunk | null> {
+  async function fetchUpstreamChunk(
+    day: string,
+    index: number,
+  ): Promise<DecodedHeatmapChunk | null> {
     const key = `upstream:${day} ${index}`;
     const cached = cacheGet(key);
     if (cached !== undefined) return cached as DecodedHeatmapChunk | null;
     try {
-      const r = await apiFetch(`/api/history/upstream/chunk?day=${day}&index=${index}`);
+      const r = await apiFetch(
+        `/api/history/upstream/chunk?day=${day}&index=${index}`,
+      );
       if (!r.ok) {
         cacheSet(key, null);
         return null;
@@ -470,7 +510,11 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
   }
   let staticLabel = sourceLabel(null);
 
-  function buildInfo(source: PlaybackSource, from: number, to: number): PlaybackInfo {
+  function buildInfo(
+    source: PlaybackSource,
+    from: number,
+    to: number,
+  ): PlaybackInfo {
     return {
       tracks: tracks.size,
       points: totalPointsAppended,
@@ -478,7 +522,7 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
       to,
       source,
       label: staticLabel,
-      maxMultiplier: source === 'upstream' || source === 'mixed' ? 600 : 3600,
+      maxMultiplier: source === "upstream" || source === "mixed" ? 600 : 3600,
     };
   }
 
@@ -504,14 +548,24 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
     // 2026-09-17 — a replayed own-archive half hour drew 2,000 aircraft / 0
     // vessels). Aircraft older than the archive come from upstream and so need
     // no own-archive request; vessels are always the own archive.
-    const ownKinds: Array<'aircraft' | 'vessel'> = aircraftFromUpstream
-      ? ['vessel']
-      : ['aircraft', 'vessel'];
-    const ownBatches = await Promise.all(ownKinds.map((k) => fetchOwnChunk(startSec, endSec, k)));
+    const ownKinds: Array<"aircraft" | "vessel"> = aircraftFromUpstream
+      ? ["vessel"]
+      : ["aircraft", "vessel"];
+    const ownBatches = await Promise.all(
+      ownKinds.map((k) => fetchOwnChunk(startSec, endSec, k)),
+    );
     for (const ownTracks of ownBatches) {
       for (const tr of ownTracks) {
         for (const [lon, lat, t, trackDeg] of tr.points) {
-          upsertSample(tr.id, tr.kind, lon, lat, t, trackDeg ?? null, CHUNK_SEC);
+          upsertSample(
+            tr.id,
+            tr.kind,
+            lon,
+            lat,
+            t,
+            trackDeg ?? null,
+            CHUNK_SEC,
+          );
           sawOwn = true;
         }
       }
@@ -522,14 +576,36 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
       if (decoded) {
         const rect = widenedViewDeg(viewer);
         for (const p of decoded.positions) {
-          if (rect && (p.lon < rect[0] || p.lon > rect[2] || p.lat < rect[1] || p.lat > rect[3])) continue;
-          upsertSample(`aircraft:${p.hex}`, 'aircraft', p.lon, p.lat, p.t / 1000, p.track, CHUNK_SEC);
+          if (
+            rect &&
+            (p.lon < rect[0] ||
+              p.lon > rect[2] ||
+              p.lat < rect[1] ||
+              p.lat > rect[3])
+          )
+            continue;
+          upsertSample(
+            `aircraft:${p.hex}`,
+            "aircraft",
+            p.lon,
+            p.lat,
+            p.t / 1000,
+            p.track,
+            CHUNK_SEC,
+          );
           sawUpstream = true;
         }
       }
     }
 
-    const source: PlaybackSource = sawOwn && sawUpstream ? 'mixed' : sawUpstream ? 'upstream' : sawOwn ? 'own' : 'none';
+    const source: PlaybackSource =
+      sawOwn && sawUpstream
+        ? "mixed"
+        : sawUpstream
+          ? "upstream"
+          : sawOwn
+            ? "own"
+            : "none";
     return { source };
   }
 
@@ -547,12 +623,20 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
         const startMs = chunkStartMs(day, index);
         const result = await loadChunkInto(day, index, startMs < oldest.ms);
         viewer.scene.requestRender();
-        if (onInfoCb) onInfoCb(buildInfo(result.source, startMs / 1000, (startMs + CHUNK_MS) / 1000));
+        if (onInfoCb)
+          onInfoCb(
+            buildInfo(
+              result.source,
+              startMs / 1000,
+              (startMs + CHUNK_MS) / 1000,
+            ),
+          );
       })();
       const nxt = nextChunk(day, index);
       void (async () => {
         const oldest = await resolveOldest();
-        if (chunkStartMs(nxt.day, nxt.index) < oldest.ms) void fetchUpstreamChunk(nxt.day, nxt.index);
+        if (chunkStartMs(nxt.day, nxt.index) < oldest.ms)
+          void fetchUpstreamChunk(nxt.day, nxt.index);
       })();
     });
     onTickRemover = () => off();
@@ -588,9 +672,14 @@ export function installHistoryPlayback(viewer: Cesium.Viewer): PlaybackControlle
 
     const { day, index } = chunkKeyForMs(startMs);
     currentKey = `${day} ${index}`;
-    const result = await loadChunkInto(day, index, chunkStartMs(day, index) < oldest.ms);
+    const result = await loadChunkInto(
+      day,
+      index,
+      chunkStartMs(day, index) < oldest.ms,
+    );
     const nxt = nextChunk(day, index);
-    if (chunkStartMs(nxt.day, nxt.index) < oldest.ms) void fetchUpstreamChunk(nxt.day, nxt.index);
+    if (chunkStartMs(nxt.day, nxt.index) < oldest.ms)
+      void fetchUpstreamChunk(nxt.day, nxt.index);
 
     viewer.scene.requestRender();
     return buildInfo(result.source, startMs / 1000, endMs / 1000);

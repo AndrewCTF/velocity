@@ -32,7 +32,6 @@ const FRAME_BUDGET_MS = 12;
 let lastStamp = -1;
 let spent = 0;
 
-
 // Remaining cooperative budget for the frame identified by `stamp`. The first
 // caller in a new frame resets the ledger and sees the full budget.
 export function frameBudgetRemaining(stamp: number): number {

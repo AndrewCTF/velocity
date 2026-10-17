@@ -57,7 +57,7 @@ One compose file and the core feeds — planes, ships, quakes, satellites, basem
 
 - Backend: Python 3.12, ~1 GB RAM, outbound HTTPS only. Runs fine on a small VPS
   or an old NUC.
-- Frontend: the 3D globe wants a real GPU on the *viewing* machine, but the
+- Frontend: the 3D globe wants a real GPU on the _viewing_ machine, but the
   2D-dark map runs on integrated graphics. The server doesn't render anything.
 - Storage: one SQLite file, retention is a byte cap you set. Mine's capped at
   2 GB and currently holds 8.7M archived positions; set it to 50 GB and it keeps

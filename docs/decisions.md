@@ -1,8 +1,8 @@
 # Operator decisions & platform history
 
 This is the full rationale and post-mortem log behind the invariants in
-`CLAUDE.md`. CLAUDE.md carries the *what* plus a pointer to the enforcing
-check; this file carries the *why*, the dates, and the failures that taught
+`CLAUDE.md`. CLAUDE.md carries the _what_ plus a pointer to the enforcing
+check; this file carries the _why_, the dates, and the failures that taught
 each lesson. If you are about to change a guarded behavior, read its entry
 here first — several were rejected and re-litigated more than once, and the
 guard tests cite this file.
@@ -28,7 +28,7 @@ Executable guards (fail loud instead of relying on prose):
   `apps/web/src/globe/adapters/styles.ts` (`aircraftStyle`, `vesselStyle`).
 - Aircraft categories (with their colors):
   - airliner — `#facc15`
-  - private  — `#2dd4bf`
+  - private — `#2dd4bf`
   - helicopter — `#c084fc`
   - glider — `#93c5fd`
   - military — `#f59e0b`
@@ -157,17 +157,21 @@ Executable guards (fail loud instead of relying on prose):
      measured 2026-07-05). Needs browser-ish `Referer`/`Origin` headers or it
      500s; NOT Cloudflare-gated. Cheapest source (one ~190 KB request/poll).
      Polled live, so wall-clock `t` is honest for it.
+     **Superseded 2026-10-04:** it is not. Each row carries its own fix time
+     (median about 2 min old, p95 about 35 min), the body is 6.3 MB, and the
+     pull now runs in `app.ais_pipeline`, which stamps the upstream time. See
+     "AIS pipeline bridged into the shared vessel store" at the end of this file.
   2. **MyShipTracking headless-browser sidecar** (`tools/ais-myshiptracking-feeder`,
      `:8093/vessels.json`, ~22k measured 2026-07-05), polled every 30 s. Serves a
      CACHE: `/vessels.json` carries `last_good`/`age_s` and the poller stamps `t`
      from `last_good`, refusing any union older than
      `ais_myshiptracking_sidecar_max_age_s` (180 s).
-  `app.ais_sidecar` also registers MarineTraffic `:8092` (SHIP_ID-keyed,
-  Cloudflare-throttled) + VesselFinder `:8091` — SHIP_ID-keyed feeders must NOT
-  run alongside an MMSI source (different id namespace → double-renders). Only
-  ONE SHIP_ID feeder may be enabled, only in place of the MMSI sources.
-  AIS Digitraffic: 30 s (Baltic only). AISStream WS: on-demand only (API cap).
-  Sentinel-1 SAR dark-vessel layer (`maritime.sar.hormuz`): 6 h poll.
+     `app.ais_sidecar` also registers MarineTraffic `:8092` (SHIP_ID-keyed,
+     Cloudflare-throttled) + VesselFinder `:8091` — SHIP_ID-keyed feeders must NOT
+     run alongside an MMSI source (different id namespace → double-renders). Only
+     ONE SHIP_ID feeder may be enabled, only in place of the MMSI sources.
+     AIS Digitraffic: 30 s (Baltic only). AISStream WS: on-demand only (API cap).
+     Sentinel-1 SAR dark-vessel layer (`maritime.sar.hormuz`): 6 h poll.
 
 ## Aircraft count + sources
 
@@ -251,7 +255,7 @@ ever re-earned, `get_registry()` is the seam.
   `/api/maps` used to 401 on a keyless boot (`current_user` demands a
   Supabase token) and 503 with a fake user (store unconfigured) — the reason
   the GRAPH page was photographed empty. These routes now use
-  `current_user_or_local`: when Supabase is *entirely* unconfigured the
+  `current_user_or_local`: when Supabase is _entirely_ unconfigured the
   caller (already past ApiKeyMiddleware) gets the shared `local` identity and
   the SQLite store. With Supabase configured, behavior is exactly
   `current_user` — prod droplet unchanged. Consequence accepted: a
@@ -260,7 +264,7 @@ ever re-earned, `get_registry()` is the seam.
   same day.
 - **Assertions, not just blobs.** Every object property change is also an
   append-only row in `assertions(object_id, prop, value, source, confidence,
-  observed_at, valid_until, derivation)` — *who said this, when, how sure*.
+observed_at, valid_until, derivation)` — _who said this, when, how sure_.
   The `objects.props` column stays the exact last-written blob (wholesale
   replace, removals included) because InvestigationCanvas + the
   situations/maps/COP/annotation stores round-trip it verbatim; the diff into
@@ -341,22 +345,23 @@ adversarial pass showed the structural ReDoS detector still leaked
 (trailing-optional `(\w+\s?)+`, lazy `(a+?)+`, alternation `(a|a)+`). A purely
 structural detector cannot be complete, so the fix is defense-in-depth, NOT a
 bigger heuristic:
-  1. **Regex patterns must be string LITERALS** (enforced in `_validate`) — a
-     dataset column value can never supply the pattern, which kills the
-     data-driven-ReDoS vector and lets the literal be screened at SAVE time.
-  2. The detector was widened (flags a quantified group whose body ENDS in OR
-     STARTS with an unbounded-quantified atom) and now RAISES at save (loud), so
-     a dangerous/invalid literal 422s before any build. Residual
-     overlapping-alternation is an operator footgun on a single-operator local
-     process, documented in `transforms.py`.
-  Also fixed: `_coerce_to` float pin now applies the `math.isfinite` guard;
-  `update_check` clears `check_results` ONLY on an actual dataset reassignment
-  (not on every rename/toggle). The FOUNDRY frontend was rebuilt on a shared
-  Workshop vocabulary (`web/src/foundry/ui.tsx`: ViewHeader, StatTile, Tabs,
-  TypeChip, LogView, health affordances) — icon nav rail, tabbed dataset detail
-  surfacing lineage + dead-letter, status-colored lineage DAG (stale = amber),
-  entity-resolution toggle on bindings. All token-driven (light/dark safe).
-  Baseline: **917 backend tests** (up from 877); web 201; verify.sh green.
+
+1. **Regex patterns must be string LITERALS** (enforced in `_validate`) — a
+   dataset column value can never supply the pattern, which kills the
+   data-driven-ReDoS vector and lets the literal be screened at SAVE time.
+2. The detector was widened (flags a quantified group whose body ENDS in OR
+   STARTS with an unbounded-quantified atom) and now RAISES at save (loud), so
+   a dangerous/invalid literal 422s before any build. Residual
+   overlapping-alternation is an operator footgun on a single-operator local
+   process, documented in `transforms.py`.
+   Also fixed: `_coerce_to` float pin now applies the `math.isfinite` guard;
+   `update_check` clears `check_results` ONLY on an actual dataset reassignment
+   (not on every rename/toggle). The FOUNDRY frontend was rebuilt on a shared
+   Workshop vocabulary (`web/src/foundry/ui.tsx`: ViewHeader, StatTile, Tabs,
+   TypeChip, LogView, health affordances) — icon nav rail, tabbed dataset detail
+   surfacing lineage + dead-letter, status-colored lineage DAG (stale = amber),
+   entity-resolution toggle on bindings. All token-driven (light/dark safe).
+   Baseline: **917 backend tests** (up from 877); web 201; verify.sh green.
 
 **Parity wave (2026-07-09) — Data Health SLAs + analytic transforms.** Closed
 in-scope real-Foundry gaps: two check types — `freshness{column,max_age_s}`
@@ -470,6 +475,7 @@ Top navigation reworked into grouped tabs (Live / Analyze / Data / Product /
 
 Nine frontend correctness fixes landed in the same PR; two are guarded
 permanently and must not regress:
+
 - **LOD1 buildings floated/sank in 3D-satellite mode.** The cesium-martini
   terrain provider exposes no tile availability, so
   `sampleTerrainMostDetailed` is unusable — building bases now clamp to
@@ -509,6 +515,7 @@ row's lat/lon, plus takeoff/land/rtl/orbit/follow/arm/disarm/pause), and
 
 **Safety model** (`apps/api/app/workflows/control.py`) — do not weaken any of
 these without a new operator decision:
+
 - Preview NEVER actuates: dry-run returns only the would-be envelope.
 - Run-wide dispatch budget (200) plus a per-block `max_dispatch` cap.
 - `WORKFLOWS_CONTROL_ENABLED=0` kill switch; optional
@@ -606,7 +613,7 @@ roadmap's demand ranking.
   `alert_deliveries` log (the durable proof a sink push happened, readable via
   `GET /api/alerts/deliveries` with no browser attached).
 - **`routes/alert_rules.py`** now selects backend on `not
-  settings.supabase_url` (the exact predicate `watch.py` already used) —
+settings.supabase_url` (the exact predicate `watch.py` already used) —
   Supabase REST when configured (byte-for-byte unchanged behavior), the local
   store otherwise. Auth changed from `current_user` to `current_user_or_local`
   (the same contract revoke the ontology routes made 2026-07-07): a keyless
@@ -654,7 +661,7 @@ roadmap's demand ranking.
 ## Evidence locker + case→report export (2026-07-12)
 
 Roadmap `docs/roadmap-practitioners-2026-07.md` P1+P2. The investigation loop
-worked until you had to *prove* something: you could flag/promote entities and
+worked until you had to _prove_ something: you could flag/promote entities and
 build Situations, but nothing turned a case into a checkable document, and there
 was no chain-of-custody capture primitive. Both now exist, backend-first.
 
@@ -686,7 +693,7 @@ was no chain-of-custody capture primitive. Both now exist, backend-first.
   tamper** rather than serving bad evidence.
 - **Case → report** (`app/intel/case_export.py`, named to avoid the unrelated
   entity-pattern-of-life `intel/dossier.py`): `POST
-  /api/situations/{id}/export?fmt=html|json|pptx` walks the situation's 1-hop
+/api/situations/{id}/export?fmt=html|json|pptx` walks the situation's 1-hop
   children, their sourced assertions, and attached evidence into a report where
   **every claim carries a provenance footnote** ("asserted by <source> at
   <observed_at>") and every exhibit shows its SHA-256 + a hash-of-hashes
@@ -733,7 +740,7 @@ Findings from the same-day state-of-project audit
   message) instead of accepted-and-never-delivered — closes the "Not done"
   named in the 2026-07-11 keyless-alerts entry the honest direction until a
   sender exists. Guard: `test_alert_rules.py::
-  test_create_rejects_email_until_a_sender_exists`. Baseline 1539 → 1540.
+test_create_rejects_email_until_a_sender_exists`. Baseline 1539 → 1540.
 - NOT changed, deliberately: watch-officer in-memory briefs (docstring
   documents restart-rederivation and `incident_store` diff state is also
   process-memory, so the story holds — the audit's first draft misread this
@@ -787,20 +794,21 @@ re-api endpoint; plain navigate on the blocked path → 403, as expected.
 **THREE things look like "Cloudflare is blocking us" and only one of them is.**
 This is the most useful result of the wave; check which one you have before
 spending anything on a fix.
-1. *A WAF path rule.* `globe.airplanes.live/data/aircraft.json`: 403 to httpx, to
+
+1. _A WAF path rule._ `globe.airplanes.live/data/aircraft.json`: 403 to httpx, to
    curl with a full Chrome header set, through WARP, and to real Chrome that had
    just loaded the site. Nothing opens it — read the page's own request instead.
-2. *Not blocked at all, just undiscovered.* The endpoint that page actually uses,
+2. _Not blocked at all, just undiscovered._ The endpoint that page actually uses,
    `/re-api/?binCraft&zstd&box=…`, answers **bare httpx with no headers at all**
    with 200 (15 762 bytes), including with the `osint-console/0.1` UA the backend
    already sends. The browser's value there is DISCOVERY, not bypass. NOTE: this
    contradicts the standing comment in `config.py` (`the binary re-api is
-   Cloudflare-403, measured`), which was measured from the DATACENTER droplet —
+Cloudflare-403, measured`), which was measured from the DATACENTER droplet —
    either it changed upstream or it is address-dependent. Not resolved here, and
    the ADS-B sidecar was left alone; worth re-probing from the droplet, because
    if it holds there too, a 25-process 4.4 GB Chromium tier has a two-line
    replacement.
-3. *A real managed challenge.* `globe.adsb.fi` answers 403 with a "Just a
+3. _A real managed challenge._ `globe.adsb.fi` answers 403 with a "Just a
    moment..." interstitial (5 596 bytes).
 
 **Headless Chrome is itself the tell — headful on Xvfb is the lever that works.**
@@ -823,6 +831,7 @@ ran on `DISPLAY=:99`/`:100`, its windows appeared on the Xvfb root (3 and 7
 top-levels), and zero Chrome windows appeared on `:0` across the whole session —
 the only Chrome there was the operator's own, started an hour earlier.
 Two things this depends on, both now enforced:
+
 - **Pin `--ozone-platform=x11` when headful.** `WAYLAND_DISPLAY` is inherited
   even inside `xvfb-run` and Chrome chooses its Ozone backend automatically.
   Today it picks X11 and honours `DISPLAY`, but that is Chrome's default doing
@@ -835,9 +844,9 @@ Two things this depends on, both now enforced:
   Note `scripts/kill-port.sh` only signals the node pid — fine because our own
   SIGTERM handler closes the browser, but that handler only exists because
   Playwright's was disabled, so do not remove one without the other.
-On a headless deployment (the droplet) Xvfb is not politeness, it is required —
-there is no display at all. To watch a session, attach with
-`x11vnc -display :99`; never point the tier at `:0` to "see what it is doing".
+  On a headless deployment (the droplet) Xvfb is not politeness, it is required —
+  there is no display at all. To watch a session, attach with
+  `x11vnc -display :99`; never point the tier at `:0` to "see what it is doing".
 
 **Behaving like a person, in the order the effect is real.** Not folklore — each
 of these is either measured here or structural: (1) real Chrome via
@@ -854,6 +863,7 @@ stealth plugin: they are fingerprinted in their own right and would be a new
 dependency in the hot path.
 
 Two bugs the live runs caught that tests would not have:
+
 - **Playwright owns SIGTERM unless you take it back.** Its default handlers tore
   the browser down before our flush ran, so the shutdown save failed with
   "Failed to open a new tab" and the session's cookies were lost — precisely
@@ -868,6 +878,7 @@ Two bugs the live runs caught that tests would not have:
   after a sidecar restart.
 
 Consequences worth keeping:
+
 - **Egress must be consistent per host.** A Cloudflare clearance cookie is bound
   to the address that earned it, so `warp_sidecars` moves the browsers onto the
   same exit as the poller or neither works. Default off: the feeders clear their
@@ -996,8 +1007,8 @@ was actually opened up. **Exactly one was a block. Four were our own bugs
 wearing a 4xx, and a fifth "finding" was the probe misreading a documentation
 string — retracted below, and the most instructive of the lot.** The lesson is
 not "the audit was wrong": the audit is what made any of this visible. It is
-that *reachability*, *correctness of the call we make*, and *whether we make
-that call at all* are three different questions, and the instrument only asked
+that _reachability_, _correctness of the call we make_, and _whether we make
+that call at all_ are three different questions, and the instrument only asked
 the first.
 
 Baseline for every measurement below: dev egress, Proton VPN exit
@@ -1032,7 +1043,7 @@ The fix is `kwargs.setdefault("follow_redirects", True)` in
 `_InstrumentedClient.__init__` — on the class, not in `get_client()`, so the
 tests (which build the client directly over a `MockTransport`) exercise the
 production shape. **The scorer needed no 3xx branch**, and that is the point:
-with follow on, httpx resolves the chain *inside* `send()` and returns the final
+with follow on, httpx resolves the chain _inside_ `send()` and returns the final
 response, so `>= 400` sees the truth and a loop raises `TooManyRedirects` into
 the existing `except`. A `300 <= code < 400` branch instead would have converted
 GDELT from silently-empty to loudly-failing without making it work.
@@ -1044,7 +1055,7 @@ per-request and re-validate each hop themselves: `intel/evidence.py:398`
 `check_url` and `_pin_http_url`, which pins the resolved IP), `news/images.py`
 (per-hop `_resolve_public`), and `browser_fetch.py` (`_is_public_url` before the
 sidecar). httpx per-request kwargs override the client default, so all four are
-untouched. The risk is the *next* route, which is what the guard is for.
+untouched. The risk is the _next_ route, which is what the guard is for.
 
 **2. CelesTrak's 403 is a conditional GET.** Body, verbatim:
 
@@ -1065,7 +1076,7 @@ us discarding data and requesting it again.
 Fixed by reading the body: on 403 + that string, serve the last good copy and
 `record_success(host, 0.0, 304)` so `/api/status/sources` says **304** and
 explains itself. The `fail` counter still moves, which is honest about the wire.
-Any *other* 403 still fails, and a not-modified with no cached copy still 502s —
+Any _other_ 403 still fails, and a not-modified with no cached copy still 502s —
 never invent data.
 
 The last-good copy is on **disk** (`data/celestrak/<group>.tle`, atomic
@@ -1087,8 +1098,8 @@ The response carries `stale` and `age_s` regardless — the age of the DATA.
 `www.gdacs.org/.../geteventlist/MAP` answers **400**; the path parameter is
 `EVENTS4APP`, which answers 200 with the identical shape the parser already
 expects — verified against a live body before switching. **0 -> 100 features.**
-`api.reliefweb.int/v1` answers **410** and says so: *"The API version 'v1' has
-been decommissioned. Please use version 'v2' instead."* v2 needs a pre-approved
+`api.reliefweb.int/v1` answers **410** and says so: _"The API version 'v1' has
+been decommissioned. Please use version 'v2' instead."_ v2 needs a pre-approved
 `appname` (400 without one, 403 with an arbitrary one), so that one is an
 operator registration, recorded, not guessed.
 
@@ -1108,8 +1119,7 @@ wrong in exactly the way this whole entry is about.
 
 What is actually true: the host has an A record (82.64.25.168) as well as a
 AAAA; `getent hosts` printed only the first line and that was read as the whole
-answer. Its **`https://` resets the TLS handshake** while its `http://` answers
-200. And the backend never asks it for `https://` anyway —
+answer. Its **`https://` resets the TLS handshake** while its `http://` answers 200. And the backend never asks it for `https://` anyway —
 `source_catalog.py`'s `KIWISDR_URL` is `http://rx.linkfanel.net/kiwisdr_com.js`
 and `/api/sdr/kiwisdr` returns **866 stations**. There was no defect.
 
@@ -1245,6 +1255,8 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2026-10-04: 3102 passed + 21 skipped in ~262 s (branch palantir-stack-2026-09, AIS pipeline wave, measured on the uncommitted shared tree); displaced 2026-10-17 by 3159 + 21 (branch frontend-speed-2026-10: the AIS, keyless Google 3D and clearance work committed and master's #95/#96 merged).
+- 2026-09-17: 2996 passed + 21 skipped in ~236 s (branch palantir-stack-2026-09); displaced 2026-10-04 by 3102 + 21 (AIS pipeline wave, measured on the shared working tree, which also carries the keyless Google 3D and clearance tests).
 - 2026-09-17: 2996 passed + 21 skipped in ~236 s (branch palantir-stack-2026-09, palantir-stack waves); displaced 2026-10-05 by 3007 + 21 (keyless Google 3D adds 11; the four MQTT tests that had been failing on master since late September pass again and were always in the count).
 - 2026-09-13: 2813 passed + 2 skipped in ~207 s (branch release-basemap-schemes-2026-09, adsb-feeder stall + heap fix); displaced 2026-09-17 by 2996 + 21 (palantir-stack waves; the 17 Timescale tests skip without HISTORY_PG_TEST_DSN).
 - 2810 + 2 skipped — 2026-09-13, release-basemap-schemes-2026-09, release-gate wave
@@ -1286,7 +1298,7 @@ number changes, the displaced line lands here.
   rules with NULL AOI, eq/track param strictness, dossier effective-window
   honesty, brief truncation, screening persistence + keyless local audit log,
   5 new MCP tools = 46, retention truth incl. `/api/history/coverage
-  oldest_ts`, ruff backlog cleared). Wave 3 ran 10 personas (3 new: SOC,
+oldest_ts`, ruff backlog cleared). Wave 3 ran 10 personas (3 new: SOC,
   NGO ops, data engineer) whose 22 confirmed findings yielded 7 same-night
   fixes (connector provenance on investigate/recon persistence, ontology
   Properties fallback in the graph inspector, workflows source.quakes loader
@@ -1358,7 +1370,8 @@ number changes, the displaced line lands here.
 ## Lessons from past sessions (post-mortems)
 
 ### A cached tier that stamps wall-clock time is immortal AND wins (2026-07-15)
-The exact ADS-B `seen_pos_s` lesson recorded in *Aircraft predicted motion*
+
+The exact ADS-B `seen_pos_s` lesson recorded in _Aircraft predicted motion_
 above ("a cached tier reports 0.3 s forever"), repeated in the AIS path ten days
 after that fix landed. Found by reading `/tmp/ais-sidecar-myshiptracking.log`,
 not by any alarm — nothing was red.
@@ -1389,6 +1402,7 @@ lets the frozen fixes age out so live sources retake the MMSI); `/api/status`
 degrades and says so.
 
 Two structural traps this exposed, both fixed the same day:
+
 - **`_already_healthy` accepted any 200.** A wedged feeder answers 200 forever,
   so every restart re-adopted the frozen tier — no restart could clear it. It
   now refuses a union older than the poller's cap and evicts the port holder.
@@ -1411,6 +1425,7 @@ Guards: `tests/test_ais_keyless.py` (stamp + refuse), `tests/test_ais_sidecar_re
 (reuse/supervise/escalate), `tests/test_status.py` (honest AIS feed).
 
 ### Supervising the tar1090 sidecar: liveness ≠ has-data (2026-07-15)
+
 The `:8090` follow-up to the above. Supervising the platform's most critical feed
 (≥8 000 floor, `ADSB_SIDECAR_ONLY=1`) looks like a copy of the AIS loop and is
 not — two hazards had to be resolved first, and both come down to one idea:
@@ -1462,6 +1477,7 @@ stamps `t=now` and is fine — it is a live direct poll with no cache behind it,
 which is the distinction that matters: cache → honest age, live fetch → `now`.)
 
 ### Never claim coverage/parity without a measurement
+
 A session called the keyless AIS firehose "global" in code, commit, and
 `/api/intel/sources` — it was Norway-only. Another asserted ~13k aircraft was
 "the full picture" — it was ~60% of FlightAware. The words global / complete /
@@ -1469,15 +1485,18 @@ full / already covered / parity are banned unless a live probe with a COUNT
 backs them up that turn.
 
 ### "Configured" ≠ "working"
-`opensky_authed: true` because creds were *set* — but expired; every call
+
+`opensky_authed: true` because creds were _set_ — but expired; every call
 401'd. To claim a source works, hit it and read the status/count.
 
 ### Exhaust the data-source search before declaring a ceiling
+
 "Keyless aircraft caps at ~12.7k" was wrong: open mirrors
 (`globe.theairtraffic.com`, `skylink.hpradar.com`), the adsb.lol full-snapshot
 quirk, and a headless-browser bridge existed. "Whole globe" means try harder.
 
 ### Feed hygiene
+
 - Feeds pull in a BACKGROUND task (`_pull_due_feeds`) per-feed; a slow body
   never blocks the fan-out. `theairtraffic` = freshness primary (~10k, ~1.6 s
   median age, pulled ~8 s). readsb `aircraft.json` bodies are several MB —
@@ -1494,6 +1513,7 @@ quirk, and a headless-browser bridge existed. "Whole globe" means try harder.
   `tests/test_invariants.py`.
 
 ### Playwright
+
 - Pass FUNCTIONS to `page.evaluate`, not strings — a template-string "reader"
   silently returns the function object and the sidecar serves 0 aircraft.
 - The globe-feeder keeps ONE page open; zoom to world once, read the store,
@@ -1503,6 +1523,7 @@ quirk, and a headless-browser bridge existed. "Whole globe" means try harder.
   from a headless number.
 
 ### Process / shell
+
 - `pkill -f` doesn't match `node index.js` argv. Kill by PORT holder:
   `scripts/kill-port.sh <port>`. Fresh log file per run.
 - apps/api uvicorn has NO --reload; restarting 3× got the egress 429'd by
@@ -1510,11 +1531,12 @@ quirk, and a headless-browser bridge existed. "Whole globe" means try harder.
 - Backend boot: `bash scripts/run-api.sh` from repo ROOT (jemalloc LD_PRELOAD;
   bare uvicorn hit ~54 GB glibc-arena thrash; NEVER set `M_ARENA_MAX=2` — it
   made memory WORSE). Stale Playwright-MCP lock: `rm
-  ~/.cache/ms-playwright-mcp/*/Singleton{Lock,Cookie,Socket}`.
+~/.cache/ms-playwright-mcp/*/Singleton{Lock,Cookie,Socket}`.
 - Backend tests from the repo ROOT, never `apps/api` (there `.env` auth
   resolves and every request 401s).
 
 ### Frontend performance (2026-06-30)
+
 World-view <10 fps is GPU/per-frame-render bound (~15k billboards+labels),
 NOT React. FPS work targets the render path (decimate/cull at world zoom, LOD
 labels, cap the moving set), not panels. Shared perf modules:
@@ -1522,12 +1544,14 @@ labels, cap the moving set), not panels. Shared perf modules:
 `globe/frameBudget.ts`, `explorer/facets.ts`.
 
 ### "Not refreshing / Last seen climbing" = backend first (2026-06-30)
+
 Diff two `/api/adsb/global` pulls N s apart on `seen_pos_s`: median can read
 fresh while <5% CHANGES over 8 s — a frozen HOT_BLOB (fan-out burning its
 budget on a 429 storm). The frontend faithfully mirrors a frozen blob.
 `scripts/verify.sh --live` runs this probe.
 
 ### Boot race (2026-06-30)
+
 API lifespan blocks `accept` until the snapshot warms (~15-25 s);
 `transport/config.ts` retries with backoff. `/api/config` is keyless — a
 config error is transport/timing, never auth.
@@ -1539,6 +1563,7 @@ keyless defaults; the ion/Google keys are applied in their own effect so a
 late token upgrades imagery in place instead of remounting the viewer.
 
 ### Release gate (2026-09-13)
+
 `publish.yml` pushed ghcr images on a tag with no tests at all, and CI never
 built or booted an image. The new gate (`release-gate.yml`, called by
 `publish.yml` together with `ci.yml`, and also run on every PR and master
@@ -1568,12 +1593,14 @@ live used the gateway. Local backup of the untracked tree:
 Guard: `apps/api/tests/test_release_gate.py`.
 
 ### Commit / doc voice
+
 Human-style commit messages; a global commit-msg hook strips AI attribution.
 Write what was measured ("union climbs to ~14k"), not marketing ("now
 global"). Repo root tidy: no dev screenshots committed, docs under `docs/`,
 app art is SVG in code.
 
 ### Typography & WCAG-AA legibility pass (2026-07-13)
+
 Operator feedback: the UI "looks AI", newcomers/older users struggle, the
 sidebar won't extend to show all the info, and WCAG rules aren't followed.
 Three findings, all fixed surgically (not a rebuild):
@@ -1614,9 +1641,9 @@ phase-2 leaf-site sentence-case sweep.
 
 ### Aircraft predicted motion: exact speed, never reverse (2026-07-14)
 
-Operator: *"the predicted motion speed must be the actual speed, not faster or
+Operator: _"the predicted motion speed must be the actual speed, not faster or
 slower, and the plane sometime goes in reverse, that is not accepted. this must
-be on par with flight radar 24 level."*
+be on par with flight radar 24 level."_
 
 Two independent defects, one in each half of the stack. Both had to be fixed —
 no frontend motion model can fix a feed that moves aircraft backwards.
@@ -1673,6 +1700,7 @@ interpolate. Measured live after: **98.1% within ±1% (p50 error 0.0000, p95
 0.05%), reverse 0.034% (166× fewer), and exactly ONE episode lasting >1 frame.**
 
 Supporting decisions, all load-bearing:
+
 - **Never fit velocity from consecutive fixes.** Measured: only **13.5%** of
   consecutive same-source fix pairs give a great-circle speed within ±10% of
   the reported `velocity_ms` (median error +47%); `seen_at - seen_pos_s` is far
@@ -1700,8 +1728,8 @@ and still forbids extrapolation. → `globe/adapters/deadReckon.test.ts`.
 
 ### Dashboard copy: one voice, no em dashes (2026-07-15)
 
-Operator: *"improve wording for the whole dashboard, remove em dashes. make it
-feel more human and use PROFESSIONAL LANGUAGE ONLY."*
+Operator: _"improve wording for the whole dashboard, remove em dashes. make it
+feel more human and use PROFESSIONAL LANGUAGE ONLY."_
 
 Follow-on to the 2026-07-13 typography pass, which found that "looks AI" was the
 type system rather than the typeface. The same verdict applies to the words: the
@@ -1719,13 +1747,13 @@ dashboard copy:
   Untouched. Do not "finish the job" by stripping these: it breaks a guard and
   reintroduces guessing.
 
-**Two patterns, not one substitution.** Mechanically swapping every ` — ` for a
+**Two patterns, not one substitution.** Mechanically swapping every `—` for a
 colon just trades one tic for another.
 
-- *Labels* (`'Quakes — USGS (24h)'`, `'Aircraft — Military'`) use ` · `. The
+- _Labels_ (`'Quakes — USGS (24h)'`, `'Aircraft — Military'`) use `·`. The
   subject-first word order is load-bearing: it clusters sibling layers in the
   rail. Reflowing to `'USGS quakes'` breaks that and was rejected.
-- *Prose* is rewritten per sentence (period, comma, colon, semicolon, or
+- _Prose_ is rewritten per sentence (period, comma, colon, semicolon, or
   parentheses, whichever actually fits).
 
 **Caveats survive verbatim in meaning.** This is an intelligence tool. Rewrites
@@ -1747,9 +1775,9 @@ security control and stays the last thing the model reads, so nothing follows
 the untrusted-content boundary that could dilute it.
 → `tests/test_prose_style.py`
 
-**Error copy (same wave).** Operator: *"all text must be professional."* Raw
+**Error copy (same wave).** Operator: _"all text must be professional."_ Raw
 internals were rendering as user text: `CamerasPanel.tsx` caught
-`new Error(\`cams ${r.status}\`)` into `setErr` and rendered `{err}`, so the UI
+`new Error(\`cams ${r.status}\`)`into`setErr`and rendered`{err}`, so the UI
 literally read **"cams 503"**. Two operator decisions:
 
 1. **Lowercase micro-labels STAY** (`loading…`, `no saved maps`, `saving…`,
@@ -1757,9 +1785,10 @@ literally read **"cams 503"**. Two operator decisions:
    language, not sloppiness. Do not sentence-case it.
 2. **Errors are readable sentences that KEEP the status code**:
    `cams 503` → `Cameras unavailable (HTTP 503)`; `save failed` → `Could not
-   save the map.`; `network error` → `Network error. Check your connection.`
+save the map.`; `network error` → `Network error. Check your connection.`
 
 Three traps found while doing it, all of which look like copy and are not:
+
 - **State-machine values.** `ChipLayer.tsx` `setStatus('idle'|'loading'|'error')`
   and Foundry's `status: 'running' | 'succeeded' | 'failed'` are enums compared
   with `===`. Rewriting them as "copy" breaks logic.
@@ -1768,7 +1797,7 @@ Three traps found while doing it, all of which look like copy and are not:
   `data.error === 'model unavailable'`.
 - **Dead text.** `acars ${r.status}`, `chip ${r.status}`, `overpass ${r.status}`,
   and `cams ${r.status}` in TrafficSimSection are all thrown into `.catch(() =>
-  …)` handlers that take no argument, so the message never reaches the DOM.
+…)` handlers that take no argument, so the message never reaches the DOM.
   They are developer diagnostics and were deliberately LEFT.
 
 Rule that falls out: **trace a string to a render before rewriting it.** Also
@@ -1792,8 +1821,8 @@ OLDEST live reader. `CoverageStrip` polls `/api/history/coverage` every 5 s;
 own poll interval, so a read transaction was permanently open. The recorder
 writes continuously, so the WAL grew without bound. Then the loop closes: every
 page read must search the wal-index to find the newest version of that page, so
-a bigger WAL makes the scan *slower*, which holds the reader *longer*, which
-grows the WAL *faster*. That is why it ran away instead of settling — the same
+a bigger WAL makes the scan _slower_, which holds the reader _longer_, which
+grows the WAL _faster_. That is why it ran away instead of settling — the same
 scan measured **73 s against the 49.6 GB WAL and 14.8 s once it was gone.**
 The "slow query" was a symptom, not the cause.
 
@@ -1824,7 +1853,7 @@ recurred since, but the precise allocation path was never isolated, so treat
 
 ### v1.0.0, and the repo is now `velocity` (2026-07-16)
 
-Operator: *"execute first item first"* — the first item being the launch, which
+Operator: _"execute first item first"_ — the first item being the launch, which
 two prior audits (2026-07-12, 2026-07-15) both named their #1 recommendation and
 which sat at 0% executed with 33 stars, 0 tags and 0 releases.
 
@@ -1855,7 +1884,7 @@ not instruction.
 capture ran under `--use-gl=swiftshader` and every frame was unusable — the
 software renderer matches the `WEAK_RENDERER` regex in `shell/device.ts:28`,
 which grades the device `low`, so `globe/LowEndBanner.tsx` fires "Low-end
-graphics detected … Switch to 2D" *into the frame* and the status bar reads
+graphics detected … Switch to 2D" _into the frame_ and the status bar reads
 `1FPS`. A hero image advertising 1 FPS is worse than no hero image. Shoot
 README media **headed on `DISPLAY=:0`**, which gets the real card — verified
 `ANGLE (NVIDIA GeForce RTX 5090)` — with `env -u LD_PRELOAD -u MALLOC_CONF`
@@ -1867,7 +1896,7 @@ invariant, so it carries no guard: the check is that a human looks at the file.
 Two corrections worth keeping, because both cost time to a wrong first guess.
 **The banner only suggests 2D, it never switches.** `sceneMode` defaults to
 `'3D'` (`state/stores.ts:98`) and is not persisted; the `2D DARK` in the
-top bar is the *basemap picker* (`ImageryMode '2d-dark'`, the Carto dark
+top bar is the _basemap picker_ (`ImageryMode '2d-dark'`, the Carto dark
 tiles), a different axis from `SceneMode`. Reading that chip as "the globe
 fell back to 2D" sends you hunting a fallback that does not exist. **A wide
 hero needs nadir pitch:** at 16,000 km Earth's angular radius is only ~16°, so
@@ -1916,7 +1945,7 @@ was measured (node 44 % → 109 %) and BACKED OUT: it is lazy and memoised per r
 and the backend does not request it on loopback.
 
 **AIS supervision: staleness is not death.** `supervise()` restarted a feeder
-whenever its union aged past the poller's cap, so a *blocked* scraper was killed
+whenever its union aged past the poller's cap, so a _blocked_ scraper was killed
 and respawned every 60 s for as long as the site chose to refuse us — the exact
 condition under which commit `2ff71f9` measured 496 leaked renderers in 1h40m.
 Liveness (`_serving`) now drives restarts alone, as it already did for the ADS-B
@@ -1935,7 +1964,7 @@ request at ~40k vessels (45 build + 46 pydantic + 56 json + 38 gzip), at a 30 s
 poll, twice, re-fired on camera move — during which the 1 s aircraft cycle cannot
 run. Now pre-rendered on a 5 s cycle in a thread and served with ETag/304, the
 same shape `_HOT_BLOB` already had. Warm: 2.8 ms / 516 KB. The builder only
-*reads* `store.latest("vessel")` — never merges, dedups or re-stamps.
+_reads_ `store.latest("vessel")` — never merges, dedups or re-stamps.
 → `tests/test_maritime_hot_blob.py`
 
 **`/api/places/*` scanned everything per request**, including the category
@@ -1962,7 +1991,7 @@ There is now one timer, releasing in priority order in batches of four spaced
 250 ms, and a layer skips its move-refresh when the URL it would request is the
 one already fetched. Polling stops while the tab is hidden. 282 → 221 req/min.
 NOTE: the first version capped concurrency with a microtask, which capped nothing
-(refresh is fire-and-forget) and measured *worse* at 321/min.
+(refresh is fire-and-forget) and measured _worse_ at 321/min.
 
 **Frontend result, stated honestly: 5 → 6 fps overall, 6 → 10 at world view**,
 entities −36 %, frame time −38 %. That is an improvement, not a fix. At 78 data
@@ -2004,14 +2033,14 @@ An earlier version of this entry said the opposite: that threading pure-Python
 work cannot help because the GIL means the loop is descheduled either way. That
 reasoning is wrong, and it was wrong in the direction that would have stopped
 the fix. CPython switches threads every `sys.getswitchinterval()` (5 ms by
-default), so a worker thread lets the loop be serviced *during* the work instead
+default), so a worker thread lets the loop be serviced _during_ the work instead
 of after it. Measured with a 5 ms probe against `_merge_raw_into` at 20 000
 aircraft:
 
-| | probe lag p50 | p95 | MAX |
-|---|---|---|---|
-| inline | 0.10 ms | 62.59 ms | 68.27 ms |
-| **in a thread** | 5.17 ms | **15.15 ms** | **24.09 ms** |
+|                 | probe lag p50 | p95          | MAX          |
+| --------------- | ------------- | ------------ | ------------ |
+| inline          | 0.10 ms       | 62.59 ms     | 68.27 ms     |
+| **in a thread** | 5.17 ms       | **15.15 ms** | **24.09 ms** |
 
 Total CPU is unchanged — there is no parallelism — and the MEDIAN gets worse,
 because the loop now shares the GIL while the work runs. For a tail that is the
@@ -2031,24 +2060,24 @@ cycle N and half from N+1.
 
 So both halves shipped together:
 
-* `_merge_raw_into` walks the raw records itself, decides freshest-wins from the
+- `_merge_raw_into` walks the raw records itself, decides freshest-wins from the
   RAW record (`_raw_obs_at`) so a losing record is never built, and updates a
   retained feature object per id. **43.59 → 31.42 ms per 20 000 aircraft (28 %).**
   `properties` is REPLACED rather than updated key-by-key: measured 20.48 ms vs
   23.52 ms — the dict-literal path is faster than 20 stores — and replacing also
   cannot leave a stale optional key behind. Leaf values are replaced, never
   edited in place, so a concurrent reader never sees a half-written container.
-* `global_snapshot()` returns an independent copy (`isolate_fc`) under
+- `global_snapshot()` returns an independent copy (`isolate_fc`) under
   `_SNAPSHOT_LOCK`, which every mutation also takes. `snapshot_view()` is the
   opt-in shared read-now accessor; the hot bbox path filters against it and
   isolates only the survivors, so it copies hundreds rather than ~20 000.
-* `_aircraft_geojson` is UNTOUCHED and remains the definition for its seven
+- `_aircraft_geojson` is UNTOUCHED and remains the definition for its seven
   per-request callers. `tests/test_adsb_feature_reuse.py` runs the old
   implementation against the new one over a multi-cycle, multi-tier, mixed-
   freshness sequence and requires identical output, so they cannot drift.
 
 Ordering for CPU on the loop, corrected: **do less work** first; thread it
-second (real, for the tail); and only expect *parallelism* from work that
+second (real, for the tail); and only expect _parallelism_ from work that
 releases the GIL (`isal.igzip` is the example here).
 
 Still open, named rather than implied: the feature-rebuild above; the
@@ -2147,7 +2176,7 @@ UTC day into `<root>/history/<day>.db` in whichever root has most free space
 reads ATTACH + UNION so every query is unchanged; retention is `os.remove`, which
 **removes** the DELETE+VACUUM path behind the 49.6 GB WAL runaway rather than
 mitigating it again. `HISTORY_BUDGET_GB` sizes the archive by disk — the old cap
-was 5 % of *free RAM*, which is how a memory-tight box silently got 64 MiB of
+was 5 % of _free RAM_, which is how a memory-tight box silently got 64 MiB of
 replay. → `tests/test_history_shards.py`
 
 **The test suite was destroying the live archive.** `conftest` isolated six
@@ -2214,7 +2243,7 @@ because a destroyer's 20 m beam IS one pixel at 20 m/px.
 
 ## Selector pivots, stealer logs, and the phone kind (2026-08-29)
 
-Branch `osint-book-intel-2026-08`. Source: *OSINT Techniques* 11th ed. (Bazzell
+Branch `osint-book-intel-2026-08`. Source: _OSINT Techniques_ 11th ed. (Bazzell
 & Edison, rev. 2025.04.02), chapters 16 and 23-35. Baseline 2450 → 2501.
 
 **What the book actually adds, given what was already here.** The digital-OSINT
@@ -2327,7 +2356,7 @@ measure the other upstreams first.
 
 ## Coordinates, ransomware leak sites, and video provenance (2026-08-29, wave 2)
 
-Second pass over *OSINT Techniques* 11th ed. on the same branch, covering the
+Second pass over _OSINT Techniques_ 11th ed. on the same branch, covering the
 chapters wave 1 left: 27 (online maps), 28 (documents), 30 (videos), 43
 (ransomware). Baseline 2501 → 2531; catalog 170 → 206 pivots over 13 kinds.
 
@@ -2462,7 +2491,7 @@ Three deliberate calls inside that:
   is: this sits on the path of a multi-MB ADS-B blob served once a second per
   client, and `BaseHTTPMiddleware` would wrap every one of those in a buffering
   stream to append three constant headers.
-→ `tests/test_security_hardening.py::test_security_headers_on_every_response`
+  → `tests/test_security_hardening.py::test_security_headers_on_every_response`
 
 **Four list routes had no ceiling.** `/api/alerts`, `/api/jamming/alerts`,
 `/api/alerts/deliveries` and `/api/correlations/{eid}` took `limit: int = 50`
@@ -2534,8 +2563,7 @@ exactly one user, and that user is the operator. `security.require_operator`
 passes unconditionally when Supabase is unconfigured — holding the static key,
 or having deliberately set `ALLOW_UNAUTHENTICATED=1`, IS the operator
 credential, and there is no second person to separate from. With Supabase
-configured there IS a second person, so `admin` is required and an analyst gets
-403.
+configured there IS a second person, so `admin` is required and an analyst gets 403.
 
 Two things it deliberately does NOT do:
 
@@ -2766,7 +2794,7 @@ live risk. Measured on this tree, both halves are already covered:
   claim any ratio it likes.
 - Billion laughs is rejected by the interpreter. A 426-byte seven-level entity
   bomb through `parse_kml` came back in 0.02 s with `limit on input
-  amplification factor (from DTD and entities) breached` (Python 3.14.4,
+amplification factor (from DTD and entities) breached` (Python 3.14.4,
   expat 2.7.4).
 
 So `defusedxml` would be a new dependency buying nothing here. Recorded because
@@ -2788,7 +2816,7 @@ icons one at a time, which never happens on touch and rarely happens at all.
 
 Not fixed with a longer tour. `APP_META` already carries a one-line `hint` for
 all fourteen, and the Omnibar already renders an action's hint as its subtitle
-and already lists something on an empty query. It listed UI *modes* only, so the
+and already lists something on an empty query. It listed UI _modes_ only, so the
 apps were not reachable from the command bar at all. They are now listed there
 with their hints, and the empty-query view shows workspaces AND apps — opening
 the command bar is a tour of what the product contains instead of a blank prompt
@@ -2805,12 +2833,12 @@ for every connected viewer." That was reasoning about a mechanism, not a
 measurement, and the measurement is smaller. Taken on this box after the change,
 timing the segments that are now on a thread:
 
-| segment | size | cost |
-| --- | --- | --- |
-| `sar_vessels._decode_and_detect` | 2500×2500 (`_MAX_DIM`) | **140 ms** |
-| `sar_damage._change_arrays` | 1024×768 (route default) | **14 ms** |
-| `offroad.astar_grid` | 171×171 real plan | **31 ms** |
-| `offroad._stitch` | 4 terrarium tiles | **27 ms** |
+| segment                          | size                     | cost       |
+| -------------------------------- | ------------------------ | ---------- |
+| `sar_vessels._decode_and_detect` | 2500×2500 (`_MAX_DIM`)   | **140 ms** |
+| `sar_damage._change_arrays`      | 1024×768 (route default) | **14 ms**  |
+| `offroad.astar_grid`             | 171×171 real plan        | **31 ms**  |
+| `offroad._stitch`                | 4 terrarium tiles        | **27 ms**  |
 
 So the worst single stall was ~140 ms, not seconds. On a snapshot cycle whose
 own budget is 1 s and whose measured `cycle_ms.total` is ~219 ms, a 140 ms
@@ -3222,4 +3250,520 @@ time), because the event loop shares a process with the 1 s ADS-B cycle. Every
 tile route pays that. It is the next thing to fix if the globe must load
 faster, and it is not a 3D problem.
 
-→ `apps/api/tests/test_rocktree.py`
+**"Google 3D takes a minute to load" was the satellite backdrop (2026-10-10).**
+The mesh was never slow: its tiles answered in 10 ms. EOX, the low-zoom source
+of the backdrop globe under it, stops accepting IPv4 connections from this box
+for minutes at a time (seen twice in one hour; it comes back by itself). Every
+uncached EOX tile then cost `_fetch_bytes` two attempts of two 5 s connects,
+20.7 s, and a 502. A browser opens six connections to one origin, so the
+sixteen backdrop tiles held all of them in three waves and no mesh request
+could be sent. Manhattan from world view, 1 882 px canvas, EOX unreachable,
+same cache, quiet API:
+
+|                                 | first mesh tile | every tile loaded |
+| ------------------------------- | --------------- | ----------------- |
+| Before                          | 61.5 s          | 86.5 s            |
+| A dead host is skipped for 60 s | 3.3 s, 2.8 s    | 9.3 s, 7.7 s      |
+
+On the live API the same evening, EOX still unreachable: first mesh tile at
+4.6 s and 3.7 s, every tile loaded at 16.0 s and 10.5 s, no failed request. A
+city the server had never cached (Osaka, 523 tiles fetched from Google) showed
+its first mesh tile at 3.5 s and finished at 20.9 s.
+
+`_fetch_bytes` now remembers a host that would not connect, answers `None` for
+it at once for 60 s, and lets one caller probe when the window ends. The first
+tile to meet a dead host still pays 4 s. While EOX is away the backdrop has
+holes below zoom 11; falling back to Esri there is a source and attribution
+change nobody has ruled on. When this comes back as a report, time
+`/tiles/sat/2/1/0.jpg` on the backend before opening the frontend.
+
+→ `apps/api/tests/test_rocktree.py`,
+`apps/api/tests/test_tiles_route.py::test_a_host_that_will_not_connect_is_asked_once`
+
+**"Still very slow to get sharp" was the API's event loop (2026-10-10, later
+the same day).** With the backdrop fixed the mesh appeared in 4 s and then took
+its time: the same Manhattan fly-in, the same 1 025 requests, none failed, was
+10 to 16 s minutes after a restart and 27 to 29 s two hours later. Resource
+Timing in the page showed six mesh requests waiting 4.0 to 4.2 s for the first
+byte of a tile the backend serves in 2 ms, and everything else queued behind
+those six connections. A 2 ms route asked every 100 ms, straight at :8000 with
+no browser attached, took over 100 ms for 45 % of the wall clock, p99 1.8 s.
+The tiles were never slow. The loop they share with the feeds was not there to
+serve them.
+
+Nothing outside the process could say what the loop was doing: ptrace is
+refused on this box (`ptrace_scope` 1, `perf_event_paranoid` 4), so py-spy and
+perf see nothing. `/api/status/perf` now carries `loop_stalls`: a thread
+samples the loop thread's stack whenever the loop's heartbeat is 100 ms late
+and charges the time to the innermost frames of ours. `cpu_ms` against
+`wall_ms` tells computing from waiting. Read it before guessing; the first
+guess here (`/api/history/coverage`) answered in 7 ms.
+
+What it named:
+
+- The watch officer's rendezvous detector measured every pair of the 3 000
+  vessel tracks it reads, 4.5 million distances on the loop every 15 s: 1.2 s
+  on its own, 3 to 4 s with the fan-out threads holding the GIL, and 49 s of
+  the 226 s the loop stalled in twenty minutes. `detectors.proximity` now
+  sweeps by latitude: 7.6 ms on the same live tracks, the same 3 456 hits in
+  the same order.
+- The rest is not one line. Garbage collection is 7.5 to 8.9 % of the wall
+  clock (longest pause 760 ms twenty minutes in, and it grows with the heap);
+  the loop waits for the GIL after every TLS read and websocket inflate while
+  the pool parses feed bodies; `isolate_fc` copies the 17 000-aircraft
+  collection per consumer; `gps_jam_cluster` and `correlate/store._evict` run
+  on the loop. With proximity fixed the API was over 100 ms late for 13 % of
+  the wall clock four minutes after a restart (p99 551 ms) and for 46 % eight
+  minutes after it (p99 1.45 s, eighteen stalls over 500 ms in one minute),
+  with RSS going from 1.3 to 1.6 GB in between. It gets worse as the process
+  ages, and none of that is fixed here.
+
+So the tiles left. `app/tiles_main.py` is the tile router and nothing else, in
+its own process (`start.sh` runs it on :8001), and the dev proxy sends the three
+families a Google 3D view pulls (`g3d`, `sat`, `terrain`) to it. In the same
+minute that the API was 46 % blocked the tile process answered the same route
+at p90 3 ms, p99 33 ms, never over 137 ms, and a fly-in started in that minute
+finished in 6.3 s. The API still serves `/tiles` itself, so anything
+that does not run the second process (the containers, the desktop shell, a bare
+`run-api.sh` + `vite`) behaves as before. Both processes write one cache tree,
+which is why a tile's temporary file now carries the writer's pid.
+
+With the network out of the way the browser was the limit, and three things in
+`GlobeCanvas.tsx` each took a measured slice: 48 request slots for the backend
+instead of Cesium's 18 (slots refill once a frame and a tile now returns well
+inside one); `immediatelyLoadDesiredLevelOfDetail` (898 requests, not 1 025);
+and the destination of a flight is loaded from take-off, not from landing,
+because Cesium preloads a flight only for a tileset that is shown and ours is
+hidden above 30 km. That last one is switched on per flight and only for a
+flight that lands under the gate: left on, the hidden mesh would load every
+view panned across from orbit.
+
+Manhattan at 900 m on a 1882 x 1134 canvas, flying in from world view (3 s):
+
+|                                                     | first mesh tile | 90 % of the picture final | every tile loaded |
+| --------------------------------------------------- | --------------- | ------------------------- | ----------------- |
+| tiles from the API, two hours up                    | 5.0, 6.8 s      | not measured              | 27.4, 28.8 s      |
+| tiles from the API, minutes up                      | 4.4, 5.4 s      | 14.2, 18.1 s              | 15.5, 18.0 s      |
+| tile process, client unchanged (5 runs)             | 3.9 to 4.6 s    | 8.9 to 10.2 s             | 9.2 to 10.5 s     |
+| tile process and the client changes (6 runs, live)  | 2.8 to 3.8 s    | 5.5 to 7.3 s              | 5.4 to 7.4 s      |
+| already over the city, basemap switched on (2 runs) | 0.9, 1.5 s      | 4.4, 4.8 s                | 4.0, 4.5 s        |
+| Chicago, never fetched (807 new files)              | 2.8 s           | 11.0 s                    | 11.4 s            |
+
+The picture column is a screenshot a second compared block by block with the
+finished frame, so it counts what is on screen and not what was requested. On
+landing, half the picture is already final.
+
+Left alone: the dark basemap and Apple tiles still come from the API (Apple
+needs the signing session the API holds; the basemap is stateless and could
+move). The containers have no tile process; nginx would need a second upstream
+for `/tiles/`. A city nobody has visited is bound by the browser's six
+connections times Google's 34 ms a tile. In the browser the main thread is now
+the limit, and it is spread thin: traversal 1.4 s, the dev build of React
+1.9 s, entity updates 1 s, tile content 1.5 s of a 12 s profile.
+
+→ `apps/api/tests/test_tiles_main.py`,
+`apps/api/tests/test_detectors.py::test_proximity_finds_exactly_the_pairs_a_full_pairwise_walk_does`,
+`apps/api/tests/test_status.py::test_a_stalled_loop_names_the_line_that_stalled_it`
+
+**"Almost instant": the tree, not the tiles (2026-10-11).** With a tile
+answering in 2 ms the same view still took 3.6 to 4.4 s parked over the city,
+and no faster with every request queue empty: the browser's main thread was the
+whole budget (99 % busy in a profile of the load). Serving every mesh tile as
+an EMPTY 520-byte model still took 2.5 s of the 3.6, so seven tenths of the
+load was the tree and the models, not the triangles and textures in them. What
+that was made of, and what came off:
+
+- One tileset document per bulk (four octree levels) made Cesium build a tile
+  object for every node of every bulk on the way down: 89 621 of them to draw 813. A document is now two levels (`_DOC_LEVELS`), 4 to 9 KB against 53 to
+  142 KB, 6 183 tile objects, 132 small requests against 85 large ones. 3.6 s
+  became 2.5 s. The finished frame is the same one: 99.5 % of 16 px blocks
+  within four grey levels of the old tree's (two runs of the new tree against
+  each other: 99.8 %), the same sharpness to four figures, 2.10 M triangles
+  against 2.07 M.
+- A quarter of the tiles were fillers (a partly refined node's own triangles
+  for the octants it has no child in) and over Manhattan 201 of 202 carried
+  nothing. Nothing in the bulk metadata says so; the filler itself does once it
+  has been built. A document now leaves out the fillers the tile cache already
+  holds as the empty stand-in, and one that still links unbuilt fillers is only
+  kept a minute, so the second visit to a place gets 616 models and not 814.
+- The time dock set React state on every Cesium clock tick and re-rendered
+  whole (240 bars, every lane mark) sixty times a second: 13 % of the main
+  thread during a load, and all the time otherwise. It now moves in whole
+  seconds.
+
+Tried and dropped: one tile per node drawn a level finer, its children merged
+into one glb. 315 models against 813 loaded a tenth faster than two-level
+documents alone and cost half as much again in triangles and texture memory
+(3.1 M and 785 MB against 2.1 M and 516 MB), because a tile twice the size
+refines as a whole. Do not retry it for speed.
+
+Live, Manhattan at 900 m, 1882 x 1134:
+
+|                                                         | before this round | now          |
+| ------------------------------------------------------- | ----------------- | ------------ |
+| parked, basemap switched on: every tile loaded          | 3.6 to 4.4 s      | 2.3, 2.4 s   |
+| fly-in (3 s): picture final on landing                  | about half        | 96 %         |
+| fly-in: every tile loaded                               | 5.4 to 7.4 s      | 4.2 to 4.9 s |
+| Paris, never fetched (586 new files): every tile loaded | Chicago 11.4 s    | 10.2 s       |
+
+What is left is Cesium turning 616 glbs into models at about 3 ms each, and
+that scales with the number of tiles, which is the detail setting. Measured on
+the new tree, parked, sharpness as the mean luminance step of the finished
+frame against the 24 px default:
+
+| `maximumScreenSpaceError`           | tiles | every tile loaded | sharpness |
+| ----------------------------------- | ----- | ----------------- | --------- |
+| 24 (one texel a pixel, the default) | 616   | 2.3 to 2.5 s      | 100 %     |
+| 28                                  | 482   | 1.85 s            | 94 %      |
+| 32                                  | 395   | 1.4 to 1.5 s      | 90 %      |
+| 40                                  | 296   | 1.3 s             | 83 %      |
+
+Detail was not touched: the operator asked for resolution (see
+`GE_PER_TEXEL`), and this table is the price list if that changes.
+
+→ `apps/api/tests/test_rocktree.py::test_tileset_links_branches_and_never_leaves_a_hole`,
+`::test_a_filler_known_to_be_empty_is_not_linked`
+
+**The same night, further down (2026-10-11).** Each of these was measured
+alternating with the thing it replaced, on a machine other sessions were also
+loading, so the pairs are worth more than any single number.
+
+- Cesium starts requests once a frame, and three limits cap how many: 18 a
+  server, 50 in all, and a priority heap that holds 20 between frames, which is
+  the one that bound. With all three at 100 the parked Manhattan view went from
+  a median 2.25 s to 1.81 s (four runs each way), and at 300, where nothing sits
+  between the page and the tile process, 1.72 s against 1.88 s (seven each
+  way). Bigger batches are also cheaper: 615 tiles processed in fewer, longer
+  frames cost about 1 ms each, against 3 ms trickled in twenty a frame.
+- A page on the tile process's own machine now asks it for the mesh directly
+  (`meshRootUrl`, `VITE_TILES_PORT` from `start.sh`, CORS on `tiles_main`). A
+  browser keeps six connections to an origin and the mesh was sharing the
+  page's with the backdrop and every API poll. Warm, it made no difference
+  (1.96 s against 2.09 s, eight each way). Into places nobody had visited it
+  was the difference: first view 2.8 to 3.6 s direct (Philadelphia, Baltimore,
+  Providence, Hartford, Albany) against 5.7 and 9.2 s through the proxy
+  (Washington, Boston), and a half-screen pan 0.9 s against 1.1 to 1.6 s,
+  because mesh requests no longer wait 0.3 to 1.1 s behind terrain tiles that
+  take a second each from their upstream.
+- `foveatedTimeDelay` 0: Cesium held everything off the centre of the screen
+  back until the camera had been still 0.2 s, and half a screen of pan is all
+  off-centre. Warm pans reach 90 % of the final picture in 0.35 to 0.6 s.
+- The tile cache evicted by fetch time, so the places looked at every day went
+  first for having been fetched first: eight new views pushed Manhattan out of
+  a 1 GB cap (one view is 110 MB) and it loaded cold again. It now evicts by
+  last use (atime, which relatime moves at worst once a day). The cap itself is
+  `TILE_CACHE_MAX_BYTES`, still 1 GB, about eight views of mesh; that number is
+  the operator's.
+
+Tried and dropped: sending the small coarse bulks whole (four hops fewer on the
+way down, yet the first tile 0.2 s later and the view 0.3 s later); Cesium's
+release build aliased in for the development one (1.74 s against 1.87 s with
+the direct path in the same run, too little for swapping the engine under the
+whole app); three tile-process workers (a cold view is bound by six connections
+times Google's 35 ms, not by the process).
+
+Where it stands, live, Manhattan at 900 m, with other work loading the machine:
+parked 1.5 to 1.9 s on a quiet minute and 2.1 to 2.4 s on a busy one; a warm
+half-screen pan 0.35 to 0.6 s quiet, 0.8 to 1.3 s busy; a never-visited city
+about 3 s. Two things are left and neither is in the tiles:
+
+- At one texel a pixel the view is 617 models and Cesium needs about 1 ms for
+  each plus 0.4 s to walk down the tree. With the limits above, lower detail
+  now buys: 32 px 1.4 s (90 % sharpness), 40 px 1.1 s (83 %), 48 px 1.05 s
+  (74 %).
+- A fly-in has every tile loaded 1.0 to 1.25 s BEFORE it lands and shows them
+  0.25 to 1.0 s after, because the frame in which the camera crosses the 30 km
+  gate takes a second: the entity layers drop the vessels that left the
+  viewport (about 6 000) in one go, and Cesium's `AssociativeArray.remove` is
+  an `indexOf` and a `splice` each (0.3 s self, 0.6 s more in the geometry
+  visualizers tearing down ten updaters an entity). That is
+  `PollGeoJsonAdapter` and `pollGate`, not the mesh.
+
+→ `apps/api/tests/test_tiles_main.py::test_a_page_on_this_machine_may_read_tiles_from_the_tile_process`,
+`apps/api/tests/test_tilecache.py::test_a_tile_that_was_read_lately_outlives_one_fetched_later`
+
+## AIS pipeline bridged into the shared vessel store (2026-10-04)
+
+`app/ais_pipeline` (ShipXplorer world pull + OpenWaters tiled sweep, merged
+freshness-wins by MMSI) was built and running but fed nothing: the globe, parked
+mode, chokepoints, analytics, dark-vessel correlation and the `query_vessels`
+MCP tool all read the shared `ObservationStore`, and the pipeline never wrote to
+it, although its own docstring said it did. ShipXplorer was also being pulled
+twice per cycle, once by `ais_keyless` and once by the pipeline.
+
+**The decision: one bridge, not a second vessel layer.** Repointing the globe at
+`/api/maritime/vessels` would have fixed one consumer and orphaned the rest.
+`ais_pipeline._mirror` writes the pipeline's winners into the shared store, so
+every existing consumer gains the data and the frontend vessel path is untouched.
+
+**The bridge carries the freshness rule itself**, because the shared store is
+last-write-wins by arrival and nothing downstream will check:
+
+- a fix is written only if it is the pipeline store's current winner AND
+  strictly newer than what the shared store holds for that id;
+- `t` is the upstream fix time, clamped to now (a future stamp would win every
+  comparison and pin itself), never the wall clock of the poll;
+- a fix already outside the shared retention is not written at all.
+
+It compares unlike clocks: ShipXplorer and OpenWaters carry per-fix time,
+MyShipTracking stamps its sweep time, the push feeds stamp wall clock. A
+contested MMSI therefore usually stays with those writers. That is the safe
+direction, never a clobber, and it is stated rather than papered over. Every
+pipeline winner still refreshes the cross-source name and ship-type caches, so
+a vessel another writer holds is still labelled.
+
+**One fetcher per upstream.** `ais_keyless.start()` no longer spawns ShipXplorer;
+the pipeline no longer polls Kystdatahuset (`ais_keyless` keeps it because that
+path also broadcasts on `/ws/ais`, and the pipeline's own parser stamped wall
+clock and kept null-island rows).
+
+**ShipXplorer sends the ship type as a name.** The icon dispatch reads an ITU
+code, so 24 784 of 39 318 vessels drew the generic icon. `providers.itu_ship_type`
+maps the names enumerated from a full world pull (29 644 rows); `?` and unseen
+spellings map to None, not a guess.
+
+**Measured on `/api/maritime/snapshot`, before and after, same sidecar state**
+(both browser sidecars down with `Cannot find module 'playwright'`,
+MyShipTracking contributing nothing, in both runs):
+
+|                             | before       | after           |
+| --------------------------- | ------------ | --------------- |
+| vessels                     | 39 318       | 48 135          |
+| with a name                 | 12 567       | 47 808          |
+| with a heading              | 7 927        | 34 411          |
+| with an ITU ship type       | 14 534       | 44 615          |
+| with a flag                 | 0            | 38 382          |
+| fix age, median / p95       | 26 s / 814 s | 137 s / 1 456 s |
+| ShipXplorer pulls per cycle | 2            | 1               |
+
+The age row got "worse" because it got true: the old path stamped every
+ShipXplorer row with the time of the poll. Two consequences an operator will
+see: `store.window(900)` consumers stop seeing ShipXplorer fixes older than 15
+minutes, and the nameless-and-typeless "dark" heuristic in `query_vessels` and
+`baseline.py` counts far fewer vessels, because those rows now have names.
+
+**Two defects on the globe's world-view vessel request, found while measuring:**
+
+- `vessel_snapshot()` iterated `_PARKED` on the event loop while
+  `_update_parked` rewrote it in a worker thread: `dictionary changed size
+during iteration`, served as a 500. Worst right after boot while the cache
+  fills. It now iterates a copy.
+- The globe asks for `?limit=20000` with no bbox, which missed the pre-rendered
+  blob and rebuilt, decimated and serialised the whole union on the event loop
+  per request, with no ETag although the adapter sends `If-None-Match` there.
+  0.49 s per request at 39k vessels and 0.7 to 0.9 s at 48k. The capped form is
+  now rendered once per blob cycle in a thread and served with ETag/304:
+  about 0.1 s for a body, 5 ms for a 304.
+  → `tests/test_maritime_hot_blob.py`
+
+**Store hygiene.** `VesselStore` never evicted (a 6-day-old fix sat under a 24 h
+cap and was counted in `stats`), `ais_pipeline_max_fix_age_s` was read nowhere,
+`stop()` was never called at teardown, and a vessel at exactly 90 N indexed one
+row past the coverage grid. All four fixed; `prune()` runs after each merge
+cycle rather than inside `merge()`, so a replay of old fixes keeps
+freshness-wins semantics.
+
+**Surfaces.** `maritime.coverage` (off by default) draws one polygon per
+occupied 5° cell from `/api/maritime/coverage?format=geojson`. The count bucket
+is part of the feature id: the polygon path styles an entity once, so a cell
+that changes band has to arrive as a new id to repaint. Three Sources panel
+lookups and four MCP tools (93 total) cover the rest. `/api/maritime/dark` is
+labelled everywhere as a Sentinel-1 scene inventory, because over HTTP that is
+all it returns.
+
+The four items left open here (SAR detection over HTTP, the capped OpenWaters
+tiles, VesselFinder decoding, `source_count`) were closed the same day; see the
+next section. → `tests/test_ais_pipeline.py` section 4,
+`docs/ais/ais-vessel-pipeline.md`
+
+### The same day, second pass: VesselFinder, satellite positions, located SAR, and a two-minute boot freeze
+
+The first pass left four things undone and two broken. This closes them, and
+records the one that bit back.
+
+**VesselFinder is decoded from its own map script, not from sniffed bytes.**
+`app/ais_pipeline/vesselfinder.py` is a port of `drawShipsOnMapBinary` and
+`getSFL` in `static.vesselfinder.net/web/vfmap/{map,index}.500107.js`. Both
+endpoints answer plain httpx (no browser, no cookie, not Cloudflare-gated).
+What the port settled:
+
+- The scale is 600 000 per degree (AIS 1/10000-minute units) for the bbox AND
+  the positions. `tools/ais-vesselfinder-feeder` used 1e6 for both, which was
+  self-consistent and scaled every published position by 0.6. Fixed there too.
+- `mp2` rows carry MMSI, position, name, a type class, a heading step and the
+  AGE of the position (minutes, or hours when the byte is negative). `Fix.t` is
+  now minus the UPPER bound of that bucket, so a VesselFinder row can never
+  out-rank a fresher fix by rounding; a row with no age is dropped.
+- The (zoom, box) pair decides what you get, silently. Measured over the
+  Singapore Strait: zoom 11 with a 4x4 degree box returns the full set (3 663
+  vessels, and quartering the box adds none); 5x5 degrees returns 9 vessels
+  with HTTP 200 and no error. Zoom 8 with 30x30 degrees is answered, thinned.
+- `sfl` is the "Satellite Position" markers: a position, a type class and a
+  heading. NO MMSI, NO name, and no age the site itself shows.
+
+**Unidentified satellite positions are the first keyless open-ocean picture,
+and they stay unidentified.** Twelve world tiles returned 10 296 positions,
+including 525 in a mid-Indian-Ocean box and 217 in the North Pacific, where
+ShipXplorer and OpenWaters hold zero. They are served at
+`/api/maritime/satellite` and drawn by `maritime.satellite` (off by default).
+They are never merged into the vessel store: there is no MMSI to merge on and
+no age to rank by, so the feature carries no `t` and the panel shows a lone
+dash. `SATELLITE_AIS_KEYLESS` stays False; identified satellite AIS is still
+not keyless.
+
+**The sweep that got this address refused.** The first version ran a 72-tile
+scout pass and then a 4-degree detail tile for every occupied cell (several
+hundred) at 2 to 4 requests a second. The scout pass landed 37 069 identified
+vessels. About four minutes in, every connection from this address to
+vesselfinder.com timed out, including single requests, and was still timing
+out half an hour later. The retry logic made it worse: 25 s per attempt, twice
+per tile. What shipped instead:
+
+- default tier = scout pass + satellite positions, 90 requests, one at a time,
+  half a second apart, every 30 minutes;
+- the detail pass is opt-in (`AIS_VESSELFINDER_DETAIL_TILES`, default 0);
+- three consecutive refusals ABORT the sweep and double the interval, up to six
+  hours; the connect timeout is 6 s so a block is learned in seconds;
+- a body shorter than a header (the 4-byte throttle answer) raises instead of
+  parsing to zero rows.
+
+Not proven: that the default volume is sustainable over days. It is the volume
+that was observed to work, and the breaker is the answer if it is not.
+
+**OpenWaters now splits a capped tile instead of accepting it.** 18 of 342
+nine-degree tiles came back capped, all over the densest water. Each is
+quartered and re-asked, up to four levels and 400 extra requests per sweep.
+The sweep rose from 48 113 unique MMSIs to 63 677 with two levels and 70 484
+with four (62 splits, 0 failed). 7 tiles were still capped at the smallest
+size; they are counted and the sweep reports itself incomplete.
+
+**`/api/maritime/dark?detect=true` returns located contacts.** The anonymous
+Sentinel-1 TIFF has no georeferencing, so detection there could only ever
+report `lat/lon: null`. `sar.detect_located` instead renders the box through
+the existing CDSE path (`imagery/cdse.py` + the CFAR in `intel/sar_vessels.py`)
+for a box up to one degree a side, and classifies each contact with the
+pipeline's three-valued rule. Live over the Hormuz channel: 20 located
+contacts, all `unknown`, because AIS there was too thin to call any of them
+dark. Without CDSE credentials, or for a larger box, the answer stays a scene
+inventory and `note` says why. The correlation runs against the vessels near
+the box only; against the whole store it was a 1.2 s stall per request.
+
+**`source_count` on vessel features.** Windowed to the shared retention (a
+source that went quiet an hour ago does not corroborate) and always present,
+since the adapter keeps a vanished key's last value. The corroboration lens
+treats a missing count as corroborated, so only vessels with a known count are
+affected, and the lens is off by default.
+
+**A two-minute event-loop freeze at every boot, found by accident.** Measuring
+the above, the loop stopped for 132 s shortly after a restart: no requests
+answered, no log lines, the 1 s aircraft cycle dead. asyncio debug mode named
+it: `ais_keyless._run_kystdatahuset`, one step of 160 s. The cause is in
+`history._resolve_vessel`: on first sight of a vessel it calls
+`intel.resolve.resolve`, which opens SQLite, writes and commits, about 40 ms a
+call (cProfile: `sqlite3.Connection.commit`). Kystdatahuset publishes about
+3 400 vessels through `ais_firehose.publish_vessel`, every one a first sight
+after a boot, all in one synchronous stretch. It now hands the work to a
+single-worker executor when a loop is running. Measured after: worst ping in
+the first three minutes 3.2 s. This predates the pipeline; an earlier note
+blamed the pipeline for slow startup.
+→ `tests/test_history.py`
+
+**Viewport vessel requests no longer rebuild the union.** With a larger union
+the bbox path (rebuild every feature on the loop per camera move) was the next
+stall. World, capped and viewport forms now all read the feature list built
+once per blob cycle; a viewport request measured 0.21 s, off the loop.
+
+**Both browser sidecars were dead** with `Cannot find module 'playwright'`:
+`tools/adsb-globe-feeder` and `tools/ais-myshiptracking-feeder` had no
+`node_modules` in this checkout. `npm ci` in each (with
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`; they use system Chrome) brought `:8090`
+back to 8 414 aircraft. `/api/status` had been reading green throughout. The
+MyShipTracking sidecar now starts but logs `myshiptracking vessel API not
+reachable yet`: that one is the site refusing its browser, not a missing
+dependency, and it still contributes nothing.
+
+→ `tests/test_ais_vesselfinder.py`, `tests/test_ais_pipeline_sar_detect.py`,
+`tests/test_ais_pipeline.py` (sections 5 and 6)
+
+## Frontend speed: per-frame work, the stats walk, and the boot chunk (2026-10-17)
+
+Operator: "optimise the frontend, I want it fast", globe fps and panning first.
+Measured on this box (165 Hz panel, an unrelated GPU job holding it near 90 %),
+headed Chrome, alternating runs, against the Vite dev server unless stated.
+
+**Where the time went** (one-off CDP CPU profiles aggregated by self-time and
+by long task, not a committed harness; the table below is `measure_ui`). At the
+default view the main thread was 49 % busy
+while a Cesium frame cost about 1 ms: the rest was per-frame work multiplied by
+165 renders a second, the 1 Hz aircraft drain, a ~60 ms entity-stats walk once
+a second, and React re-renders of the Layers panel and time dock. With every
+layer on, during a pan, the main thread had 87 ms idle in 32 s: about 20 % was
+BillboardCollection.update's per-billboard texture-status loop (Cesium, every
+frame, every shown billboard), 16 % the moving-icon mirror in
+`PrimitiveEntityLayer.onPreUpdate`, and the long frames were mostly
+`DataSourceDisplay.update` → GeometryVisualizer walking entities that carry no
+graphics.
+
+**What changed** (ac577259..ff799e92):
+
+- Batched layers drop their data source's visualizers (`dropVisualizers`).
+  Falsified before any code changed: stripping them through `__viewer` in the
+  live page, alternating with a control, took long-task time from 5.4 and 5.9 s
+  to 3.7 and 1.9 s per 30 s and GC from 1.3 to 0.8 s.
+- The moving-icon mirror runs at most at 30 Hz instead of at display rate.
+- The adaptive governor's thresholds scale with the measured refresh interval
+  (it read every 60 Hz frame as overload and shed a layer every 6 s), and a
+  paused clock no longer counts as load. → `globe/adaptiveGovernor.test.ts`
+- The entity-stats walk yields every 500 entities and resumes at the next idle
+  period instead of forcing ~60 ms through the idle timeout.
+  → `globe/entityStats.test.ts`
+- `useLayerCounts` keeps its object when no count moved; the time dock's lanes
+  and density bars are memoised on the polled data.
+- Every console app is a lazy chunk, milsymbol loads on the COP layer's first
+  attach, and the World panel's two finding counts start 3 s after mount instead
+  of competing for the six API sockets with the aircraft snapshot.
+
+A/B of exactly these commits: two worktrees, 1d3b6a0f and ff799e92, each on
+its own Vite against the same backend, runs alternated.
+
+|                                                                                               | before (1d3b6a0f)                                                                            | after                                                                |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `measure_ui --profile all-toggles`                                                            | POOR: fps p05 9, p50 50; renderMs p95 28.9; long tasks 73/min; 38k entities                  | OK: fps p05 51, p50 91; renderMs p95 9.2; 27/min; 43k entities       |
+| `measure_ui --profile baseline`, two runs each                                                | fps p05 76 and 70, p50 147 and 150; frame gap p95 18.4 and 18.3 ms; long tasks 24 and 26/min | fps p05 122 and 118, p50 164 and 151; 9.0 and 14.1 ms; 12 and 13/min |
+| fly-in, world view to the North Sea at 400 km, worst frame / frames over 50 ms, two runs each | 340 and 334 ms / 18 and 9                                                                    | 94 and 97 ms / 5 and 6                                               |
+| idle, main-thread time outside Cesium's frame loop (CDP profile), two runs each               | 47 % and 67 %                                                                                | 36 % and 41 %                                                        |
+| idle, aircraft drain CPU per 25 s (CDP profile)                                               | 2.8 and 2.2 s                                                                                | 1.8 and 1.9 s                                                        |
+| idle main thread, dev server / production build (shared tree)                                 | 49 % / 41 %                                                                                  | 41 % / 37 %                                                          |
+| boot chunk                                                                                    | 2.78 MB, 746 KB gzipped                                                                      | 1.46 MB, 434 KB gzipped                                              |
+
+**Left alone, and why.** BillboardCollection's per-frame loop is Cesium's; the
+levers are fewer renders or fewer shown billboards. Cesium.js stays a blocking
+script (the CSP meta is placed after it on purpose); in the production build
+DOMContentLoaded lands at ~390 ms and the first frame at ~870 ms. react-markdown and cesium-martini are still in the boot
+chunk: Markdown's tests render synchronously, and martini would need a guard
+against a mode switch landing before its import. `preloadSiblings` is still on.
+Planned and not done: creating the FOV/spotlight entities and the empty `__*`
+system sources lazily (the visualizer cost measured was the per-entity walk in
+large sources, not empty ones), `feedStatusSignature` for the nine whole-map
+`useFeeds` subscribers and a frame throttle on `GlobeOverlays`' cursor readout
+(both small in the profiles once the above landed). The idle time Cesium's own
+frame loop takes went UP (11-17 % → 32-36 %): the globe now gets to render the
+frames the app's tasks used to take from it, which is the fps gain above.
+
+Tried and dropped: caching the last props written into each PropertyBag so an
+unchanged key skips the getter + `getValue` round trip. Alternated against the
+committed code it moved `refreshBag` from 0.9-1.5 s to 1.1-1.2 s per 25 s, inside
+the noise; the cost left there is the setter events for values that did change.
+
+**Open for the operator.**
+
+- `continuousRenderGovernor` ON, idle world view, two alternating runs each:
+  main thread 41 % → 27 %, renders 113-130/s → 4-6/s. The default stays OFF
+  until signed off on hardware (2026-07-02 entry above).
+- `start.sh` serves the dev server. A production build idles at 37 % against
+  41 % and reaches first frame in 0.88 s against 1.2-1.4 s; it costs HMR and the
+  DEV globals the walkthroughs drive.
+- First data at ~2-3 s is backend-bound: event-loop lag p95 517 ms and max
+  1.7 s (stalls in `correlate/rules.py` and `intel/incidents.py`), and
+  `/api/sanctions/vessels` answers in 0.4-1.8 s. `/ws/adsb` refuses a browser
+  without an API key with a 403, so the aircraft feed polls at 1 Hz.

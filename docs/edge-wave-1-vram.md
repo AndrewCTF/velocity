@@ -69,12 +69,12 @@ Running the app itself and re-reading the card:
 
 **27 606 MiB of 28 822 — 96 % of the VRAM — is the local model stack.**
 
-| holder | VRAM | what |
-|---|---|---|
+| holder          | VRAM       | what                                                                                   |
+| --------------- | ---------- | -------------------------------------------------------------------------------------- |
 | `ollama` runner | 21 440 MiB | `qwen3-coder:30b-a3b-q4_K_M`, `size_vram` 22 027 810 944 B, on ollama's own keep-alive |
-| `llama-server` | 2 969 MiB | `data/models/64a1fac552dc/Llama-3.2-3B-Instruct-Q4_K_M.gguf` |
-| `llama-server` | 3 197 MiB | `data/models/db6d01f62d0f/gemma-3-4b-it-Q4_K_M.gguf` |
-| chrome sidecars | **0 MiB** | 25 processes, 4.8 GB RSS |
+| `llama-server`  | 2 969 MiB  | `data/models/64a1fac552dc/Llama-3.2-3B-Instruct-Q4_K_M.gguf`                           |
+| `llama-server`  | 3 197 MiB  | `data/models/db6d01f62d0f/gemma-3-4b-it-Q4_K_M.gguf`                                   |
+| chrome sidecars | **0 MiB**  | 25 processes, 4.8 GB RSS                                                               |
 
 The operator's report — "it uses about twenty five GB of vRAM" — is correct in
 magnitude and was attributed to the wrong subsystem by everyone, including the
@@ -90,8 +90,8 @@ The two `llama-server` processes are children of PID 127207, which is ours:
 ```
 
 That is the router `app/llamacpp_sidecar.start()` spawns in the lifespan
-(`main.py:248`). `--models-max 2` with `-ngl -1` means *keep two models resident,
-all layers on the GPU*, and llama.cpp fills the slots from the models directory
+(`main.py:248`). `--models-max 2` with `-ngl -1` means _keep two models resident,
+all layers on the GPU_, and llama.cpp fills the slots from the models directory
 on its own.
 
 Meanwhile every switch said the feature was off:
@@ -147,10 +147,10 @@ gnome-shell, Firefox, Discord and the terminal.
 ### Two honest qualifications
 
 1. **The ollama 21 440 MiB is not claimed as fixed by this change.** `ollama
-   serve` is a system service; its runner started during our boot window and its
+serve` is a system service; its runner started during our boot window and its
    model carries an `expires_at` (its own keep-alive), so it released the memory
    on its own. What this change does establish is that a default boot no longer
-   *triggers* it: after the fix, with the router gated off, no ollama runner
+   _triggers_ it: after the fix, with the router gated off, no ollama runner
    appeared at all. Whether some code path still calls ollama when local
    inference is off is the next thing to attribute, and it is not attributed yet.
 2. **This is a VRAM "after", not a CPU one.** During the after-run the AIS tier
@@ -166,7 +166,7 @@ gnome-shell, Firefox, Discord and the terminal.
 single renderer.** That is the operator's RAM/CPU complaint and this wave does not
 touch it. The structural idea from the plan — stop rendering three world maps to
 read three JavaScript arrays — is unchanged and still worth doing:
-`readFn` (`index.js:77-99`) reads `g.planesOrdered`, tar1090's *parsed* store, so
+`readFn` (`index.js:77-99`) reads `g.planesOrdered`, tar1090's _parsed_ store, so
 the raster and composite work is pure waste. The AIS feeder already shows the
 pattern (`ais-myshiptracking-feeder/index.js:173-180`: `goto` once for cookies,
 then `page.evaluate(fetch)` against the site's own JSON). Carried forward.

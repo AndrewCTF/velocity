@@ -6,7 +6,7 @@
 // 'jet' and 'heli' have no lucide equivalent, so those two keep the original
 // hand-drawn path data as local components with the same props shape.
 
-import type { ComponentType } from 'react';
+import type { ComponentType } from "react";
 import {
   Activity,
   Anchor,
@@ -138,144 +138,150 @@ import {
   Workflow,
   Zap,
   type LucideProps,
-} from 'lucide-react';
+} from "lucide-react";
 
 export type IconName =
-  | 'globe'
-  | 'map'
-  | 'plane'
-  | 'jet'
-  | 'heli'
-  | 'ship'
-  | 'anchor'
-  | 'satellite'
-  | 'fire'
-  | 'quake'
-  | 'layers'
-  | 'feed'
-  | 'signal'
-  | 'sliders'
-  | 'filter'
-  | 'search'
-  | 'settings'
-  | 'user'
-  | 'chevron-down'
-  | 'chevron-right'
-  | 'x'
-  | 'expand'
-  | 'crosshair'
-  | 'file'
-  | 'network'
-  | 'sparkle'
-  | 'bell'
-  | 'clock'
-  | 'target'
-  | 'image'
-  | 'play'
-  | 'pause'
-  | 'step-f'
-  | 'step-b'
-  | 'bookmark'
-  | 'gauge'
-  | 'shield'
-  | 'hexagon'
-  | 'route'
-  | 'pin'
-  | 'info'
-  | 'warning'
-  | 'check'
-  | 'plus'
-  | 'minus'
-  | 'grid'
-  | 'sun'
-  | 'moon'
-  | 'annotate'
-  | 'around'
-  | 'arrow-down'
-  | 'arrow-left'
-  | 'arrow-right'
-  | 'arrow-up'
-  | 'back-15'
-  | 'binoculars'
-  | 'box'
-  | 'building'
-  | 'calendar'
-  | 'capture'
-  | 'chart'
-  | 'chart-line'
-  | 'chevron-left'
-  | 'chevron-up'
-  | 'circle'
-  | 'circle-alert'
-  | 'circle-check'
-  | 'circle-dot'
-  | 'cloud'
-  | 'compass'
-  | 'copy'
-  | 'cpu'
-  | 'database'
-  | 'download'
-  | 'draw'
-  | 'droplet'
-  | 'enter'
-  | 'external'
-  | 'eye'
-  | 'eye-off'
-  | 'factory'
-  | 'fast-forward'
-  | 'file-chart'
-  | 'film'
-  | 'flag'
-  | 'folder'
-  | 'frame-b'
-  | 'frame-f'
-  | 'fwd-15'
-  | 'hand'
-  | 'helicopter'
-  | 'inbox'
-  | 'link'
-  | 'list'
-  | 'lock'
-  | 'maximize'
-  | 'measure'
-  | 'menu'
-  | 'message'
-  | 'more'
-  | 'more-v'
-  | 'mountain'
-  | 'move'
-  | 'panel-left'
-  | 'panel-right'
-  | 'pencil'
-  | 'radar'
-  | 'radio'
-  | 'refresh'
-  | 'rewind'
-  | 'rocket'
-  | 'save'
-  | 'scan'
-  | 'select'
-  | 'share'
-  | 'square'
-  | 'square-check'
-  | 'star'
-  | 'table'
-  | 'transform'
-  | 'trash'
-  | 'trend'
-  | 'truck'
-  | 'unlink'
-  | 'upload'
-  | 'users'
-  | 'video'
-  | 'waves'
-  | 'wind'
-  | 'workflow'
-  | 'zap';
+  | "globe"
+  | "map"
+  | "plane"
+  | "jet"
+  | "heli"
+  | "ship"
+  | "anchor"
+  | "satellite"
+  | "fire"
+  | "quake"
+  | "layers"
+  | "feed"
+  | "signal"
+  | "sliders"
+  | "filter"
+  | "search"
+  | "settings"
+  | "user"
+  | "chevron-down"
+  | "chevron-right"
+  | "x"
+  | "expand"
+  | "crosshair"
+  | "file"
+  | "network"
+  | "sparkle"
+  | "bell"
+  | "clock"
+  | "target"
+  | "image"
+  | "play"
+  | "pause"
+  | "step-f"
+  | "step-b"
+  | "bookmark"
+  | "gauge"
+  | "shield"
+  | "hexagon"
+  | "route"
+  | "pin"
+  | "info"
+  | "warning"
+  | "check"
+  | "plus"
+  | "minus"
+  | "grid"
+  | "sun"
+  | "moon"
+  | "annotate"
+  | "around"
+  | "arrow-down"
+  | "arrow-left"
+  | "arrow-right"
+  | "arrow-up"
+  | "back-15"
+  | "binoculars"
+  | "box"
+  | "building"
+  | "calendar"
+  | "capture"
+  | "chart"
+  | "chart-line"
+  | "chevron-left"
+  | "chevron-up"
+  | "circle"
+  | "circle-alert"
+  | "circle-check"
+  | "circle-dot"
+  | "cloud"
+  | "compass"
+  | "copy"
+  | "cpu"
+  | "database"
+  | "download"
+  | "draw"
+  | "droplet"
+  | "enter"
+  | "external"
+  | "eye"
+  | "eye-off"
+  | "factory"
+  | "fast-forward"
+  | "file-chart"
+  | "film"
+  | "flag"
+  | "folder"
+  | "frame-b"
+  | "frame-f"
+  | "fwd-15"
+  | "hand"
+  | "helicopter"
+  | "inbox"
+  | "link"
+  | "list"
+  | "lock"
+  | "maximize"
+  | "measure"
+  | "menu"
+  | "message"
+  | "more"
+  | "more-v"
+  | "mountain"
+  | "move"
+  | "panel-left"
+  | "panel-right"
+  | "pencil"
+  | "radar"
+  | "radio"
+  | "refresh"
+  | "rewind"
+  | "rocket"
+  | "save"
+  | "scan"
+  | "select"
+  | "share"
+  | "square"
+  | "square-check"
+  | "star"
+  | "table"
+  | "transform"
+  | "trash"
+  | "trend"
+  | "truck"
+  | "unlink"
+  | "upload"
+  | "users"
+  | "video"
+  | "waves"
+  | "wind"
+  | "workflow"
+  | "zap";
 
 // Original hand-drawn glyphs kept for the two aircraft silhouettes lucide
 // doesn't carry. Same props contract as a lucide icon.
-function LocalGlyph({ d, className }: { d: string; className?: string | undefined }) {
+function LocalGlyph({
+  d,
+  className,
+}: {
+  d: string;
+  className?: string | undefined;
+}) {
   return (
     <svg
       className={className}
@@ -294,9 +300,9 @@ function LocalGlyph({ d, className }: { d: string; className?: string | undefine
 }
 
 const JET_D =
-  'M12 2 13 9l8 5v2l-8-2 .2 4 2.3 1.6V22L12 21l-3.5.6v-1.4L10.8 18 11 14 3 16v-2l8-5 1-7z';
+  "M12 2 13 9l8 5v2l-8-2 .2 4 2.3 1.6V22L12 21l-3.5.6v-1.4L10.8 18 11 14 3 16v-2l8-5 1-7z";
 const HELI_D =
-  'M4 5h16M12 5v3M7 11h8a3 3 0 0 1 3 3v1H8a4 4 0 0 1-4-4zM11 15v3H8m3 0h3M18 12l3-1';
+  "M4 5h16M12 5v3M7 11h8a3 3 0 0 1 3 3v1H8a4 4 0 0 1-4-4zM11 15v3H8m3 0h3M18 12l3-1";
 
 const Jet = ({ className }: LucideProps) => (
   <LocalGlyph d={JET_D} className={className as string | undefined} />
@@ -324,8 +330,8 @@ const ICONS: Record<IconName, ComponentType<LucideProps>> = {
   search: Search,
   settings: Settings,
   user: CircleUser,
-  'chevron-down': ChevronDown,
-  'chevron-right': ChevronRight,
+  "chevron-down": ChevronDown,
+  "chevron-right": ChevronRight,
   x: X,
   expand: Maximize2,
   crosshair: Crosshair,
@@ -338,8 +344,8 @@ const ICONS: Record<IconName, ComponentType<LucideProps>> = {
   image: Image,
   play: Play,
   pause: Pause,
-  'step-f': SkipForward,
-  'step-b': SkipBack,
+  "step-f": SkipForward,
+  "step-b": SkipBack,
   bookmark: Bookmark,
   gauge: Gauge,
   shield: ShieldCheck,
@@ -356,24 +362,24 @@ const ICONS: Record<IconName, ComponentType<LucideProps>> = {
   moon: Moon,
   annotate: SquarePen,
   around: GitFork,
-  'arrow-down': ArrowDown,
-  'arrow-left': ArrowLeft,
-  'arrow-right': ArrowRight,
-  'arrow-up': ArrowUp,
-  'back-15': RotateCcw,
+  "arrow-down": ArrowDown,
+  "arrow-left": ArrowLeft,
+  "arrow-right": ArrowRight,
+  "arrow-up": ArrowUp,
+  "back-15": RotateCcw,
   binoculars: Binoculars,
   box: Box,
   building: Building2,
   calendar: Calendar,
   capture: Camera,
   chart: ChartColumn,
-  'chart-line': ChartLine,
-  'chevron-left': ChevronLeft,
-  'chevron-up': ChevronUp,
+  "chart-line": ChartLine,
+  "chevron-left": ChevronLeft,
+  "chevron-up": ChevronUp,
   circle: Circle,
-  'circle-alert': CircleAlert,
-  'circle-check': CircleCheck,
-  'circle-dot': CircleDot,
+  "circle-alert": CircleAlert,
+  "circle-check": CircleCheck,
+  "circle-dot": CircleDot,
   cloud: Cloud,
   compass: Compass,
   copy: Copy,
@@ -385,16 +391,16 @@ const ICONS: Record<IconName, ComponentType<LucideProps>> = {
   enter: CornerDownLeft,
   external: ArrowUpRight,
   eye: Eye,
-  'eye-off': EyeOff,
+  "eye-off": EyeOff,
   factory: Factory,
-  'fast-forward': FastForward,
-  'file-chart': FileChartColumn,
+  "fast-forward": FastForward,
+  "file-chart": FileChartColumn,
   film: Film,
   flag: Flag,
   folder: Folder,
-  'frame-b': ChevronFirst,
-  'frame-f': ChevronLast,
-  'fwd-15': RotateCw,
+  "frame-b": ChevronFirst,
+  "frame-f": ChevronLast,
+  "fwd-15": RotateCw,
   hand: Hand,
   helicopter: Helicopter,
   inbox: Inbox,
@@ -406,11 +412,11 @@ const ICONS: Record<IconName, ComponentType<LucideProps>> = {
   menu: Menu,
   message: MessageSquare,
   more: Ellipsis,
-  'more-v': EllipsisVertical,
+  "more-v": EllipsisVertical,
   mountain: Mountain,
   move: Move,
-  'panel-left': PanelLeft,
-  'panel-right': PanelRight,
+  "panel-left": PanelLeft,
+  "panel-right": PanelRight,
   pencil: Pencil,
   radar: Radar,
   radio: Radio,
@@ -422,7 +428,7 @@ const ICONS: Record<IconName, ComponentType<LucideProps>> = {
   select: MousePointer2,
   share: Share2,
   square: Square,
-  'square-check': SquareCheckBig,
+  "square-check": SquareCheckBig,
   star: Star,
   table: Table,
   transform: GitBranch,

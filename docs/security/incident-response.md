@@ -7,6 +7,7 @@ deployment that is, or may be, compromised.
 ## 1. Detect
 
 Signals worth acting on:
+
 - GitHub secret-scanning or Dependabot alerts on the repository.
 - Unexpected rows in the audit trail. `GET /api/audit` lists every mutating call (workflows, foundry,
   evidence, models, ingest, alert rules, MCP tools) with actor and path.

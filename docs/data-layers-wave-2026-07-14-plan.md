@@ -7,6 +7,7 @@ Success = `bash scripts/verify.sh` green + `ruff check` clean + no regression
 below pytest baseline 1630.
 
 ## Coverage check (verified 2026-07-14, grep of routes/)
+
 Already built — DO NOT rebuild: GDELT `/api/events/gdelt`, EONET `/api/events/eonet`,
 ACLED `/api/events/acled`, IODA+Cloudflare `/api/cyber/*outages`, NWS alerts
 `/api/weather/alerts`, METAR, Open-Meteo forecast, SWPC **Kp index only**
@@ -14,22 +15,23 @@ ACLED `/api/events/acled`, IODA+Cloudflare `/api/cyber/*outages`, NWS alerts
 
 ## The 12 (all keyless; #9 is self-derived from AIS)
 
-| # | Feed | Route | Upstream (keyless) | kind | style |
-|---|------|-------|--------------------|------|-------|
-| 1 | GDACS global disaster alerts (severity-scored) | `/api/hazards/gdacs` | gdacs.org gdacsapi geteventlist/MAP (GeoJSON) | `disaster` | hazard |
-| 2 | NIFC wildfire perimeters (polygons) | `/api/hazards/fire-perimeters` | services3.arcgis.com WFIGS Current (f=geojson) | `fireperim` | polygon |
-| 3 | NHC tropical cyclones + cones | `/api/hazards/cyclones` | nhc.noaa.gov CurrentStorms.json + gis cone | `cyclone` | hazard/polygon |
-| 4 | Smithsonian GVP volcanoes | `/api/hazards/volcanoes` | webservices.volcano.si.edu WFS (GeoJSON) | `volcano` | hazard |
-| 5 | Safecast radiation | `/api/hazards/radiation` | api.safecast.org measurements.json | `radiation` | hazard |
-| 6 | Air quality (PM2.5/AQI) | `/api/env/air-quality` | air-quality-api.open-meteo.com (keyless) | `airquality` | generic |
-| 7 | Space weather ext (X-ray flares, storm alerts, aurora) | `/api/weather/swpc/space` | services.swpc.noaa.gov json/products | (data, no map pins) | — |
-| 8 | NDBC marine buoys (wave/wind) | `/api/maritime/buoys` | ndbc.noaa.gov latest_obs | `buoy` | generic |
-| 9 | Maritime chokepoint congestion (dwell/counts) | `/api/maritime/chokepoints` | **self-derived** from maritime snapshot | `chokepoint` | generic |
-| 10 | ReliefWeb disasters (humanitarian) | `/api/hazards/reliefweb` | api.reliefweb.int/v1/disasters | `relief` | hazard |
-| 11 | WRI global power plants (energy infra) | `/api/infra/powerplants` | WRI dataset (vendored static, keyless) | `powerplant` | facility |
-| 12 | Aviation hazards SIGMET/AIRMET | `/api/aviation/sigmet` | aviationweather.gov airsigmet (f=geojson) | `sigmet` | polygon |
+| #   | Feed                                                   | Route                          | Upstream (keyless)                             | kind                | style          |
+| --- | ------------------------------------------------------ | ------------------------------ | ---------------------------------------------- | ------------------- | -------------- |
+| 1   | GDACS global disaster alerts (severity-scored)         | `/api/hazards/gdacs`           | gdacs.org gdacsapi geteventlist/MAP (GeoJSON)  | `disaster`          | hazard         |
+| 2   | NIFC wildfire perimeters (polygons)                    | `/api/hazards/fire-perimeters` | services3.arcgis.com WFIGS Current (f=geojson) | `fireperim`         | polygon        |
+| 3   | NHC tropical cyclones + cones                          | `/api/hazards/cyclones`        | nhc.noaa.gov CurrentStorms.json + gis cone     | `cyclone`           | hazard/polygon |
+| 4   | Smithsonian GVP volcanoes                              | `/api/hazards/volcanoes`       | webservices.volcano.si.edu WFS (GeoJSON)       | `volcano`           | hazard         |
+| 5   | Safecast radiation                                     | `/api/hazards/radiation`       | api.safecast.org measurements.json             | `radiation`         | hazard         |
+| 6   | Air quality (PM2.5/AQI)                                | `/api/env/air-quality`         | air-quality-api.open-meteo.com (keyless)       | `airquality`        | generic        |
+| 7   | Space weather ext (X-ray flares, storm alerts, aurora) | `/api/weather/swpc/space`      | services.swpc.noaa.gov json/products           | (data, no map pins) | —              |
+| 8   | NDBC marine buoys (wave/wind)                          | `/api/maritime/buoys`          | ndbc.noaa.gov latest_obs                       | `buoy`              | generic        |
+| 9   | Maritime chokepoint congestion (dwell/counts)          | `/api/maritime/chokepoints`    | **self-derived** from maritime snapshot        | `chokepoint`        | generic        |
+| 10  | ReliefWeb disasters (humanitarian)                     | `/api/hazards/reliefweb`       | api.reliefweb.int/v1/disasters                 | `relief`            | hazard         |
+| 11  | WRI global power plants (energy infra)                 | `/api/infra/powerplants`       | WRI dataset (vendored static, keyless)         | `powerplant`        | facility       |
+| 12  | Aviation hazards SIGMET/AIRMET                         | `/api/aviation/sigmet`         | aviationweather.gov airsigmet (f=geojson)      | `sigmet`            | polygon        |
 
 ## Per-feed recipe (12×)
+
 1. **Route** `routes/<name>.py`: URL const + `load()` that fetches, normalizes to a
    GeoJSON FeatureCollection with stable `id`=`<kind>:<rawid>`, `cache.get_or_fetch`.
    Register in `main.py` (import + include_router).
@@ -45,17 +47,20 @@ ACLED `/api/events/acled`, IODA+Cloudflare `/api/cyber/*outages`, NWS alerts
    feed object resolves to enrichment and is promotable via existing actions.
 
 ## Shared helper (justified: 12× duplication)
+
 Add `routes/_feedgeo.py::passthrough_geojson(key, url, ttl, transform=None)` wrapping
 the cables.py idiom once. Keeps each route ~10 lines, one place for the 502/timeout
 handling. Match local style otherwise.
 
 ## Reuse / linkage
+
 - Hazard-family (1,3,4,5,10) share one StyleKind + `emits:['event']`.
 - `/api/entity` enrichment makes every feed object clickable → correlations card
   (bus-keyed, automatic) → graph promote. That IS the "linked together".
 - Chokepoint (#9) reuses `maritime.global_snapshot()`; no new upstream.
 
 ## Verification — DONE (2026-07-14, all green)
+
 - `bash scripts/verify.sh` → **ALL GREEN**: typecheck ✓, eslint ✓, web unit
   355 passed, api **1645 passed + 1 skipped** (was 1630 baseline; +15 new tests).
 - `ruff check apps/api` → All checks passed.
@@ -70,5 +75,6 @@ handling. Match local style otherwise.
   TestClient which is the same app factory.
 
 ## Shipped surface (per feed): route + main.py registration + MCP tool + globe
+
 descriptor + hazard/hazardpoly/facility style + 2D catalog row + ontology kind +
 /api/entity resolver. 12 feeds, 6 route files, 34→46 registry layers, 22→34 MCP tools.

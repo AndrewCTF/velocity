@@ -11,8 +11,8 @@
 // and are reachable on the Data sources tab's "Live data layers" list. Nothing is dropped.
 //
 // Pure data + registry-facade helpers; no React. Guarded by ./layerCatalog.test.ts.
-import type { LayerRegistry } from '../registry/LayerRegistry.js';
-import type { IconName } from './Icon.js';
+import type { LayerRegistry } from "../registry/LayerRegistry.js";
+import type { IconName } from "./Icon.js";
 
 export interface CatalogRow {
   /** Plain capability label (no source name). */
@@ -32,169 +32,350 @@ export interface CatalogFolder {
 
 export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
   {
-    id: 'air',
-    label: 'Air',
-    icon: 'plane',
+    id: "air",
+    label: "Air",
+    icon: "plane",
     defaultOpen: true,
     rows: [
-      { label: 'Aircraft', icon: 'plane', layerIds: ['aviation.adsb.global'] },
-      { label: 'Military', icon: 'jet', layerIds: ['aviation.adsb.live.mil'] },
-      { label: 'Sanctioned aircraft', icon: 'shield', layerIds: ['intel.sanctions.aircraft'] },
-      { label: 'Emergency', icon: 'warning', layerIds: ['aviation.adsb.live.emergencies'] },
-      { label: 'TFR / Airspace', icon: 'warning', layerIds: ['airspace.tfr'] },
-      { label: 'SIGMET / AIRMET', icon: 'warning', layerIds: ['aviation.sigmet'] },
-      { label: 'Ground stops (NAS)', icon: 'warning', layerIds: ['airspace.nasstatus'] },
-      { label: 'Privacy-filtered aircraft', icon: 'plane', layerIds: ['aviation.adsb.ladd', 'aviation.adsb.pia'] },
+      { label: "Aircraft", icon: "plane", layerIds: ["aviation.adsb.global"] },
+      { label: "Military", icon: "jet", layerIds: ["aviation.adsb.live.mil"] },
+      {
+        label: "Sanctioned aircraft",
+        icon: "shield",
+        layerIds: ["intel.sanctions.aircraft"],
+      },
+      {
+        label: "Emergency",
+        icon: "warning",
+        layerIds: ["aviation.adsb.live.emergencies"],
+      },
+      { label: "TFR / Airspace", icon: "warning", layerIds: ["airspace.tfr"] },
+      {
+        label: "SIGMET / AIRMET",
+        icon: "warning",
+        layerIds: ["aviation.sigmet"],
+      },
+      {
+        label: "Ground stops (NAS)",
+        icon: "warning",
+        layerIds: ["airspace.nasstatus"],
+      },
+      {
+        label: "Privacy-filtered aircraft",
+        icon: "plane",
+        layerIds: ["aviation.adsb.ladd", "aviation.adsb.pia"],
+      },
     ],
   },
   {
-    id: 'maritime',
-    label: 'Maritime',
-    icon: 'ship',
+    id: "maritime",
+    label: "Maritime",
+    icon: "ship",
     defaultOpen: true,
     rows: [
-      { label: 'Vessels', icon: 'ship', layerIds: ['maritime.keyless'] },
-      { label: 'Baltic AIS', icon: 'ship', layerIds: ['maritime.digitraffic'] },
-      { label: 'Sanctioned vessels', icon: 'shield', layerIds: ['intel.sanctions.vessels'] },
+      { label: "Vessels", icon: "ship", layerIds: ["maritime.keyless"] },
+      { label: "Baltic AIS", icon: "ship", layerIds: ["maritime.digitraffic"] },
       {
-        label: 'Dark-vessel SAR',
-        icon: 'crosshair',
+        label: "Sanctioned vessels",
+        icon: "shield",
+        layerIds: ["intel.sanctions.vessels"],
+      },
+      {
+        label: "Dark-vessel SAR",
+        icon: "crosshair",
         layerIds: [
-          'maritime.sar.hormuz',
-          'maritime.sar.bab-el-mandeb',
-          'maritime.sar.gulf-of-aden',
-          'maritime.sar.suez-gulf-approach',
-          'maritime.sar.kerch-strait',
-          'maritime.sar.taiwan-strait',
+          "maritime.sar.hormuz",
+          "maritime.sar.bab-el-mandeb",
+          "maritime.sar.gulf-of-aden",
+          "maritime.sar.suez-gulf-approach",
+          "maritime.sar.kerch-strait",
+          "maritime.sar.taiwan-strait",
         ],
       },
-      { label: 'Parking mode', icon: 'anchor', layerIds: ['maritime.parked'] },
-      { label: 'Naval warnings', icon: 'warning', layerIds: ['maritime.warnings'] },
-      { label: 'Marine buoys', icon: 'anchor', layerIds: ['maritime.buoys'] },
-      { label: 'Chokepoint congestion', icon: 'ship', layerIds: ['maritime.chokepoints'] },
+      { label: "Parking mode", icon: "anchor", layerIds: ["maritime.parked"] },
+      {
+        label: "Naval warnings",
+        icon: "warning",
+        layerIds: ["maritime.warnings"],
+      },
+      { label: "Marine buoys", icon: "anchor", layerIds: ["maritime.buoys"] },
+      {
+        label: "Chokepoint congestion",
+        icon: "ship",
+        layerIds: ["maritime.chokepoints"],
+      },
+      { label: "AIS coverage", icon: "ship", layerIds: ["maritime.coverage"] },
+      {
+        label: "Satellite positions",
+        icon: "ship",
+        layerIds: ["maritime.satellite"],
+      },
     ],
   },
   {
-    id: 'space',
-    label: 'Space',
-    icon: 'satellite',
-    rows: [
-      { label: 'Stations / ISS', icon: 'satellite', layerIds: ['space.celestrak.stations'] },
-      { label: 'Starlink', icon: 'satellite', layerIds: ['space.celestrak.starlink'] },
-      { label: 'GPS', icon: 'satellite', layerIds: ['space.celestrak.gps'] },
-      { label: 'Visual', icon: 'satellite', layerIds: ['space.celestrak.visual'] },
-      { label: 'Space weather / aurora', icon: 'satellite', layerIds: ['weather.spacewx.aurora'] },
-      { label: 'Launches', icon: 'satellite', layerIds: ['space.launches'] },
-      { label: 'Observed passes (SatNOGS)', icon: 'satellite', layerIds: ['space.satnogs.observations'] },
-      { label: 'Radio emitters (PSKReporter)', icon: 'satellite', layerIds: ['sigint.pskreporter'] },
-      { label: 'Amateur ground stations', icon: 'satellite', layerIds: ['space.satnogs.stations'] },
-    ],
-  },
-  {
-    id: 'ground',
-    label: 'Ground & Hazards',
-    icon: 'fire',
+    id: "space",
+    label: "Space",
+    icon: "satellite",
     rows: [
       {
-        label: 'Earthquakes',
-        icon: 'quake',
-        layerIds: ['hazards.usgs.quakes', 'hazards.emsc.quakes'],
+        label: "Stations / ISS",
+        icon: "satellite",
+        layerIds: ["space.celestrak.stations"],
       },
-      { label: 'Fires', icon: 'fire', layerIds: ['hazards.nasa.firms'] },
-      { label: 'Wildfire perimeters', icon: 'fire', layerIds: ['hazards.fireperimeters'] },
-      { label: 'Natural events', icon: 'warning', layerIds: ['hazards.nasa.eonet'] },
-      { label: 'Disaster alerts (GDACS)', icon: 'warning', layerIds: ['hazards.gdacs'] },
-      { label: 'Tropical cyclones', icon: 'warning', layerIds: ['hazards.cyclones'] },
-      { label: 'Volcanoes', icon: 'warning', layerIds: ['hazards.volcanoes'] },
-      { label: 'Humanitarian disasters', icon: 'warning', layerIds: ['hazards.reliefweb'] },
-      { label: 'Radiation', icon: 'warning', layerIds: ['hazards.radiation'] },
-      { label: 'Climate anomalies', icon: 'warning', layerIds: ['climate.anomalies'] },
-      { label: 'Air quality', icon: 'signal', layerIds: ['env.airquality'] },
-      { label: 'Weather alerts', icon: 'warning', layerIds: ['hazards.nws.alerts'] },
-      { label: 'Disaster declarations (FEMA)', icon: 'warning', layerIds: ['alerts.fema'] },
-      { label: 'Storm reports (SPC)', icon: 'warning', layerIds: ['hazards.spc.storms'] },
-      { label: 'Radiosondes', icon: 'signal', layerIds: ['env.sondes'] },
-      { label: 'GPS jamming', icon: 'signal', layerIds: ['env.jamming.nacp'] },
-    ],
-  },
-  {
-    id: 'signals',
-    label: 'Signals & Events',
-    icon: 'signal',
-    rows: [
-      { label: 'Armed conflict', icon: 'crosshair', layerIds: ['conflict.gdelt.live'] },
-      { label: 'Fused warnings', icon: 'shield', layerIds: ['intel.incidents.live'] },
-      { label: 'Internet outages', icon: 'signal', layerIds: ['cyber.ioda.outages'] },
-      { label: 'National routing drop', icon: 'signal', layerIds: ['cyber.routing.national'] },
-      { label: 'Storm surge', icon: 'anchor', layerIds: ['oceans.surge'] },
-      { label: 'GDELT events', icon: 'bell', layerIds: ['news.gdelt.events'] },
-      { label: 'ACLED conflict', icon: 'bell', layerIds: ['news.acled.events'] },
-      { label: 'UCDP actor-coded', icon: 'crosshair', layerIds: ['conflict.ucdp'] },
       {
-        label: 'Air raid alerts (Ukraine)',
-        icon: 'bell',
-        layerIds: ['alerts.ukraine', 'alerts.ukraine.alt'],
+        label: "Starlink",
+        icon: "satellite",
+        layerIds: ["space.celestrak.starlink"],
       },
-      { label: 'DeepState fires', icon: 'fire', layerIds: ['deepstate.fires'] },
-      { label: 'DeepState radiation', icon: 'warning', layerIds: ['deepstate.radiation'] },
-      { label: 'DeepState reports', icon: 'bell', layerIds: ['deepstate.news'] },
-      { label: 'Public SDR receivers', icon: 'signal', layerIds: ['rf.kiwisdr'] },
+      { label: "GPS", icon: "satellite", layerIds: ["space.celestrak.gps"] },
+      {
+        label: "Visual",
+        icon: "satellite",
+        layerIds: ["space.celestrak.visual"],
+      },
+      {
+        label: "Space weather / aurora",
+        icon: "satellite",
+        layerIds: ["weather.spacewx.aurora"],
+      },
+      { label: "Launches", icon: "satellite", layerIds: ["space.launches"] },
+      {
+        label: "Observed passes (SatNOGS)",
+        icon: "satellite",
+        layerIds: ["space.satnogs.observations"],
+      },
+      {
+        label: "Radio emitters (PSKReporter)",
+        icon: "satellite",
+        layerIds: ["sigint.pskreporter"],
+      },
+      {
+        label: "Amateur ground stations",
+        icon: "satellite",
+        layerIds: ["space.satnogs.stations"],
+      },
     ],
   },
   {
-    id: 'infra',
-    label: 'Infrastructure',
-    icon: 'network',
+    id: "ground",
+    label: "Ground & Hazards",
+    icon: "fire",
     rows: [
       {
-        label: 'Submarine cables',
-        icon: 'network',
-        layerIds: ['infra.cables.lines', 'infra.cables.landings'],
+        label: "Earthquakes",
+        icon: "quake",
+        layerIds: ["hazards.usgs.quakes", "hazards.emsc.quakes"],
       },
-      { label: 'CCTV cameras', icon: 'image', layerIds: ['infra.cams.public'] },
-      { label: 'Airports', icon: 'plane', layerIds: ['places.airports'] },
+      { label: "Fires", icon: "fire", layerIds: ["hazards.nasa.firms"] },
       {
-        label: 'Airports (full gazetteers)',
-        icon: 'plane',
-        layerIds: ['aviation.airports.full', 'aviation.airports.openflights'],
+        label: "Wildfire perimeters",
+        icon: "fire",
+        layerIds: ["hazards.fireperimeters"],
       },
-      { label: 'Ports', icon: 'anchor', layerIds: ['places.ports'] },
-      { label: 'Military bases', icon: 'shield', layerIds: ['places.bases'] },
-      { label: 'Military installations (MIRTA)', icon: 'shield', layerIds: ['military.installations'] },
-      { label: 'Power plants', icon: 'signal', layerIds: ['infra.power'] },
-      { label: 'Power plants (WRI global)', icon: 'signal', layerIds: ['infra.powerplants'] },
-      { label: 'Nuclear facilities', icon: 'warning', layerIds: ['infra.nuclear'] },
-      { label: 'Water / desalination', icon: 'network', layerIds: ['infra.water', 'infra.desalination'] },
-      { label: 'Datacenters', icon: 'network', layerIds: ['infra.datacenters'] },
-      { label: 'Telecom hubs', icon: 'signal', layerIds: ['infra.telecom'] },
-      { label: 'Ground stations', icon: 'satellite', layerIds: ['infra.ground_stations'] },
-      { label: 'Telescopes', icon: 'satellite', layerIds: ['infra.telescopes'] },
-      { label: 'Launch facilities', icon: 'satellite', layerIds: ['infra.launch'] },
-      { label: 'Mineral sites', icon: 'network', layerIds: ['infra.mines'] },
-      { label: 'Military land use (OSM)', icon: 'shield', layerIds: ['osm.military'] },
-      { label: 'Crowd-mapped places', icon: 'layers', layerIds: ['osm.wikimapia'] },
+      {
+        label: "Natural events",
+        icon: "warning",
+        layerIds: ["hazards.nasa.eonet"],
+      },
+      {
+        label: "Disaster alerts (GDACS)",
+        icon: "warning",
+        layerIds: ["hazards.gdacs"],
+      },
+      {
+        label: "Tropical cyclones",
+        icon: "warning",
+        layerIds: ["hazards.cyclones"],
+      },
+      { label: "Volcanoes", icon: "warning", layerIds: ["hazards.volcanoes"] },
+      {
+        label: "Humanitarian disasters",
+        icon: "warning",
+        layerIds: ["hazards.reliefweb"],
+      },
+      { label: "Radiation", icon: "warning", layerIds: ["hazards.radiation"] },
+      {
+        label: "Climate anomalies",
+        icon: "warning",
+        layerIds: ["climate.anomalies"],
+      },
+      { label: "Air quality", icon: "signal", layerIds: ["env.airquality"] },
+      {
+        label: "Weather alerts",
+        icon: "warning",
+        layerIds: ["hazards.nws.alerts"],
+      },
+      {
+        label: "Disaster declarations (FEMA)",
+        icon: "warning",
+        layerIds: ["alerts.fema"],
+      },
+      {
+        label: "Storm reports (SPC)",
+        icon: "warning",
+        layerIds: ["hazards.spc.storms"],
+      },
+      { label: "Radiosondes", icon: "signal", layerIds: ["env.sondes"] },
+      { label: "GPS jamming", icon: "signal", layerIds: ["env.jamming.nacp"] },
     ],
   },
   {
-    id: 'reference',
-    label: 'Reference',
-    icon: 'layers',
-    rows: [{ label: 'COP units', icon: 'shield', layerIds: ['mil.cop.notional'] }],
+    id: "signals",
+    label: "Signals & Events",
+    icon: "signal",
+    rows: [
+      {
+        label: "Armed conflict",
+        icon: "crosshair",
+        layerIds: ["conflict.gdelt.live"],
+      },
+      {
+        label: "Fused warnings",
+        icon: "shield",
+        layerIds: ["intel.incidents.live"],
+      },
+      {
+        label: "Internet outages",
+        icon: "signal",
+        layerIds: ["cyber.ioda.outages"],
+      },
+      {
+        label: "National routing drop",
+        icon: "signal",
+        layerIds: ["cyber.routing.national"],
+      },
+      { label: "Storm surge", icon: "anchor", layerIds: ["oceans.surge"] },
+      { label: "GDELT events", icon: "bell", layerIds: ["news.gdelt.events"] },
+      {
+        label: "ACLED conflict",
+        icon: "bell",
+        layerIds: ["news.acled.events"],
+      },
+      {
+        label: "UCDP actor-coded",
+        icon: "crosshair",
+        layerIds: ["conflict.ucdp"],
+      },
+      {
+        label: "Air raid alerts (Ukraine)",
+        icon: "bell",
+        layerIds: ["alerts.ukraine", "alerts.ukraine.alt"],
+      },
+      { label: "DeepState fires", icon: "fire", layerIds: ["deepstate.fires"] },
+      {
+        label: "DeepState radiation",
+        icon: "warning",
+        layerIds: ["deepstate.radiation"],
+      },
+      {
+        label: "DeepState reports",
+        icon: "bell",
+        layerIds: ["deepstate.news"],
+      },
+      {
+        label: "Public SDR receivers",
+        icon: "signal",
+        layerIds: ["rf.kiwisdr"],
+      },
+    ],
+  },
+  {
+    id: "infra",
+    label: "Infrastructure",
+    icon: "network",
+    rows: [
+      {
+        label: "Submarine cables",
+        icon: "network",
+        layerIds: ["infra.cables.lines", "infra.cables.landings"],
+      },
+      { label: "CCTV cameras", icon: "image", layerIds: ["infra.cams.public"] },
+      { label: "Airports", icon: "plane", layerIds: ["places.airports"] },
+      {
+        label: "Airports (full gazetteers)",
+        icon: "plane",
+        layerIds: ["aviation.airports.full", "aviation.airports.openflights"],
+      },
+      { label: "Ports", icon: "anchor", layerIds: ["places.ports"] },
+      { label: "Military bases", icon: "shield", layerIds: ["places.bases"] },
+      {
+        label: "Military installations (MIRTA)",
+        icon: "shield",
+        layerIds: ["military.installations"],
+      },
+      { label: "Power plants", icon: "signal", layerIds: ["infra.power"] },
+      {
+        label: "Power plants (WRI global)",
+        icon: "signal",
+        layerIds: ["infra.powerplants"],
+      },
+      {
+        label: "Nuclear facilities",
+        icon: "warning",
+        layerIds: ["infra.nuclear"],
+      },
+      {
+        label: "Water / desalination",
+        icon: "network",
+        layerIds: ["infra.water", "infra.desalination"],
+      },
+      {
+        label: "Datacenters",
+        icon: "network",
+        layerIds: ["infra.datacenters"],
+      },
+      { label: "Telecom hubs", icon: "signal", layerIds: ["infra.telecom"] },
+      {
+        label: "Ground stations",
+        icon: "satellite",
+        layerIds: ["infra.ground_stations"],
+      },
+      {
+        label: "Telescopes",
+        icon: "satellite",
+        layerIds: ["infra.telescopes"],
+      },
+      {
+        label: "Launch facilities",
+        icon: "satellite",
+        layerIds: ["infra.launch"],
+      },
+      { label: "Mineral sites", icon: "network", layerIds: ["infra.mines"] },
+      {
+        label: "Military land use (OSM)",
+        icon: "shield",
+        layerIds: ["osm.military"],
+      },
+      {
+        label: "Crowd-mapped places",
+        icon: "layers",
+        layerIds: ["osm.wikimapia"],
+      },
+    ],
+  },
+  {
+    id: "reference",
+    label: "Reference",
+    icon: "layers",
+    rows: [
+      { label: "COP units", icon: "shield", layerIds: ["mil.cop.notional"] },
+    ],
   },
 ];
 
 // Registered layers deliberately NOT shown on Map layers — redundant breadth sources that are
 // unioned server-side and belong on the Data sources tab, not as operator toggles here.
 export const HIDDEN_SOURCE_IDS: readonly string[] = [
-  'aviation.adsb.fi.global',
-  'aviation.opensky.states',
-  'maritime.aisstream',
+  "aviation.adsb.fi.global",
+  "aviation.opensky.states",
+  "maritime.aisstream",
 ];
 
 /** Every layer id referenced by a catalog row (deduped). */
 export function catalogLayerIds(): readonly string[] {
   const set = new Set<string>();
-  for (const f of MAP_LAYER_FOLDERS) for (const r of f.rows) for (const id of r.layerIds) set.add(id);
+  for (const f of MAP_LAYER_FOLDERS)
+    for (const r of f.rows) for (const id of r.layerIds) set.add(id);
   return [...set];
 }
 
@@ -213,17 +394,24 @@ export function toggleRow(registry: LayerRegistry, row: CatalogRow): void {
 }
 
 /** {on,total} capability-row counts for a folder header badge. */
-export function folderCounts(registry: LayerRegistry, folder: CatalogFolder): { on: number; total: number } {
+export function folderCounts(
+  registry: LayerRegistry,
+  folder: CatalogFolder,
+): { on: number; total: number } {
   let on = 0;
   for (const r of folder.rows) if (rowEnabled(registry, r)) on += 1;
   return { on, total: folder.rows.length };
 }
 
 /** Toggle a whole folder (the eye icon): any row on → all off; else all on. */
-export function toggleFolder(registry: LayerRegistry, folder: CatalogFolder): void {
+export function toggleFolder(
+  registry: LayerRegistry,
+  folder: CatalogFolder,
+): void {
   const anyOn = folder.rows.some((r) => rowEnabled(registry, r));
-  for (const r of folder.rows) for (const id of r.layerIds) {
-    if (anyOn) registry.disable(id);
-    else registry.enable(id);
-  }
+  for (const r of folder.rows)
+    for (const id of r.layerIds) {
+      if (anyOn) registry.disable(id);
+      else registry.enable(id);
+    }
 }

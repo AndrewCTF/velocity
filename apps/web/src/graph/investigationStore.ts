@@ -14,7 +14,7 @@
 //     re-opens the tab (the id alone wouldn't change), which is why this is a
 //     monotonic counter rather than a boolean.
 
-import { create } from 'zustand';
+import { create } from "zustand";
 
 // A single point-in-time snapshot of the investigation canvas: who changed it,
 // when, what kind of mutation, a human line, and the node-id set AFTER the
@@ -23,7 +23,7 @@ import { create } from 'zustand';
 export interface GraphRevision {
   ts: number; // epoch ms
   author: string; // 'operator' for now (single-operator console)
-  kind: 'root' | 'expand' | 'remove' | 'clear' | 'path';
+  kind: "root" | "expand" | "remove" | "clear" | "path";
   label: string; // human line, e.g. 'expanded vessel:123 (+6 nodes)'
   nodeIds: string[]; // node-id set AFTER the change
 }
@@ -46,7 +46,7 @@ interface InvestigationState {
   setRoot: (id: string) => void;
   // Record a revision (author + timestamp are stamped here); any live mutation
   // returns the view to live.
-  record: (r: Omit<GraphRevision, 'ts' | 'author'>) => void;
+  record: (r: Omit<GraphRevision, "ts" | "author">) => void;
   // Move the read-only scrubber (null = back to live).
   setViewRev: (i: number | null) => void;
   clear: () => void;
@@ -61,7 +61,10 @@ export const useInvestigation = create<InvestigationState>((set) => ({
   setRoot: (id) => set({ rootId: id }),
   record: (r) =>
     set((s) => ({
-      revisions: [...s.revisions, { ...r, ts: Date.now(), author: 'operator' }].slice(-MAX_REVISIONS),
+      revisions: [
+        ...s.revisions,
+        { ...r, ts: Date.now(), author: "operator" },
+      ].slice(-MAX_REVISIONS),
       viewRev: null, // any live mutation returns the view to live
     })),
   setViewRev: (i) => set({ viewRev: i }),
@@ -69,7 +72,8 @@ export const useInvestigation = create<InvestigationState>((set) => ({
 }));
 
 // DEV-only handle for debugging/introspection (mirrors __useSelection / __useChip).
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useInvestigation: typeof useInvestigation }).__useInvestigation =
-    useInvestigation;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (
+    window as unknown as { __useInvestigation: typeof useInvestigation }
+  ).__useInvestigation = useInvestigation;
 }

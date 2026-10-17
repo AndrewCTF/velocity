@@ -2,14 +2,20 @@
 // routes, walks a new analyst through what the console is and where the tools
 // live, then gets out of the way. Style mirrors SettingsModal (bg-bg-1 card,
 // mono type, accent-line focus). Re-openable from Settings via `resetOnboarding`.
-import { useEffect, useState } from 'react';
-import { MousePointerClick, Radar, Settings2, Waypoints, type LucideIcon } from 'lucide-react';
+import { useEffect, useState } from "react";
+import {
+  MousePointerClick,
+  Radar,
+  Settings2,
+  Waypoints,
+  type LucideIcon,
+} from "lucide-react";
 
-const SEEN_KEY = 'velocity.onboarded.v1';
+const SEEN_KEY = "velocity.onboarded.v1";
 
 export function hasOnboarded(): boolean {
   try {
-    return localStorage.getItem(SEEN_KEY) === '1';
+    return localStorage.getItem(SEEN_KEY) === "1";
   } catch {
     return true; // no storage → don't nag
   }
@@ -17,7 +23,7 @@ export function hasOnboarded(): boolean {
 
 function markOnboarded(): void {
   try {
-    localStorage.setItem(SEEN_KEY, '1');
+    localStorage.setItem(SEEN_KEY, "1");
   } catch {
     /* private mode — fine, it just shows again next load */
   }
@@ -41,64 +47,72 @@ interface Step {
 
 const STEPS: Step[] = [
   {
-    tag: 'Welcome',
+    tag: "Welcome",
     icon: Radar,
-    title: 'A live OSINT intelligence console',
+    title: "A live OSINT intelligence console",
     body: (
       <>
-        Velocity fuses real-time <b className="text-txt-1">ADS-B aircraft</b>,{' '}
-        <b className="text-txt-1">AIS vessels</b>, satellites, imagery, ground photos, ACARS
-        and digital OSINT onto one Cesium globe, records every position it sees to your
-        own disk, and keeps an analyst workflow on top: cases, custody-chained
-        evidence and a verifiable audit log. The core feeds run <span className="text-accent">keyless</span>: open
-        it and aircraft, ships, quakes and satellites are already moving.
+        Velocity fuses real-time <b className="text-txt-1">ADS-B aircraft</b>,{" "}
+        <b className="text-txt-1">AIS vessels</b>, satellites, imagery, ground
+        photos, ACARS and digital OSINT onto one Cesium globe, records every
+        position it sees to your own disk, and keeps an analyst workflow on top:
+        cases, custody-chained evidence and a verifiable audit log. The core
+        feeds run <span className="text-accent">keyless</span>: open it and
+        aircraft, ships, quakes and satellites are already moving.
       </>
     ),
   },
   {
-    tag: 'The map',
+    tag: "The map",
     icon: MousePointerClick,
-    title: 'Click anything to interrogate it',
+    title: "Click anything to interrogate it",
     body: (
       <>
-        Every aircraft and vessel renders as its <b className="text-txt-1">category icon</b>,
-        rotated to real heading. <b className="text-txt-1">Click one</b> to open the inspector
-        on the right: identity, track history, pattern-of-life. The{' '}
-        <b className="text-txt-1">left rail</b> toggles layers (traffic, maritime, satellites,
-        imagery, fires). Drag to Europe or the Gulf to see the density.
+        Every aircraft and vessel renders as its{" "}
+        <b className="text-txt-1">category icon</b>, rotated to real heading.{" "}
+        <b className="text-txt-1">Click one</b> to open the inspector on the
+        right: identity, track history, pattern-of-life. The{" "}
+        <b className="text-txt-1">left rail</b> toggles layers (traffic,
+        maritime, satellites, imagery, fires). Drag to Europe or the Gulf to see
+        the density.
       </>
     ),
   },
   {
-    tag: 'Analysis',
+    tag: "Analysis",
     icon: Waypoints,
-    title: 'From raw feeds to sense-making',
+    title: "From raw feeds to sense-making",
     body: (
       <>
-        Draw a <b className="text-txt-1">watchbox</b> or AOI and get alerts. The{' '}
-        <b className="text-txt-1">ontology graph</b> resolves entities and links them;
-        behavioral detectors flag AIS gaps, loitering and proximity; the{' '}
-        <b className="text-txt-1">watch-officer</b> writes cited incident briefs. Command-K
-        opens the omnibar to jump anywhere.
+        Draw a <b className="text-txt-1">watchbox</b> or AOI and get alerts. The{" "}
+        <b className="text-txt-1">ontology graph</b> resolves entities and links
+        them; behavioral detectors flag AIS gaps, loitering and proximity; the{" "}
+        <b className="text-txt-1">watch-officer</b> writes cited incident
+        briefs. Command-K opens the omnibar to jump anywhere.
       </>
     ),
   },
   {
-    tag: 'Make it yours',
+    tag: "Make it yours",
     icon: Settings2,
-    title: 'Keys, layout & local AI live in Settings',
+    title: "Keys, layout & local AI live in Settings",
     body: (
       <>
-        The core is keyless, but <b className="text-txt-1">Settings</b> (top-right) lets you
-        bring your own keys for extras (NASA FIRMS fires, high-res satellite imagery), pick a{' '}
-        <b className="text-txt-1">dashboard layout</b>, and route AI to a local GPU model. You
-        can always re-open this tour from there.
+        The core is keyless, but <b className="text-txt-1">Settings</b>{" "}
+        (top-right) lets you bring your own keys for extras (NASA FIRMS fires,
+        high-res satellite imagery), pick a{" "}
+        <b className="text-txt-1">dashboard layout</b>, and route AI to a local
+        GPU model. You can always re-open this tour from there.
       </>
     ),
   },
 ];
 
-export function Onboarding({ onClose }: { onClose: () => void }): JSX.Element | null {
+export function Onboarding({
+  onClose,
+}: {
+  onClose: () => void;
+}): JSX.Element | null {
   const [i, setI] = useState(0);
   const last = i === STEPS.length - 1;
 
@@ -109,12 +123,12 @@ export function Onboarding({ onClose }: { onClose: () => void }): JSX.Element | 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') finish();
-      if (e.key === 'ArrowRight' && !last) setI((n) => n + 1);
-      if (e.key === 'ArrowLeft' && i > 0) setI((n) => n - 1);
+      if (e.key === "Escape") finish();
+      if (e.key === "ArrowRight" && !last) setI((n) => n + 1);
+      if (e.key === "ArrowLeft" && i > 0) setI((n) => n - 1);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [i, last]);
 
@@ -149,13 +163,19 @@ export function Onboarding({ onClose }: { onClose: () => void }): JSX.Element | 
         <div className="px-5 py-4">
           <div className="flex items-center gap-2.5">
             <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-sm border border-line-2 bg-bg-2">
-              <step.icon aria-hidden className="h-[18px] w-[18px] text-accent" strokeWidth={1.75} />
+              <step.icon
+                aria-hidden
+                className="h-[18px] w-[18px] text-accent"
+                strokeWidth={1.75}
+              />
             </span>
             <h2 className="mono text-[15px] font-semibold text-txt-0 leading-snug">
               {step.title}
             </h2>
           </div>
-          <p className="mono text-[12px] text-txt-2 leading-relaxed mt-2.5">{step.body}</p>
+          <p className="mono text-[12px] text-txt-2 leading-relaxed mt-2.5">
+            {step.body}
+          </p>
         </div>
 
         <div className="flex items-center justify-between border-t border-line px-4 py-2.5">
@@ -163,7 +183,7 @@ export function Onboarding({ onClose }: { onClose: () => void }): JSX.Element | 
             {STEPS.map((_, n) => (
               <span
                 key={n}
-                className={`h-1.5 w-1.5 rounded-full ${n === i ? 'bg-accent' : 'bg-line'}`}
+                className={`h-1.5 w-1.5 rounded-full ${n === i ? "bg-accent" : "bg-line"}`}
               />
             ))}
           </div>
@@ -182,7 +202,7 @@ export function Onboarding({ onClose }: { onClose: () => void }): JSX.Element | 
               onClick={() => (last ? finish() : setI((n) => n + 1))}
               className="mono text-[11px] px-3 py-1 border border-accent-line bg-accent-dim rounded-sm text-txt-0 hover:text-accent"
             >
-              {last ? 'Start exploring →' : 'Next'}
+              {last ? "Start exploring →" : "Next"}
             </button>
           </div>
         </div>

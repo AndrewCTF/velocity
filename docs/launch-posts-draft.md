@@ -14,7 +14,7 @@ I run a little home-lab habit of watching planes and ships over conflict zones,
 and the same wall kept showing up: Flightradar24 gives you 7 days of history
 free, MarineTraffic quietly cut its free window from 72h to 24h last year, and
 ADS-B Exchange killed its free API tier. The live view is great right up until
-you want to ask "what was over here *yesterday*" — and then it's a paywall or
+you want to ask "what was over here _yesterday_" — and then it's a paywall or
 it's just gone.
 
 So I built a self-hosted situation console that fuses live aircraft, ships,
@@ -57,13 +57,13 @@ share the compose file and answer setup questions in the comments.
 A pattern I keep hitting doing geospatial OSINT: the analysis you actually want
 is temporal. "This vessel went dark here — when, and what was nearby?" "This
 aircraft's pattern over three weeks." "Rewind to the hour of the incident."
-Almost every live tracker is built to show you *now* and monetizes the past.
+Almost every live tracker is built to show you _now_ and monetizes the past.
 FR24 gates history, RadarBox charges for a year of it, ADSB-X removed its free
 API, MarineTraffic trimmed its free window. The moment your question has a
 timestamp, you're renting.
 
 So I've been building a self-hosted console around the opposite assumption: the
-live feed is table stakes, and the *archive you own* is the product. It fuses
+live feed is table stakes, and the _archive you own_ is the product. It fuses
 aircraft + ships + satellites + hazards on one globe, records positions locally,
 and lets you scrub back through whatever window your disk holds.
 
@@ -71,7 +71,7 @@ Things that matter to this crowd specifically:
 
 - **Provenance over vibes.** Everything the tool derives is stored as
   assertions with a source and a timestamp, in an append-only local table.
-  Anything automated is labeled automated. I deliberately did *not* build a
+  Anything automated is labeled automated. I deliberately did _not_ build a
   "the AI thinks this is suspicious" black box — after watching the practitioner
   backlash against unlabeled AI "insights," that felt like a liability, not a
   feature. If a detector flags something, you can see why.
@@ -101,7 +101,7 @@ Flightradar24: 7 days of history free.
 MarineTraffic: cut its free window 72h → 24h.
 ADS-B Exchange: killed its free API tier.
 
-The live map is never the paywall. Your *past* is. So I self-hosted a tracker
+The live map is never the paywall. Your _past_ is. So I self-hosted a tracker
 that records everything locally and lets you rewind. 🧵
 
 2/
@@ -158,6 +158,7 @@ A cloud vendor structurally can't give away unlimited history; a self-hosted
 tool can, because it's your disk.
 
 How it's built:
+
 - FastAPI backend, React + CesiumJS frontend, a couple of scraper sidecars.
 - Keyless core: airplanes.live/adsb.lol for ADS-B, public AIS, USGS quakes,
   CelesTrak for satellites (client-side SGP4 propagation). Optional free keys
@@ -167,6 +168,7 @@ How it's built:
   assertions (provenance is first-class), detectors, dossiers, evidence export.
 
 Two opinions baked in that I'd be happy to argue about:
+
 1. No unlabeled AI "insights." Anything automated is labeled automated and
    carries its source. The target audience treats black-box "this looks
    suspicious" output as a liability, and I agree.
@@ -202,12 +204,12 @@ Boosts welcome if you know someone who'd want to break it. 🌍
 
 ---
 
-## 6. r/DataHoarder  (written in the format of the pinned "Gaza archive" post — numbers-forward title, preservation framing, NOT an ad)
+## 6. r/DataHoarder (written in the format of the pinned "Gaza archive" post — numbers-forward title, preservation framing, NOT an ad)
 
 **Title:** Self-hosting the timeline of the physical world: ~13,000 aircraft + ~50,000 ships tracked live, every position written to local disk, rewind/replay any window, keyless (no API key, no account), append-only SQLite/WAL you own, GB/day you control | Built it because every flight & ship tracker paywalls or deletes its own history — this keeps it.
 
-The single most hoardable dataset on Earth is *where everything is, minute by
-minute* — and every company collecting it throws it away or paywalls it.
+The single most hoardable dataset on Earth is _where everything is, minute by
+minute_ — and every company collecting it throws it away or paywalls it.
 Flightradar24 keeps 7 days of history for free users. MarineTraffic cut its free
 window from 72h to 24h in 2025. ADS-B Exchange removed its free API tier in
 March 2025. RadarBox charges for a year of it. The live world scrolls past and
@@ -215,7 +217,7 @@ the past is deleted or rented back to you.
 
 So I've been building a self-hosted recorder that captures it locally, forever
 (or until your disk says stop), and lets you scrub back through it. Sharing it
-here because this is the one sub that gets *why* that matters.
+here because this is the one sub that gets _why_ that matters.
 
 What it captures, continuously, to your machine:
 
@@ -238,7 +240,7 @@ The storage/archival specifics — the part that matters here:
   via `docker compose up`.
 - **Byte math (honest estimate, measurements pending):** at full firehose it's
   on the order of a few GB/day depending on dedup/retention settings. I'll post
-  real measured numbers rather than guesses — but the point is *you* choose the
+  real measured numbers rather than guesses — but the point is _you_ choose the
   fidelity/size tradeoff, not a vendor.
 
 Caveats, up front so nobody feels sold to: coverage is only as good as the public
@@ -280,7 +282,8 @@ The reason I built it, and the r/ADSB-relevant bit:
 Not competing with tar1090 — different job (multi-domain fusion + local replay).
 Genuinely want feedback from people who know these feeds cold: am I being a good
 citizen to the aggregators, and is local replay something you'd use? Compose file
-+ repo in comments.
+
+- repo in comments.
 
 ---
 
@@ -304,7 +307,7 @@ Deployment shape:
 - Stateful bit is a local SQLite/WAL positions store; back it up like any volume.
   Retention sized to whatever disk you allocate.
 - Resource honesty: the backend is fine on modest hardware, but the Cesium
-  frontend wants a GPU on the *client* to be smooth, and storage grows with
+  frontend wants a GPU on the _client_ to be smooth, and storage grows with
   retention. Not a Pi-zero job at full firehose.
 
 It's early and there are rough edges — mostly posting to find homelabbers who'll
@@ -325,8 +328,8 @@ It's a self-hosted console that fuses live aircraft/ships/satellites/hazards on 
 side is where most of the interesting problems live:
 
 - **FastAPI backend** serving a pre-rendered, gzipped world snapshot on a 1s poll
-  + WebSocket push, with a sticky-snapshot pattern so N clients don't multiply
-  upstream load.
+  - WebSocket push, with a sticky-snapshot pattern so N clients don't multiply
+    upstream load.
 - **Polite scraping** of rate-limited community feeds: burst semaphore, per-host
   UA rules, rejecting throttle responses that come back as HTTP 200 + text/plain,
   IPv4-pinned httpx clients. Lots of "the upstream lies to you" defensive code.
@@ -377,10 +380,11 @@ workflows you'd want. Repo in comments.
 
 These subs ban/heavily moderate self-promotion and low-effort links. Do **not**
 drop an ad. Two legitimate routes:
-- Post genuinely useful *analysis* that happens to use the tool (e.g., an
+
+- Post genuinely useful _analysis_ that happens to use the tool (e.g., an
   annotated replay of a real air/maritime event), with the tool mentioned only as
   methodology in a comment if asked. Value first, link maybe.
 - Answer existing "how do I track X" questions with a real, sourced how-to and
   mention the self-hosted option as one of several, alongside FR24/ADSB-X/etc.
-Anything that reads as marketing will (correctly) get removed. Skip these until
-you have a concrete, shareable analysis artifact.
+  Anything that reads as marketing will (correctly) get removed. Skip these until
+  you have a concrete, shareable analysis artifact.

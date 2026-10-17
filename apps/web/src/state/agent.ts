@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 // Shared state for the Velocity analyst console (the "AI bar"). The command-bar
 // AGENT indicator and the floating console talk through this store: the
@@ -23,6 +23,10 @@ export const useAgent = create<AgentState>((set) => ({
   pending: null,
   setOpen: (v) => set({ open: v }),
   toggle: () => set((s) => ({ open: !s.open })),
-  ask: (q) => set((s) => ({ open: true, pending: { q, seq: (s.pending?.seq ?? 0) + 1 } })),
+  ask: (q) =>
+    set((s) => ({
+      open: true,
+      pending: { q, seq: (s.pending?.seq ?? 0) + 1 },
+    })),
   clearPending: () => set({ pending: null }),
 }));

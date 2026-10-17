@@ -2,15 +2,15 @@
 // accepts it (chip goes live); an enforcing backend rejects it before open —
 // then we stay closed with no reconnect loop (the old always-skip showed a
 // permanent "LINK down" pill on every open-mode box).
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, act } from '@testing-library/react';
-import { AlertSubscriber } from './AlertSubscriber.js';
-import { useConnection } from '../state/stores.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, act } from "@testing-library/react";
+import { AlertSubscriber } from "./AlertSubscriber.js";
+import { useConnection } from "../state/stores.js";
 
-vi.mock('../auth/AuthContext.js', () => ({
+vi.mock("../auth/AuthContext.js", () => ({
   useAuth: () => ({ session: null, loading: false }),
 }));
-vi.mock('../transport/http.js', () => ({
+vi.mock("../transport/http.js", () => ({
   apiFetch: vi.fn(() => Promise.resolve()),
   hasStaticApiKey: () => false,
   openAuthedWebSocket: (u: string) => new WebSocket(u),
@@ -34,35 +34,35 @@ function inst(i: number): FakeWS {
   return w;
 }
 
-describe('AlertSubscriber keyless probe', () => {
+describe("AlertSubscriber keyless probe", () => {
   beforeEach(() => {
     FakeWS.instances = [];
     vi.useFakeTimers();
-    vi.stubGlobal('WebSocket', FakeWS);
-    useConnection.setState({ ws: 'connecting' });
+    vi.stubGlobal("WebSocket", FakeWS);
+    useConnection.setState({ ws: "connecting" });
   });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
-  it('attempts the upgrade once and adopts it if the backend accepts', () => {
+  it("attempts the upgrade once and adopts it if the backend accepts", () => {
     render(<AlertSubscriber />);
     expect(FakeWS.instances.length).toBe(1);
     act(() => inst(0).onopen?.());
-    expect(useConnection.getState().ws).toBe('open');
+    expect(useConnection.getState().ws).toBe("open");
   });
 
-  it('stays closed with no retry loop when rejected before open', () => {
+  it("stays closed with no retry loop when rejected before open", () => {
     render(<AlertSubscriber />);
     expect(FakeWS.instances.length).toBe(1);
     act(() => inst(0).onclose?.());
     act(() => vi.advanceTimersByTime(60_000));
     expect(FakeWS.instances.length).toBe(1); // no reconnect
-    expect(useConnection.getState().ws).toBe('closed');
+    expect(useConnection.getState().ws).toBe("closed");
   });
 
-  it('reconnects after a drop only if the socket had opened', () => {
+  it("reconnects after a drop only if the socket had opened", () => {
     render(<AlertSubscriber />);
     act(() => inst(0).onopen?.());
     act(() => inst(0).onclose?.());

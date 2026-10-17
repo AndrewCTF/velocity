@@ -4,12 +4,12 @@
 // and the point is placed exactly — clicking the globe stays as a shortcut, not
 // the only way. Resolves a free-text query through the same /api/search the top
 // search bar uses (coords parsed locally, no round-trip).
-import { useState } from 'react';
-import * as Cesium from 'cesium';
-import { search, LOCATION_KINDS } from '../transport/search.js';
-import { flyToPosition } from './camera.js';
-import { viewerCenter } from './center.js';
-import { Icon } from '../normal/Icon.js';
+import { useState } from "react";
+import * as Cesium from "cesium";
+import { search, LOCATION_KINDS } from "../transport/search.js";
+import { flyToPosition } from "./camera.js";
+import { viewerCenter } from "./center.js";
+import { Icon } from "../normal/Icon.js";
 
 /** Parse "lat,lon" / "lat lon" → {lat,lon}, or null if it isn't a coordinate.
  *  (SimulationOverlay keeps its own two-field variant; this is the single-field
@@ -33,15 +33,20 @@ interface Props {
   fly?: boolean;
 }
 
-export function CoordEntry({ viewer, onPlace, placeholder, fly = true }: Props) {
-  const [q, setQ] = useState('');
+export function CoordEntry({
+  viewer,
+  onPlace,
+  placeholder,
+  fly = true,
+}: Props) {
+  const [q, setQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const place = (lat: number, lon: number, label?: string): void => {
     if (fly && viewer) flyToPosition(viewer, lon, lat, 200_000, 0.8);
     onPlace(lat, lon, label);
-    setQ('');
+    setQ("");
     setErr(null);
   };
 
@@ -59,12 +64,16 @@ export function CoordEntry({ viewer, onPlace, placeholder, fly = true }: Props) 
       const results = await search(text);
       const hit = results[0];
       if (!hit) {
-        setErr('No match found.');
+        setErr("No match found.");
         return;
       }
-      place(hit.lat, hit.lon, LOCATION_KINDS.has(hit.kind) ? hit.label : undefined);
+      place(
+        hit.lat,
+        hit.lon,
+        LOCATION_KINDS.has(hit.kind) ? hit.label : undefined,
+      );
     } catch {
-      setErr('Search failed.');
+      setErr("Search failed.");
     } finally {
       setBusy(false);
     }
@@ -72,8 +81,8 @@ export function CoordEntry({ viewer, onPlace, placeholder, fly = true }: Props) 
 
   const useCentre = (): void => {
     const c = viewerCenter(viewer);
-    if (c) place(c.lat, c.lon, 'map centre');
-    else setErr('No map centre available.');
+    if (c) place(c.lat, c.lon, "map centre");
+    else setErr("No map centre available.");
   };
 
   return (
@@ -83,12 +92,14 @@ export function CoordEntry({ viewer, onPlace, placeholder, fly = true }: Props) 
           value={q}
           onChange={(e) => setQ(e.currentTarget.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (e.key === "Enter") {
               e.preventDefault();
               void resolve();
             }
           }}
-          placeholder={placeholder ?? 'lat,lon · place · airport / port · IATA/ICAO'}
+          placeholder={
+            placeholder ?? "lat,lon · place · airport / port · IATA/ICAO"
+          }
           aria-label="coordinate or place name"
           className="flex-1 mono bg-bg-2 border border-line rounded-sm px-2 py-1 text-[11px] text-txt-0 focus:outline-hidden focus:border-accent-line"
         />
@@ -98,7 +109,7 @@ export function CoordEntry({ viewer, onPlace, placeholder, fly = true }: Props) 
           disabled={busy}
           className="mono text-[10px] uppercase tracking-[0.4px] px-2 py-1 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-txt-1 disabled:opacity-50"
         >
-          {busy ? '…' : 'go'}
+          {busy ? "…" : "go"}
         </button>
         <button
           type="button"
@@ -106,7 +117,9 @@ export function CoordEntry({ viewer, onPlace, placeholder, fly = true }: Props) 
           title="Use current map centre"
           aria-label="use map centre"
           className="mono text-[11px] px-1.5 py-1 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-txt-1"
-        ><Icon name="crosshair" className="w-3.5 h-3.5" /></button>
+        >
+          <Icon name="crosshair" className="w-3.5 h-3.5" />
+        </button>
       </div>
       {err && <div className="mono text-[10px] text-alert">{err}</div>}
     </div>

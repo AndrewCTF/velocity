@@ -3,12 +3,12 @@
 // then commit to the per-user graph. Every committed row carries the chosen
 // classification marking; the backend caps it at the caller's clearance.
 
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, useState } from "react";
 
-import { apiFetch } from '../transport/http.js';
-import { LEVELS } from '../security/classification.js';
-import { MarkingBadge } from '../security/MarkingBadge.js';
-import { InlineAlert } from '../shell/InlineAlert.js';
+import { apiFetch } from "../transport/http.js";
+import { LEVELS } from "../security/classification.js";
+import { MarkingBadge } from "../security/MarkingBadge.js";
+import { InlineAlert } from "../shell/InlineAlert.js";
 
 interface ExtractedEntity {
   id: string;
@@ -30,10 +30,10 @@ interface ExtractResponse {
 }
 
 export function ExtractPanel({ situationId }: { situationId?: string }) {
-  const [text, setText] = useState('');
-  const [title, setTitle] = useState('');
+  const [text, setText] = useState("");
+  const [title, setTitle] = useState("");
   const [level, setLevel] = useState(0);
-  const [comps, setComps] = useState('');
+  const [comps, setComps] = useState("");
   const [shared, setShared] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,16 +43,16 @@ export function ExtractPanel({ situationId }: { situationId?: string }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await apiFetch('/api/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const r = await apiFetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text,
           title,
           situation_id: situationId ?? null,
           classification: level,
           compartments: comps
-            .split(',')
+            .split(",")
             .map((c) => c.trim())
             .filter(Boolean),
           shared,
@@ -72,8 +72,18 @@ export function ExtractPanel({ situationId }: { situationId?: string }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, fontSize: 13 }}>
-      <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>Document extraction</div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        padding: 12,
+        fontSize: 13,
+      }}
+    >
+      <div style={{ fontWeight: 700, letterSpacing: 0.5 }}>
+        Document extraction
+      </div>
       <input
         placeholder="Document title (optional)"
         value={title}
@@ -85,12 +95,23 @@ export function ExtractPanel({ situationId }: { situationId?: string }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={8}
-        style={{ ...inputStyle, fontFamily: 'inherit', resize: 'vertical' }}
+        style={{ ...inputStyle, fontFamily: "inherit", resize: "vertical" }}
       />
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <label style={{ display: "flex", gap: 4, alignItems: "center" }}>
           Classify
-          <select value={level} onChange={(e) => setLevel(Number(e.target.value))} style={inputStyle}>
+          <select
+            value={level}
+            onChange={(e) => setLevel(Number(e.target.value))}
+            style={inputStyle}
+          >
             {LEVELS.map((name, i) => (
               <option key={i} value={i}>
                 {name}
@@ -104,13 +125,21 @@ export function ExtractPanel({ situationId }: { situationId?: string }) {
           onChange={(e) => setComps(e.target.value)}
           style={{ ...inputStyle, flex: 1 }}
         />
-        <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
+        <label style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <input
+            type="checkbox"
+            checked={shared}
+            onChange={(e) => setShared(e.target.checked)}
+          />
           share
         </label>
       </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button disabled={busy || !text.trim()} onClick={() => void run(false)} style={btnStyle}>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          disabled={busy || !text.trim()}
+          onClick={() => void run(false)}
+          style={btnStyle}
+        >
           Preview
         </button>
         <button
@@ -123,12 +152,18 @@ export function ExtractPanel({ situationId }: { situationId?: string }) {
       </div>
       {error && <InlineAlert tone="alert">{error}</InlineAlert>}
       {result && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <MarkingBadge level={level} compartments={comps.split(',').map((c) => c.trim()).filter(Boolean)} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <MarkingBadge
+              level={level}
+              compartments={comps
+                .split(",")
+                .map((c) => c.trim())
+                .filter(Boolean)}
+            />
             <span>
-              {result.committed ? 'Committed' : 'Preview'}: {result.entities.length} entities,{' '}
-              {result.links.length} links
+              {result.committed ? "Committed" : "Preview"}:{" "}
+              {result.entities.length} entities, {result.links.length} links
             </span>
           </div>
           <ul style={{ margin: 0, paddingLeft: 16 }}>
@@ -145,17 +180,17 @@ export function ExtractPanel({ situationId }: { situationId?: string }) {
 }
 
 const inputStyle: CSSProperties = {
-  background: 'rgba(255,255,255,0.05)',
-  border: '1px solid rgba(255,255,255,0.15)',
+  background: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.15)",
   borderRadius: 4,
-  color: 'inherit',
-  padding: '4px 6px',
+  color: "inherit",
+  padding: "4px 6px",
 };
 const btnStyle: CSSProperties = {
-  background: 'rgba(255,255,255,0.08)',
-  border: '1px solid rgba(255,255,255,0.2)',
+  background: "rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255,255,255,0.2)",
   borderRadius: 4,
-  color: 'inherit',
-  padding: '5px 10px',
-  cursor: 'pointer',
+  color: "inherit",
+  padding: "5px 10px",
+  cursor: "pointer",
 };

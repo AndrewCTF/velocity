@@ -60,7 +60,11 @@ const SQRT2 = Math.SQRT2;
  * or null if no path exists. Diagonals are NOT allowed to cut between two blocked
  * cells (no corner-clipping through walls).
  */
-export function astarGrid(grid: CostGrid, start: Cell, goal: Cell): Cell[] | null {
+export function astarGrid(
+  grid: CostGrid,
+  start: Cell,
+  goal: Cell,
+): Cell[] | null {
   const { cols, rows, enter } = grid;
   const idx = (c: number, r: number): number => r * cols + c;
   const N = cols * rows;
@@ -73,14 +77,15 @@ export function astarGrid(grid: CostGrid, start: Cell, goal: Cell): Cell[] | nul
   const h = (c: number, r: number): number => {
     const dx = Math.abs(c - gc);
     const dy = Math.abs(r - gr);
-    return (dx + dy) + (SQRT2 - 2) * Math.min(dx, dy);
+    return dx + dy + (SQRT2 - 2) * Math.min(dx, dy);
   };
 
   const open = new MinHeap();
   g[idx(sc, sr)] = 0;
   open.push(idx(sc, sr), h(sc, sr));
 
-  const blocked = (c: number, r: number): boolean => !Number.isFinite(enter(c, r));
+  const blocked = (c: number, r: number): boolean =>
+    !Number.isFinite(enter(c, r));
 
   while (open.size > 0) {
     const cur = open.pop();
@@ -111,7 +116,12 @@ export function astarGrid(grid: CostGrid, start: Cell, goal: Cell): Cell[] | nul
         if (!Number.isFinite(stepEnter)) continue;
         // No corner-cutting: a diagonal move is illegal if it squeezes between two
         // blocked orthogonal neighbours.
-        if (dc !== 0 && dr !== 0 && (blocked(cc + dc, cr) || blocked(cc, cr + dr))) continue;
+        if (
+          dc !== 0 &&
+          dr !== 0 &&
+          (blocked(cc + dc, cr) || blocked(cc, cr + dr))
+        )
+          continue;
         const step = stepEnter * (dc !== 0 && dr !== 0 ? SQRT2 : 1);
         const tentative = g[cur]! + step;
         if (tentative < g[ni]!) {

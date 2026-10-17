@@ -1,6 +1,11 @@
-import { useMemo } from 'react';
-import { useFeeds, type FeedHealth, type FeedStatus } from '../state/stores.js';
-import { SectionLabel, StatusDot, Badge, type BadgeTone } from '../shell/instruments.js';
+import { useMemo } from "react";
+import { useFeeds, type FeedHealth, type FeedStatus } from "../state/stores.js";
+import {
+  SectionLabel,
+  StatusDot,
+  Badge,
+  type BadgeTone,
+} from "../shell/instruments.js";
 
 // Feeds rail tab — grouped feed-health dashboard.
 // Reads useFeeds, groups entries by their upstream source (the layer-id prefix
@@ -17,20 +22,20 @@ const STATUS_RANK: Record<FeedStatus, number> = {
 
 // Map a feed status to the StatusDot tone + summary-badge tone vocabulary.
 const STATUS_TONE: Record<FeedStatus, BadgeTone> = {
-  green: 'ok',
-  amber: 'warn',
-  red: 'alert',
-  unknown: 'neutral',
+  green: "ok",
+  amber: "warn",
+  red: "alert",
+  unknown: "neutral",
 };
 
 function upstreamOf(id: string): string {
-  const parts = id.split('.');
+  const parts = id.split(".");
   if (parts.length >= 2) return `${parts[0]}.${parts[1]}`;
   return parts[0] ?? id;
 }
 
 function worstStatus(feeds: readonly FeedHealth[]): FeedStatus {
-  let worst: FeedStatus = 'green';
+  let worst: FeedStatus = "green";
   for (const f of feeds) {
     if (STATUS_RANK[f.status] > STATUS_RANK[worst]) worst = f.status;
   }
@@ -38,13 +43,13 @@ function worstStatus(feeds: readonly FeedHealth[]): FeedStatus {
 }
 
 function formatLastSeen(epochMs: number | undefined): string {
-  if (!epochMs) return '—';
+  if (!epochMs) return "—";
   try {
     const iso = new Date(epochMs).toISOString();
     // YYYY-MM-DDTHH:MM:SSZ — drop ms
     return `${iso.slice(0, 19)}Z`;
   } catch {
-    return '—';
+    return "—";
   }
 }
 
@@ -54,7 +59,12 @@ export function FeedsPanel(): JSX.Element {
   const { groups, total, byStatus } = useMemo(() => {
     const list = Object.values(feedsMap);
     const groups = new Map<string, FeedHealth[]>();
-    const byStatus: Record<FeedStatus, number> = { green: 0, amber: 0, red: 0, unknown: 0 };
+    const byStatus: Record<FeedStatus, number> = {
+      green: 0,
+      amber: 0,
+      red: 0,
+      unknown: 0,
+    };
     for (const f of list) {
       byStatus[f.status]++;
       const key = upstreamOf(f.id);
@@ -81,7 +91,11 @@ export function FeedsPanel(): JSX.Element {
         <StatusTally label="green" count={byStatus.green} status="green" />
         <StatusTally label="amber" count={byStatus.amber} status="amber" />
         <StatusTally label="red" count={byStatus.red} status="red" />
-        <StatusTally label="unknown" count={byStatus.unknown} status="unknown" />
+        <StatusTally
+          label="unknown"
+          count={byStatus.unknown}
+          status="unknown"
+        />
       </div>
 
       {total === 0 ? (
@@ -96,10 +110,15 @@ export function FeedsPanel(): JSX.Element {
               <section key={source}>
                 <div className="flex items-center gap-2 pb-1 border-b border-line">
                   <StatusDot tone={worst} />
-                  <span className="mono text-[11.5px] text-txt-0 truncate flex-1" title={source}>
+                  <span
+                    className="mono text-[11.5px] text-txt-0 truncate flex-1"
+                    title={source}
+                  >
                     {source}
                   </span>
-                  <span className="mono text-[10px] text-txt-3 tabular-nums">{list.length}</span>
+                  <span className="mono text-[10px] text-txt-3 tabular-nums">
+                    {list.length}
+                  </span>
                 </div>
                 <ul className="mt-0.5">
                   {list.map((f) => (
@@ -109,12 +128,19 @@ export function FeedsPanel(): JSX.Element {
                     >
                       <div className="flex items-center gap-2">
                         <StatusDot tone={f.status} />
-                        <span className="text-[11px] text-txt-1 flex-1 truncate" title={f.label}>
+                        <span
+                          className="text-[11px] text-txt-1 flex-1 truncate"
+                          title={f.label}
+                        >
                           {f.label}
                         </span>
                         <span
                           className="mono text-[10px] tabular-nums text-txt-3 shrink-0"
-                          title={f.lastSeen ? new Date(f.lastSeen).toISOString() : 'no last-seen'}
+                          title={
+                            f.lastSeen
+                              ? new Date(f.lastSeen).toISOString()
+                              : "no last-seen"
+                          }
                         >
                           {formatLastSeen(f.lastSeen)}
                         </span>

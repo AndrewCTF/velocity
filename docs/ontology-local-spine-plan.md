@@ -19,7 +19,7 @@ invoked the §5c kill criterion and the PostgREST ontology backend was deleted
   the `_GraphWalk` mixin (`test_ontology_path.py`'s matrix covers the walk
   against the real SQLite store).
 - Method surface: `upsert / get / delete / link / traverse / path_between /
-  list_by_kind / assert_props / get_assertions`.
+list_by_kind / assert_props / get_assertions`.
 - Auth: ontology/situations/maps routes use `current_user_or_local`
   (`app/keys.py`): Supabase auth entirely unconfigured → shared `local`
   identity (request already passed ApiKeyMiddleware); otherwise exactly
@@ -33,12 +33,12 @@ default executor, `override_db_path()` test hook (autouse fixture in
 `tests/conftest.py` isolates every test to a tmp file).
 
 - `objects(user_id, id, kind, props, classification, compartments, shared,
-  created_at, updated_at)` — PK `(user_id, id)`. `props` is the materialized
+created_at, updated_at)` — PK `(user_id, id)`. `props` is the materialized
   latest blob: **wholesale-replaced on upsert (removals included)** — the
   frontend round-trip contract (InvestigationCanvas, situations, maps, COP,
   annotations). Never make upsert merge.
 - `assertions(id, user_id, object_id, prop, value, source, confidence,
-  observed_at, valid_until, derivation)` — append-only, written by `upsert`'s
+observed_at, valid_until, derivation)` — append-only, written by `upsert`'s
   diff and by `assert_props` (merge-style, never removes). Removal tombstone:
   `value=null` + `derivation={"op":"remove"}`. Dedup on (value, source);
   a different source restating a value is corroboration, kept.

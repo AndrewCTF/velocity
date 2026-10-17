@@ -1,6 +1,6 @@
 # Velocity visual reskin — design plan
 
-Goal: take the reskin from *additive dark-theme* to a coherent, unmistakable
+Goal: take the reskin from _additive dark-theme_ to a coherent, unmistakable
 visual identity for a live intelligence COP. Grounds: the real Palantir-Gotham
 grammar I analyzed (classification-first, instrument density, map-as-canvas /
 chrome-floats, MIL-STD symbology, semantic-only color) + Velocity's existing
@@ -12,7 +12,7 @@ token + instrument system. Written against the actual files.
 instrument glass over that feed — not a dashboard that happens to contain a
 map.** The globe is the hero and the canvas; every piece of chrome is a precise,
 quiet instrument module docked to a sensor frame. The product's whole reason to
-exist — *fused, classified, trustworthy observation* — becomes the visual
+exist — _fused, classified, trustworthy observation_ — becomes the visual
 identity, not a coat of paint.
 
 The current build inverts this: the chrome is a generic dark dashboard and the
@@ -28,7 +28,7 @@ disciplined and quiet around it.
 - **Classification frame** — a hairline top + bottom strip spanning the full
   width carrying the live handling caveat (`UNCLAS // OSINT // NOFORN-N/A`), the
   data-posture (keyless vs commercial), and the session/build id. Real
-  classified systems are *banner-framed*; for an OSINT tool the honest banner is
+  classified systems are _banner-framed_; for an OSINT tool the honest banner is
   `UNCLAS // OPEN-SOURCE`. This is the domain's actual visual grammar, not decoration.
 - **Corner reticle ticks** at the four viewport corners (scope/viewfinder marks).
 - **Edge instrument readouts** — current camera center (lat/lon), bearing, scale,
@@ -40,44 +40,47 @@ disciplined and quiet around it.
   `prefers-reduced-motion`. Says "live feed," not "animated app."
 
 Why this and not a trendy accent: the boldness goes into a structural device
-that is *true to the subject* (a fused-sensor COP is literally framed glass),
+that is _true to the subject_ (a fused-sensor COP is literally framed glass),
 which no generic dark dashboard has — instead of spending it on a color the way
 every AI design does.
 
 ## 3. Token system
 
 ### Color — substrate colder, semantics kept, color = meaning only
+
 Velocity's semantic palette is already correct and partly guardrailed; we tighten
 the substrate temperature and stop using color decoratively.
 
-| Token | Hex | Role |
-|---|---|---|
-| `ink-0` | `#090C12` | substrate (colder, deeper than today's `#080a0f`) |
-| `ink-1` | `#10151D` | rail / frame base |
-| `ink-2` | `#18202B` | raised panel / card |
-| `ink-3` | `#222C3A` | input / hover |
-| `line` | `rgba(138,166,200,0.10)` | hairline divider |
-| `line-2` | `rgba(138,166,200,0.18)` | structural divider |
-| `txt-0..3` | `#EAF0F7 · #B7C2D0 · #7E8B9C · #515D6E` | text ramp (cool greys) |
-| `signal` | `#4FA0D8` | interactive / active / focus (steel-blue, institutional — NOT a trendy acid accent) |
-| `threat` `warn` `nominal` `select` | `#FF5A52 · #F5A524 · #36D399 · #E25BEF` | **kept** — semantic only; `select` matches the globe polyline |
+| Token                              | Hex                                     | Role                                                                                |
+| ---------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------- |
+| `ink-0`                            | `#090C12`                               | substrate (colder, deeper than today's `#080a0f`)                                   |
+| `ink-1`                            | `#10151D`                               | rail / frame base                                                                   |
+| `ink-2`                            | `#18202B`                               | raised panel / card                                                                 |
+| `ink-3`                            | `#222C3A`                               | input / hover                                                                       |
+| `line`                             | `rgba(138,166,200,0.10)`                | hairline divider                                                                    |
+| `line-2`                           | `rgba(138,166,200,0.18)`                | structural divider                                                                  |
+| `txt-0..3`                         | `#EAF0F7 · #B7C2D0 · #7E8B9C · #515D6E` | text ramp (cool greys)                                                              |
+| `signal`                           | `#4FA0D8`                               | interactive / active / focus (steel-blue, institutional — NOT a trendy acid accent) |
+| `threat` `warn` `nominal` `select` | `#FF5A52 · #F5A524 · #36D399 · #E25BEF` | **kept** — semantic only; `select` matches the globe polyline                       |
 
 Rule encoded in the system: **color appears only to mean threat / warn /
 nominal / selection / interactive.** Everything structural is ink + hairline +
 type. (Audit + delete every decorative color use.)
 
 ### Type — drop Inter; condensed instrument labels are the typographic signature
-| Role | Face | Use |
-|---|---|---|
-| **Structural / labels / caveats** | **Saira Condensed** (new) | section eyebrows, classification, instrument labels — uppercase, tracked `+0.6–1.2`. The MIL-spec "labeled panel" voice. |
-| **Human body** | **IBM Plex Sans** (replaces Inter) | descriptions, news, prose — pairs natively with Plex Mono, institutional, kills the every-dashboard-is-Inter tell. |
-| **Machine data** | **IBM Plex Mono** (kept) | IDs, coords, counts, timestamps, tables — already loaded. |
+
+| Role                              | Face                               | Use                                                                                                                      |
+| --------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Structural / labels / caveats** | **Saira Condensed** (new)          | section eyebrows, classification, instrument labels — uppercase, tracked `+0.6–1.2`. The MIL-spec "labeled panel" voice. |
+| **Human body**                    | **IBM Plex Sans** (replaces Inter) | descriptions, news, prose — pairs natively with Plex Mono, institutional, kills the every-dashboard-is-Inter tell.       |
+| **Machine data**                  | **IBM Plex Mono** (kept)           | IDs, coords, counts, timestamps, tables — already loaded.                                                                |
 
 Scale (instrument-dense): `9 / 10 / 11 / 13 / 18px`. Tight leading. Tabular-nums
 on all data. Condensed caps for every label; mono for every number; sans only
 where a human reads sentences.
 
 ### Space, radius, motion
+
 - **Density grid**: 4px base; panel padding `8/10px`, row rhythm `6px`. Tighter
   than today — instruments are packed.
 - **Radius**: `2px` everywhere (down from 3–8). Hard-cornered = instrument-grade.
@@ -87,14 +90,14 @@ where a human reads sentences.
 ## 4. Critique vs the AI defaults (required self-check)
 
 - **Near-black + single acid accent** (default): avoided — substrate is cold ink
-  but the accent stays a *disciplined institutional blue* and the semantic palette
+  but the accent stays a _disciplined institutional blue_ and the semantic palette
   is unchanged; boldness is the sensor frame, not a neon color.
 - **Broadsheet hairlines** (default): hairlines exist because instruments use
   them, but the layout is floating-glass-over-live-map, not newspaper columns.
 - **Warm cream + serif** (default): opposite of the brief.
 
 The signature (sensor-frame + condensed MIL labels + map-as-hero/chrome-defers)
-is specific to *live classified observation* and wouldn't appear on a generic
+is specific to _live classified observation_ and wouldn't appear on a generic
 build. Passes.
 
 ## 5. Information architecture — the structural fix (not a band-aid)
@@ -155,28 +158,29 @@ the frame primitives. One language, applied everywhere.
 ## 7. What stays untouched (guardrails)
 
 Hard-locked by CLAUDE.md — the reskin does **not** touch them:
+
 - `styles.ts` aircraft/vessel category SVGs + their colors (airliner `#facc15`
   etc) — data symbology is sacred.
 - `labelStyle.ts` label font/colors.
-- Selection polyline `#d946ef` (the reticle bracket is *added* chrome around it).
+- Selection polyline `#d946ef` (the reticle bracket is _added_ chrome around it).
 - Aircraft teleport / no-motion-synthesis, `requestRenderMode`, the hot-blob path.
 
 The reskin is **chrome only** — frame, panels, type, tokens. Never the data layer.
 
 ## 8. Phasing
 
-| Phase | Scope | Risk | Ship value |
-|---|---|---|---|
-| **V1 — visual language** | tokens.css + tailwind (palette/space/radius), fonts (Saira + Plex Sans), restyle `instruments.tsx` primitives, the caveat **frame** + OSD readouts + corner reticle | low (chrome only, guardrail-bounded) | immediate "this is a different product" — applied to every existing panel at once |
-| **V2 — IA restructure** | right rail → 4 context tabs; Tasking/Targeting/FMV → command-bar modes; **Targeting → full-width dock**; FMV → framed center window | medium (layout, panel mounts) | fixes the cramped Kanban + 7-tab overflow at the root |
-| **V3 — motion + selection** | reticle-lock on select, frame sweep, panel power-on | low | the "live sensor" feel that sells it |
+| Phase                       | Scope                                                                                                                                                               | Risk                                 | Ship value                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
+| **V1 — visual language**    | tokens.css + tailwind (palette/space/radius), fonts (Saira + Plex Sans), restyle `instruments.tsx` primitives, the caveat **frame** + OSD readouts + corner reticle | low (chrome only, guardrail-bounded) | immediate "this is a different product" — applied to every existing panel at once |
+| **V2 — IA restructure**     | right rail → 4 context tabs; Tasking/Targeting/FMV → command-bar modes; **Targeting → full-width dock**; FMV → framed center window                                 | medium (layout, panel mounts)        | fixes the cramped Kanban + 7-tab overflow at the root                             |
+| **V3 — motion + selection** | reticle-lock on select, frame sweep, panel power-on                                                                                                                 | low                                  | the "live sensor" feel that sells it                                              |
 
 Recommend V1 first (biggest perceived change for least risk; everything inherits
 it), then V2 (the structural payoff), then V3 (polish).
 
 ## 9. The one risk + fallback
 
-**Risk:** the persistent classification *frame* (top/bottom banners + edge OSD +
+**Risk:** the persistent classification _frame_ (top/bottom banners + edge OSD +
 corner reticle) eats ~24–32px of vertical room and could feel like cosplay if
 over-styled. **Mitigation:** hairline-thin, mono-small, information-bearing
 (real caveat + real coordinates, not flavor text); collapsible to a single 16px

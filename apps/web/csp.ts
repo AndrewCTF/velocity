@@ -17,23 +17,23 @@
 // (globe/GlobeCanvas.tsx THIRD_PARTY_BASEMAPS). Cesium fetches imagery as
 // blobs, so these are connect-src as well as img-src.
 const BASEMAP_HOSTS = [
-  'https://server.arcgisonline.com',
-  'https://a.tile.opentopomap.org',
-  'https://basemap.nationalmap.gov',
-  'https://tiles.maps.eox.at',
+  "https://server.arcgisonline.com",
+  "https://a.tile.opentopomap.org",
+  "https://basemap.nationalmap.gov",
+  "https://tiles.maps.eox.at",
 ];
 
 // Optional keyed imagery: GlobeCanvas.tsx sets Cesium.Ion.defaultAccessToken and
 // createGooglePhotorealistic3DTileset() when the operator supplies those keys.
 // Keyless boxes never contact them; a keyed box must not be broken by the CSP.
 const KEYED_IMAGERY = [
-  'https://api.cesium.com',
-  'https://assets.ion.cesium.com',
-  'https://tile.googleapis.com',
+  "https://api.cesium.com",
+  "https://assets.ion.cesium.com",
+  "https://tile.googleapis.com",
 ];
 
 // Traffic simulator road graph (sim/TrafficController.ts).
-const OVERPASS = 'https://overpass-api.de';
+const OVERPASS = "https://overpass-api.de";
 
 export interface CspOptions {
   /** VELOCITY_DESKTOP=1: the Tauri shell, which talks to 127.0.0.1:8000. */
@@ -54,15 +54,27 @@ function origin(url: string | undefined): string | null {
 }
 
 export function buildCsp(opts: CspOptions = {}): string {
-  const connect = ["'self'", 'data:', 'blob:', ...BASEMAP_HOSTS, ...KEYED_IMAGERY, OVERPASS];
+  const connect = [
+    "'self'",
+    "data:",
+    "blob:",
+    ...BASEMAP_HOSTS,
+    ...KEYED_IMAGERY,
+    OVERPASS,
+  ];
   const api = origin(opts.apiUrl);
-  if (api) connect.push(api, api.replace(/^http/, 'ws'));
+  if (api) connect.push(api, api.replace(/^http/, "ws"));
   const supabase = origin(opts.supabaseUrl);
   if (supabase) connect.push(supabase);
   if (opts.desktop) {
     // transport/http.ts pins the desktop backend to IPv4 loopback; ipc: is
     // Tauri's own bridge.
-    connect.push('http://127.0.0.1:8000', 'ws://127.0.0.1:8000', 'ipc:', 'http://ipc.localhost');
+    connect.push(
+      "http://127.0.0.1:8000",
+      "ws://127.0.0.1:8000",
+      "ipc:",
+      "http://ipc.localhost",
+    );
   }
 
   return [
@@ -81,7 +93,7 @@ export function buildCsp(opts: CspOptions = {}): string {
     // which is connect-src, so a third-party camera hls_url is refused there
     // until it is proxied through the backend like /api/cams/{id}/snapshot.
     "media-src 'self' blob: https:",
-    `connect-src ${connect.join(' ')}`,
+    `connect-src ${connect.join(" ")}`,
     // MapLibre, hls.js, cesium-martini and Spark all start blob: workers.
     "worker-src 'self' blob:",
     "font-src 'self' data:",
@@ -90,5 +102,5 @@ export function buildCsp(opts: CspOptions = {}): string {
     // every relative script and API path (ASVS V3.4.3).
     "base-uri 'none'",
     "form-action 'self'",
-  ].join('; ');
+  ].join("; ");
 }

@@ -8,7 +8,7 @@
 
 /* The right rail aside becomes the query container (named so unrelated nested
    containers can't accidentally match). ConsoleShell tags it `data-rail="right"`. */
-[data-rail='right'] {
+[data-rail="right"] {
   container-type: inline-size;
   container-name: inspector;
 }

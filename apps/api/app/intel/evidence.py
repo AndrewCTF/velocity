@@ -43,12 +43,15 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 from app.config import Settings, get_settings
 from app.intel.ontology import Object, get_registry
 from app.keys import UserCtx
+
+if TYPE_CHECKING:
+    from app.security import Principal
 from app.netguard import is_non_public_ip
 from app.upstream import get_client
 
@@ -779,19 +782,39 @@ async def capture_replay_window(
 
 
 async def list_evidence(
-    ctx: UserCtx, *, limit: int = 200, settings: Settings | None = None
+    ctx: UserCtx,
+    *,
+    limit: int = 200,
+    settings: Settings | None = None,
+    principal: Principal | None = None,
 ) -> list[Object]:
+    """The capture-kind objects, newest first, capped at ``limit``.
+
+    ``principal`` rides into ``get_registry``, so the LIMIT is spent on rows the
+    caller may read (the clearance clause is in the WHERE) — filtering the
+    page in Python AFTER ``limit`` would let a handful of over-clearance exhibits
+    eat the whole page and make the locker look empty. ``None`` is the
+    unfiltered internal path (the capture side, which also calls into here).
+    """
     settings = settings or get_settings()
-    reg = get_registry(ctx, settings)
+    reg = get_registry(ctx, settings, principal=principal)
     return await reg.list_by_kind(EVIDENCE_KIND, limit=limit)
 
 
 async def get_evidence(
-    ctx: UserCtx, sha256: str, *, settings: Settings | None = None
+    ctx: UserCtx,
+    sha256: str,
+    *,
+    settings: Settings | None = None,
+    principal: Principal | None = None,
 ) -> tuple[Object | None, list[dict[str, Any]]]:
-    """Return (object, custody-chain) for an evidence hash (chain newest-first)."""
+    """Return (object, custody-chain) for an evidence hash (chain newest-first).
+
+    Out of clearance reads exactly like absent (``get`` returns None), so a sha
+    cannot be probed; ``principal=None`` stays the unfiltered internal path.
+    """
     settings = settings or get_settings()
-    reg = get_registry(ctx, settings)
+    reg = get_registry(ctx, settings, principal=principal)
     obj = await reg.get(evidence_id(sha256))
     if obj is None:
         return None, []
@@ -810,15 +833,21 @@ async def attach_to_situation(
     rel: str = "evidence",
     note: str | None = None,
     settings: Settings | None = None,
+    principal: Principal | None = None,
 ) -> None:
     """Link ``situation --evidence--> evidence:<sha>`` and log the custody event.
 
     Consistent with routes/situations.py::link_child (situation owns outgoing
     edges to its children); traverse(depth=1) then surfaces the evidence in the
     situation's neighbourhood and the case export walks it.
+
+    ``principal`` rides into the registry so a caller cannot hang an edge, or a
+    custody event, off a situation (or for an exhibit) above their clearance: a
+    hidden situation reads as absent and raises ``EvidenceError``, which the
+    explicit attach route answers with a 404.
     """
     settings = settings or get_settings()
-    reg = get_registry(ctx, settings)
+    reg = get_registry(ctx, settings, principal=principal)
     obj_id = evidence_id(sha256)
     from app.intel.ontology import Link
 
@@ -858,15 +887,22 @@ async def custody_manifest(
     evidence_ids: list[str],
     *,
     settings: Settings | None = None,
+    principal: Principal | None = None,
 ) -> dict[str, Any]:
     """Per-case hash-of-hashes manifest with explicit Berkeley-Protocol fields.
 
     ``evidence_ids`` may be bare hashes or full ``evidence:<sha>`` ids. The
     ``manifest_sha256`` is the SHA-256 of the sorted member hashes joined by
     newline — a single value that verifies the whole set has not changed.
+
+    A member the caller cannot read is dropped exactly like a member that does
+    not exist (``reg.get`` returns None and the loop ``continue``s), so the
+    manifest cannot be used to enumerate hidden hashes — the count alone never
+    tells the caller whether a hidden exhibit is out there. ``principal=None``
+    stays the unfiltered internal path.
     """
     settings = settings or get_settings()
-    reg = get_registry(ctx, settings)
+    reg = get_registry(ctx, settings, principal=principal)
     items: list[dict[str, Any]] = []
     for raw in evidence_ids:
         sha = raw.split(":", 1)[1] if raw.startswith(f"{EVIDENCE_KIND}:") else raw

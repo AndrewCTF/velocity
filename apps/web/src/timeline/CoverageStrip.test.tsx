@@ -4,15 +4,15 @@
 // backend is live (routes/history.py); these tests exercise the frontend
 // against its response shape (docs/replay-flagship-plan.md §2).
 
-import { act, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CoverageStrip, type Coverage } from './CoverageStrip.js';
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CoverageStrip, type Coverage } from "./CoverageStrip.js";
 
-vi.mock('../transport/http.js', () => ({
+vi.mock("../transport/http.js", () => ({
   apiFetch: vi.fn(),
 }));
 
-import { apiFetch } from '../transport/http.js';
+import { apiFetch } from "../transport/http.js";
 
 const mockedFetch = vi.mocked(apiFetch);
 
@@ -20,7 +20,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    statusText: status === 200 ? 'OK' : 'Error',
+    statusText: status === 200 ? "OK" : "Error",
     json: async () => body,
     text: async () => JSON.stringify(body),
   } as unknown as Response;
@@ -37,12 +37,12 @@ const COVERAGE: Coverage = {
   ],
 };
 
-describe('CoverageStrip', () => {
+describe("CoverageStrip", () => {
   beforeEach(() => {
     mockedFetch.mockReset();
   });
 
-  it('fetches /api/history/coverage with a window/bucket query and renders every bucket, gaps included', async () => {
+  it("fetches /api/history/coverage with a window/bucket query and renders every bucket, gaps included", async () => {
     mockedFetch.mockResolvedValue(jsonResponse(COVERAGE));
     render(<CoverageStrip windowHours={168} />);
 
@@ -50,9 +50,11 @@ describe('CoverageStrip', () => {
       expect(mockedFetch).toHaveBeenCalled();
     });
     const [url] = mockedFetch.mock.calls[0] as [string];
-    expect(url).toMatch(/^\/api\/history\/coverage\?window_hours=168&bucket_hours=\d+$/);
+    expect(url).toMatch(
+      /^\/api\/history\/coverage\?window_hours=168&bucket_hours=\d+$/,
+    );
 
-    const strip = await screen.findByRole('img', { name: /history coverage/i });
+    const strip = await screen.findByRole("img", { name: /history coverage/i });
     // Every bucket is drawn, INCLUDING the zero-count one. Previously a gap
     // rendered nothing at all, which is visually identical to the strip's own
     // background, so an hour we were down looked the same as an hour with no
@@ -60,16 +62,20 @@ describe('CoverageStrip', () => {
     // recorded", which is the same class of lie as a stale contact looking
     // live. Three buckets in the fixture, so three rects.
     await waitFor(() => {
-      expect(strip.querySelectorAll('rect').length).toBe(3);
+      expect(strip.querySelectorAll("rect").length).toBe(3);
     });
     // The gap is drawn in the alert colour, distinguishably from a real bar.
-    const rects = [...strip.querySelectorAll('rect')];
-    expect(rects.filter((r) => r.getAttribute('fill') === 'var(--alert)')).toHaveLength(1);
+    const rects = [...strip.querySelectorAll("rect")];
+    expect(
+      rects.filter((r) => r.getAttribute("fill") === "var(--alert)"),
+    ).toHaveLength(1);
     // And the strip says in words that the gap is unknown, not quiet.
-    expect(strip.getAttribute('aria-label')).toMatch(/unknown rather than quiet/i);
+    expect(strip.getAttribute("aria-label")).toMatch(
+      /unknown rather than quiet/i,
+    );
   });
 
-  it('lifts the coverage totals up via onCoverage', async () => {
+  it("lifts the coverage totals up via onCoverage", async () => {
     mockedFetch.mockResolvedValue(jsonResponse(COVERAGE));
     const onCoverage = vi.fn();
     render(<CoverageStrip windowHours={168} onCoverage={onCoverage} />);
@@ -79,7 +85,7 @@ describe('CoverageStrip', () => {
     });
   });
 
-  it('clamps window_hours to the route ceiling for an uncapped archive-mode retention', async () => {
+  it("clamps window_hours to the route ceiling for an uncapped archive-mode retention", async () => {
     mockedFetch.mockResolvedValue(jsonResponse(COVERAGE));
     render(<CoverageStrip windowHours={50_000} />);
 
@@ -87,15 +93,15 @@ describe('CoverageStrip', () => {
       expect(mockedFetch).toHaveBeenCalled();
     });
     const [url] = mockedFetch.mock.calls[0] as [string];
-    expect(url).toContain('window_hours=8760');
+    expect(url).toContain("window_hours=8760");
   });
 
-  it('renders an empty strip and does not throw when the endpoint fails', async () => {
-    mockedFetch.mockRejectedValue(new Error('network down'));
+  it("renders an empty strip and does not throw when the endpoint fails", async () => {
+    mockedFetch.mockRejectedValue(new Error("network down"));
     render(<CoverageStrip windowHours={168} />);
 
-    const strip = await screen.findByRole('img', { name: /history coverage/i });
-    expect(strip.querySelectorAll('rect').length).toBe(0);
+    const strip = await screen.findByRole("img", { name: /history coverage/i });
+    expect(strip.querySelectorAll("rect").length).toBe(0);
   });
 
   // Regression: the poll used to abort the in-flight request at the top of
@@ -103,7 +109,7 @@ describe('CoverageStrip', () => {
   // POLL_MS (measured 73 s over 78 M fixes), so every tick killed the previous
   // one and the strip never resolved — the chip sat on its fallback forever.
   // A slow query must be allowed to finish.
-  it('lets a query slower than the poll interval finish instead of aborting it every tick', async () => {
+  it("lets a query slower than the poll interval finish instead of aborting it every tick", async () => {
     vi.useFakeTimers();
     try {
       let resolveFetch: ((r: Response) => void) | undefined;
@@ -120,7 +126,10 @@ describe('CoverageStrip', () => {
 
       // No second request was issued, and nothing aborted the first.
       expect(mockedFetch).toHaveBeenCalledTimes(1);
-      const [, init] = mockedFetch.mock.calls[0] as [string, { signal: AbortSignal }];
+      const [, init] = mockedFetch.mock.calls[0] as [
+        string,
+        { signal: AbortSignal },
+      ];
       expect(init.signal.aborted).toBe(false);
 
       // The slow response finally lands and is rendered.
@@ -128,9 +137,9 @@ describe('CoverageStrip', () => {
         resolveFetch?.(jsonResponse(COVERAGE));
         await vi.advanceTimersByTimeAsync(0);
       });
-      const strip = screen.getByRole('img', { name: /history coverage/i });
+      const strip = screen.getByRole("img", { name: /history coverage/i });
       // Three buckets in the fixture, gaps drawn too (see the render test above).
-      expect(strip.querySelectorAll('rect').length).toBe(3);
+      expect(strip.querySelectorAll("rect").length).toBe(3);
     } finally {
       vi.useRealTimers();
     }

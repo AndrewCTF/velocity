@@ -2,7 +2,7 @@
 // GET /api/imagery/detect for an AOI. Client-only, in-memory (unlike captures,
 // these are a transient analysis result, not a persistent observation). Rendered
 // on the globe by globe/DetectLayer.ts as a static, upsert-by-id point layer.
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface Detection {
   id: string; // `detect:<layer>:<date>:<i>`
@@ -26,11 +26,11 @@ interface DetectState {
 
 export const useDetections = create<DetectState>((set) => ({
   detections: [],
-  note: '',
+  note: "",
   pending: false,
-  set: (dets, note = '') => set({ detections: dets, note, pending: false }),
+  set: (dets, note = "") => set({ detections: dets, note, pending: false }),
   setPending: (v) => set({ pending: v }),
-  clear: () => set({ detections: [], note: '', pending: false }),
+  clear: () => set({ detections: [], note: "", pending: false }),
 }));
 
 // Feature shape returned by /api/imagery/detect.
@@ -46,9 +46,9 @@ export function featuresToDetections(features: DetectFeature[]): Detection[] {
     id: f.id,
     lon: f.geometry.coordinates[0],
     lat: f.geometry.coordinates[1],
-    cls: f.properties.cls ?? 'object',
+    cls: f.properties.cls ?? "object",
     conf: f.properties.conf ?? 0,
-    source: f.properties.source ?? 'yolo',
-    date: f.properties.date ?? '',
+    source: f.properties.source ?? "yolo",
+    date: f.properties.date ?? "",
   }));
 }

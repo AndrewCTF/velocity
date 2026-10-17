@@ -27,7 +27,7 @@
 // >= 8000 aircraft is exactly the case the low-end 2D suggestion targets. The
 // separately-sanctioned mobile 2000 cap still applies on top of any preset.
 
-export type MapQuality = 'high' | 'balanced' | 'performance';
+export type MapQuality = "high" | "balanced" | "performance";
 
 export interface QualityKnobs {
   /** Max device-pixel multiplier (resolutionScale cap). */
@@ -76,13 +76,16 @@ const PRESETS: Record<MapQuality, QualityKnobs> = {
 
 /** Concrete knob values for a preset. Unknown/legacy values fall back to 'high'. */
 export function presetKnobs(q: MapQuality | undefined | null): QualityKnobs {
-  return PRESETS[(q ?? 'high') as MapQuality] ?? PRESETS.high;
+  return PRESETS[(q ?? "high") as MapQuality] ?? PRESETS.high;
 }
 
-export const MAP_QUALITIES: MapQuality[] = ['high', 'balanced', 'performance'];
+export const MAP_QUALITIES: MapQuality[] = ["high", "balanced", "performance"];
 
-export const QUALITY_LABELS: Record<MapQuality, { label: string; hint: string }> = {
-  high: { label: 'High', hint: 'Sharpest: native pixels, full detail' },
-  balanced: { label: 'Balanced', hint: 'Smoother: trims resolution & tiles' },
-  performance: { label: 'Performance', hint: 'Fastest, for low-end GPUs' },
+export const QUALITY_LABELS: Record<
+  MapQuality,
+  { label: string; hint: string }
+> = {
+  high: { label: "High", hint: "Sharpest: native pixels, full detail" },
+  balanced: { label: "Balanced", hint: "Smoother: trims resolution & tiles" },
+  performance: { label: "Performance", hint: "Fastest, for low-end GPUs" },
 };

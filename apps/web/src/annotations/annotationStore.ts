@@ -12,30 +12,30 @@
 // the DEFAULT colour, `style` overrides it. Every previously stored annotation
 // still parses.
 
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { apiFetch } from '../transport/http.js';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { apiFetch } from "../transport/http.js";
 
 export type AnnoKind =
-  | 'point'
-  | 'line'
-  | 'circle'
-  | 'polygon'
-  | 'rect'
-  | 'arrow'
-  | 'corridor'
-  | 'sector'
-  | 'text'
-  | 'symbol'
-  | 'freehand';
+  | "point"
+  | "line"
+  | "circle"
+  | "polygon"
+  | "rect"
+  | "arrow"
+  | "corridor"
+  | "sector"
+  | "text"
+  | "symbol"
+  | "freehand";
 
-export type Threat = 'hostile' | 'friendly' | 'neutral' | 'unknown';
+export type Threat = "hostile" | "friendly" | "neutral" | "unknown";
 
 export const THREAT_COLOR: Record<Threat, string> = {
-  hostile: '#ef4444',
-  friendly: '#38bdf8',
-  neutral: '#4ade80',
-  unknown: '#facc15',
+  hostile: "#ef4444",
+  friendly: "#38bdf8",
+  neutral: "#4ade80",
+  unknown: "#facc15",
 };
 
 export interface AnnoStyle {
@@ -44,7 +44,7 @@ export interface AnnoStyle {
   width: number;
   opacity: number;
   fillOpacity: number;
-  dash: 'solid' | 'dash' | 'dot';
+  dash: "solid" | "dash" | "dot";
   fontSize: number;
   pointSize: number;
   outline: boolean;
@@ -54,7 +54,7 @@ export const DEFAULT_STYLE: AnnoStyle = {
   width: 3,
   opacity: 0.9,
   fillOpacity: 0.12,
-  dash: 'solid',
+  dash: "solid",
   fontSize: 11,
   pointSize: 11,
   outline: true,
@@ -121,10 +121,14 @@ const memoryStore: Storage = (() => {
 const safeLocalStorage: Storage = (() => {
   try {
     const ls = globalThis.localStorage as Storage | undefined;
-    if (ls && typeof ls.setItem === 'function' && typeof ls.getItem === 'function') {
+    if (
+      ls &&
+      typeof ls.setItem === "function" &&
+      typeof ls.getItem === "function"
+    ) {
       // Prove it actually works before trusting it (private mode throws on write).
-      ls.setItem('osint.probe', '1');
-      ls.removeItem('osint.probe');
+      ls.setItem("osint.probe", "1");
+      ls.removeItem("osint.probe");
       return ls;
     }
   } catch {
@@ -134,7 +138,8 @@ const safeLocalStorage: Storage = (() => {
 })();
 
 let _seq = 0;
-const uid = (): string => `an-${Date.now().toString(36)}-${(_seq++).toString(36)}`;
+const uid = (): string =>
+  `an-${Date.now().toString(36)}-${(_seq++).toString(36)}`;
 
 const HISTORY_CAP = 50;
 
@@ -142,8 +147,8 @@ interface AnnoState {
   annotations: Annotation[];
   past: Annotation[][];
   future: Annotation[][];
-  add: (a: Omit<Annotation, 'id'>) => string;
-  update: (id: string, patch: Partial<Omit<Annotation, 'id'>>) => void;
+  add: (a: Omit<Annotation, "id">) => string;
+  update: (id: string, patch: Partial<Omit<Annotation, "id">>) => void;
   remove: (id: string) => void;
   clear: () => void;
   replaceAll: (a: Annotation[]) => void;
@@ -157,7 +162,7 @@ interface AnnoState {
 function withHistory(
   s: AnnoState,
   next: Annotation[],
-): Pick<AnnoState, 'annotations' | 'past' | 'future'> {
+): Pick<AnnoState, "annotations" | "past" | "future"> {
   const past = [...s.past, s.annotations].slice(-HISTORY_CAP);
   return { annotations: next, past, future: [] };
 }
@@ -172,7 +177,10 @@ export const useAnnotations = create<AnnoState>()(
         const id = uid();
         const now = Date.now();
         set((s) =>
-          withHistory(s, [...s.annotations, { createdAt: now, updatedAt: now, ...a, id }]),
+          withHistory(s, [
+            ...s.annotations,
+            { createdAt: now, updatedAt: now, ...a, id },
+          ]),
         );
         return id;
       },
@@ -181,12 +189,19 @@ export const useAnnotations = create<AnnoState>()(
           withHistory(
             s,
             s.annotations.map((a) =>
-              a.id === id && !a.locked ? { ...a, ...patch, updatedAt: Date.now() } : a,
+              a.id === id && !a.locked
+                ? { ...a, ...patch, updatedAt: Date.now() }
+                : a,
             ),
           ),
         ),
       remove: (id) =>
-        set((s) => withHistory(s, s.annotations.filter((a) => a.id !== id))),
+        set((s) =>
+          withHistory(
+            s,
+            s.annotations.filter((a) => a.id !== id),
+          ),
+        ),
       clear: () => set((s) => withHistory(s, [])),
       replaceAll: (a) => set((s) => withHistory(s, a)),
       undo: () =>
@@ -213,26 +228,33 @@ export const useAnnotations = create<AnnoState>()(
       canRedo: () => get().future.length > 0,
     }),
     {
-      name: 'osint.annotations',
+      name: "osint.annotations",
       storage: createJSONStorage(() => safeLocalStorage),
       // History is a session concern; only the drawings survive a reload.
-      partialize: (s) => ({ annotations: s.annotations }) as unknown as AnnoState,
+      partialize: (s) =>
+        ({ annotations: s.annotations }) as unknown as AnnoState,
       version: 1,
     },
   ),
 );
 
-const OBJ_ID = 'annotations:workspace';
+const OBJ_ID = "annotations:workspace";
 
-export async function saveAnnotations(): Promise<{ ok: boolean; status: number }> {
+export async function saveAnnotations(): Promise<{
+  ok: boolean;
+  status: number;
+}> {
   const body = {
     id: OBJ_ID,
-    props: { annotations: useAnnotations.getState().annotations, saved_at: new Date().toISOString() },
+    props: {
+      annotations: useAnnotations.getState().annotations,
+      saved_at: new Date().toISOString(),
+    },
   };
   try {
-    const r = await apiFetch('/api/ontology/object', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+    const r = await apiFetch("/api/ontology/object", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
     return { ok: r.ok, status: r.status };
@@ -251,7 +273,9 @@ export async function saveAnnotations(): Promise<{ ok: boolean; status: number }
  */
 export async function loadAnnotations(): Promise<boolean> {
   try {
-    const r = await apiFetch(`/api/ontology/object/${encodeURIComponent(OBJ_ID)}`);
+    const r = await apiFetch(
+      `/api/ontology/object/${encodeURIComponent(OBJ_ID)}`,
+    );
     if (!r.ok) return false;
     const o = (await r.json()) as { props?: { annotations?: Annotation[] } };
     const remote = o.props?.annotations;
@@ -260,7 +284,8 @@ export async function loadAnnotations(): Promise<boolean> {
     for (const a of useAnnotations.getState().annotations) byId.set(a.id, a);
     for (const a of remote) {
       const local = byId.get(a.id);
-      if (!local || (a.updatedAt ?? 0) >= (local.updatedAt ?? 0)) byId.set(a.id, a);
+      if (!local || (a.updatedAt ?? 0) >= (local.updatedAt ?? 0))
+        byId.set(a.id, a);
     }
     useAnnotations.getState().replaceAll([...byId.values()]);
     return true;
@@ -275,17 +300,24 @@ export async function loadAnnotations(): Promise<boolean> {
 export function annotationsToGeoJSON(): string {
   const feats = useAnnotations.getState().annotations.map((a) => {
     let geometry: Record<string, unknown> | null = null;
-    if (a.coords && a.coords.length >= 3 && ['polygon', 'rect', 'corridor'].includes(a.kind)) {
-      geometry = { type: 'Polygon', coordinates: [[...a.coords, a.coords[0]!]] };
+    if (
+      a.coords &&
+      a.coords.length >= 3 &&
+      ["polygon", "rect", "corridor"].includes(a.kind)
+    ) {
+      geometry = {
+        type: "Polygon",
+        coordinates: [[...a.coords, a.coords[0]!]],
+      };
     } else if (a.coords && a.coords.length >= 2) {
-      geometry = { type: 'LineString', coordinates: a.coords };
+      geometry = { type: "LineString", coordinates: a.coords };
     } else if (a.coords?.[0]) {
-      geometry = { type: 'Point', coordinates: a.coords[0] };
+      geometry = { type: "Point", coordinates: a.coords[0] };
     } else if (a.center) {
-      geometry = { type: 'Point', coordinates: [a.center.lon, a.center.lat] };
+      geometry = { type: "Point", coordinates: [a.center.lon, a.center.lat] };
     }
     return {
-      type: 'Feature',
+      type: "Feature",
       id: a.id,
       geometry,
       properties: {
@@ -305,7 +337,11 @@ export function annotationsToGeoJSON(): string {
       },
     };
   });
-  return JSON.stringify({ type: 'FeatureCollection', features: feats }, null, 2);
+  return JSON.stringify(
+    { type: "FeatureCollection", features: feats },
+    null,
+    2,
+  );
 }
 
 /** Read back an export (or any GeoJSON) as annotations. Returns the count added. */
@@ -326,46 +362,56 @@ export function annotationsFromGeoJSON(text: string): number {
     const p = f.properties ?? {};
     const g = f.geometry;
     if (!g?.type) continue;
-    const kind = (typeof p['kind'] === 'string' ? p['kind'] : null) as AnnoKind | null;
+    const kind = (
+      typeof p["kind"] === "string" ? p["kind"] : null
+    ) as AnnoKind | null;
     let coords: [number, number][] | undefined;
     let center: { lat: number; lon: number } | undefined;
-    if (g.type === 'Point') {
+    if (g.type === "Point") {
       const c = g.coordinates as [number, number];
       coords = [c];
       center = { lon: c[0], lat: c[1] };
-    } else if (g.type === 'LineString') {
+    } else if (g.type === "LineString") {
       coords = g.coordinates as [number, number][];
-    } else if (g.type === 'Polygon') {
+    } else if (g.type === "Polygon") {
       coords = (g.coordinates as [number, number][][])[0]?.slice(0, -1);
     }
     // exactOptionalPropertyTypes: build the object by ASSIGNING only the keys
     // that are actually present, rather than assigning `undefined`.
-    const draft: Omit<Annotation, 'id'> = {
+    const draft: Omit<Annotation, "id"> = {
       kind:
         kind ??
-        (g.type === 'Polygon' ? 'polygon' : g.type === 'LineString' ? 'line' : 'point'),
-      label: typeof p['label'] === 'string' ? p['label'] : '',
-      threat: (typeof p['threat'] === 'string' ? p['threat'] : 'unknown') as Threat,
+        (g.type === "Polygon"
+          ? "polygon"
+          : g.type === "LineString"
+            ? "line"
+            : "point"),
+      label: typeof p["label"] === "string" ? p["label"] : "",
+      threat: (typeof p["threat"] === "string"
+        ? p["threat"]
+        : "unknown") as Threat,
     };
-    if (typeof p['note'] === 'string') draft.note = p['note'];
-    if (p['style']) draft.style = p['style'] as Partial<AnnoStyle>;
-    if (typeof p['sidc'] === 'string') draft.sidc = p['sidc'];
+    if (typeof p["note"] === "string") draft.note = p["note"];
+    if (p["style"]) draft.style = p["style"] as Partial<AnnoStyle>;
+    if (typeof p["sidc"] === "string") draft.sidc = p["sidc"];
     if (coords) draft.coords = coords;
-    if (typeof p['radiusKm'] === 'number') {
-      draft.radiusKm = p['radiusKm'];
+    if (typeof p["radiusKm"] === "number") {
+      draft.radiusKm = p["radiusKm"];
       if (center) draft.center = center;
     }
-    if (typeof p['bearingDeg'] === 'number') draft.bearingDeg = p['bearingDeg'];
-    if (typeof p['sweepDeg'] === 'number') draft.sweepDeg = p['sweepDeg'];
-    if (typeof p['group'] === 'string') draft.group = p['group'];
+    if (typeof p["bearingDeg"] === "number") draft.bearingDeg = p["bearingDeg"];
+    if (typeof p["sweepDeg"] === "number") draft.sweepDeg = p["sweepDeg"];
+    if (typeof p["group"] === "string") draft.group = p["group"];
     add(draft);
     n++;
   }
   return n;
 }
 
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __annotations: typeof useAnnotations }).__annotations = useAnnotations;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (
+    window as unknown as { __annotations: typeof useAnnotations }
+  ).__annotations = useAnnotations;
 }
 
 // ── the shared draft ─────────────────────────────────────────────────────────
@@ -386,28 +432,32 @@ interface DraftState {
   label: string;
   style: Partial<AnnoStyle>;
   sidc: string;
-  set: (patch: Partial<Omit<DraftState, 'set' | 'setStyle'>>) => void;
+  set: (patch: Partial<Omit<DraftState, "set" | "setStyle">>) => void;
   setStyle: (patch: Partial<AnnoStyle>) => void;
 }
 
 export const useAnnoDraft = create<DraftState>((set) => ({
-  kind: 'point',
-  threat: 'unknown',
-  label: '',
+  kind: "point",
+  threat: "unknown",
+  label: "",
   style: {},
-  sidc: '',
+  sidc: "",
   set: (patch) => set(patch),
   setStyle: (patch) => set((s) => ({ style: { ...s.style, ...patch } })),
 }));
 
 /** The annotation a placement surface should create right now, minus geometry. */
-export function draftBase(): Pick<Annotation, 'kind' | 'threat' | 'label' | 'style' | 'sidc'> {
+export function draftBase(): Pick<
+  Annotation,
+  "kind" | "threat" | "label" | "style" | "sidc"
+> {
   const d = useAnnoDraft.getState();
-  const out: Pick<Annotation, 'kind' | 'threat' | 'label' | 'style' | 'sidc'> = {
-    kind: d.kind,
-    threat: d.threat,
-    label: d.label,
-  };
+  const out: Pick<Annotation, "kind" | "threat" | "label" | "style" | "sidc"> =
+    {
+      kind: d.kind,
+      threat: d.threat,
+      label: d.label,
+    };
   if (Object.keys(d.style).length > 0) out.style = { ...d.style };
   if (d.sidc) out.sidc = d.sidc;
   return out;

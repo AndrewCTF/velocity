@@ -1,7 +1,20 @@
-import { useEffect, useState } from 'react';
-import { Widget, Badge, Caveat, KV, KVRow, MicroLabel, type BadgeTone } from '../shell/instruments.js';
-import { fetchMetar, type AirportEnrichment, type Metar, type Runway } from '../transport/entity.js';
-import { safeHttpUrl } from '../shell/safeUrl.js';
+import { useEffect, useState } from "react";
+import {
+  Widget,
+  Badge,
+  Caveat,
+  KV,
+  KVRow,
+  MicroLabel,
+  type BadgeTone,
+} from "../shell/instruments.js";
+import {
+  fetchMetar,
+  type AirportEnrichment,
+  type Metar,
+  type Runway,
+} from "../transport/entity.js";
+import { safeHttpUrl } from "../shell/safeUrl.js";
 
 // ── ILS CAT badge ────────────────────────────────────────────────────────
 // CAT data is FAA NASR (ils_rf.txt) — US-only. `ils_category*` is null for
@@ -13,19 +26,24 @@ function IlsBadge({ cat }: { cat: string | null | undefined }): JSX.Element {
 }
 
 function RunwayRow({ rw }: { rw: Runway }): JSX.Element {
-  const ends = [rw.le_ident, rw.he_ident].filter(Boolean).join(' / ') || '—';
+  const ends = [rw.le_ident, rw.he_ident].filter(Boolean).join(" / ") || "—";
   const differs =
     rw.ils_category_le !== undefined &&
     rw.ils_category_he !== undefined &&
     rw.ils_category_le !== rw.ils_category_he;
   return (
     <tr className="border-t border-line/60">
-      <td className="py-1 pr-2 mono text-[10.5px] text-txt-0 whitespace-nowrap">{ends}</td>
-      <td className="py-1 pr-2 mono text-[10.5px] text-txt-1 text-right tabular-nums whitespace-nowrap">
-        {typeof rw.length_ft === 'number' ? rw.length_ft.toLocaleString() : '—'} ft
+      <td className="py-1 pr-2 mono text-[10.5px] text-txt-0 whitespace-nowrap">
+        {ends}
       </td>
-      <td className="py-1 pr-2 mono text-[10px] text-txt-2 uppercase whitespace-nowrap">{rw.surface || '—'}</td>
-      <td className="py-1 pr-2 text-center">{rw.lighted ? '✓' : '—'}</td>
+      <td className="py-1 pr-2 mono text-[10.5px] text-txt-1 text-right tabular-nums whitespace-nowrap">
+        {typeof rw.length_ft === "number" ? rw.length_ft.toLocaleString() : "—"}{" "}
+        ft
+      </td>
+      <td className="py-1 pr-2 mono text-[10px] text-txt-2 uppercase whitespace-nowrap">
+        {rw.surface || "—"}
+      </td>
+      <td className="py-1 pr-2 text-center">{rw.lighted ? "✓" : "—"}</td>
       <td className="py-1 pl-1">
         {differs ? (
           <div className="flex items-center gap-1 flex-wrap">
@@ -43,14 +61,16 @@ function RunwayRow({ rw }: { rw: Runway }): JSX.Element {
 
 // ── METAR / live weather block ───────────────────────────────────────────
 const FLTCAT_TONE: Record<string, BadgeTone> = {
-  VFR: 'ok',
-  MVFR: 'accent',
-  IFR: 'alert',
-  LIFR: 'mag',
+  VFR: "ok",
+  MVFR: "accent",
+  IFR: "alert",
+  LIFR: "mag",
 };
 
-function windArrow(wdir: number | string | null | undefined): JSX.Element | null {
-  if (typeof wdir !== 'number') return null;
+function windArrow(
+  wdir: number | string | null | undefined,
+): JSX.Element | null {
+  if (typeof wdir !== "number") return null;
   // Meteorological convention: wdir is where the wind blows FROM. A down
   // arrow (pointing toward the direction wind flows) rotated by wdir shows
   // that flow direction on a screen where 0deg = up = north.
@@ -67,8 +87,8 @@ function windArrow(wdir: number | string | null | undefined): JSX.Element | null
 }
 
 function lowVisib(visib: number | string | null | undefined): boolean {
-  if (typeof visib === 'number') return visib < 3;
-  if (typeof visib === 'string') {
+  if (typeof visib === "number") return visib < 3;
+  if (typeof visib === "string") {
     const n = Number.parseFloat(visib);
     return Number.isFinite(n) && n < 3;
   }
@@ -87,17 +107,28 @@ function MetarBlock({ icao }: { icao: string }): JSX.Element {
   }, [icao]);
 
   if (metar === undefined) {
-    return <p className="mono text-[10px] tracking-[0.5px] uppercase text-txt-3">resolving metar…</p>;
+    return (
+      <p className="mono text-[10px] tracking-[0.5px] uppercase text-txt-3">
+        resolving metar…
+      </p>
+    );
   }
   if (!metar) {
-    return <p className="mono text-[10px] text-txt-3">METAR unavailable (non-reporting station)</p>;
+    return (
+      <p className="mono text-[10px] text-txt-3">
+        METAR unavailable (non-reporting station)
+      </p>
+    );
   }
   const fltCat = metar.fltCat ?? null;
-  const fog = (fltCat === 'IFR' || fltCat === 'LIFR' || lowVisib(metar.visib)) ?? false;
+  const fog =
+    (fltCat === "IFR" || fltCat === "LIFR" || lowVisib(metar.visib)) ?? false;
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2 flex-wrap">
-        {fltCat && <Badge tone={FLTCAT_TONE[fltCat] ?? 'neutral'}>{fltCat}</Badge>}
+        {fltCat && (
+          <Badge tone={FLTCAT_TONE[fltCat] ?? "neutral"}>{fltCat}</Badge>
+        )}
         {fog && <Badge tone="warn">low vis / fog</Badge>}
       </div>
       <KV>
@@ -106,16 +137,29 @@ function MetarBlock({ icao }: { icao: string }): JSX.Element {
           v={
             <span className="inline-flex items-center gap-1">
               {windArrow(metar.wdir)}
-              {typeof metar.wdir === 'number' ? `${metar.wdir}°` : (metar.wdir ?? '—')}
-              {typeof metar.wspd === 'number' ? ` @ ${metar.wspd} kt` : ''}
+              {typeof metar.wdir === "number"
+                ? `${metar.wdir}°`
+                : (metar.wdir ?? "—")}
+              {typeof metar.wspd === "number" ? ` @ ${metar.wspd} kt` : ""}
             </span>
           }
         />
-        <KVRow k="Visibility" v={metar.visib != null ? `${metar.visib} sm` : '—'} />
-        {typeof metar.temp === 'number' && <KVRow k="Temp" v={`${metar.temp.toFixed(0)}°C`} />}
-        {typeof metar.altim === 'number' && <KVRow k="Altimeter" v={`${metar.altim.toFixed(1)} hPa`} />}
+        <KVRow
+          k="Visibility"
+          v={metar.visib != null ? `${metar.visib} sm` : "—"}
+        />
+        {typeof metar.temp === "number" && (
+          <KVRow k="Temp" v={`${metar.temp.toFixed(0)}°C`} />
+        )}
+        {typeof metar.altim === "number" && (
+          <KVRow k="Altimeter" v={`${metar.altim.toFixed(1)} hPa`} />
+        )}
       </KV>
-      {metar.rawOb && <p className="mono text-[9.5px] text-txt-3 leading-snug break-all">{metar.rawOb}</p>}
+      {metar.rawOb && (
+        <p className="mono text-[9.5px] text-txt-3 leading-snug break-all">
+          {metar.rawOb}
+        </p>
+      )}
     </div>
   );
 }
@@ -150,13 +194,17 @@ function LiveAtcBlock({
             onClick={() => setOpen((v) => !v)}
             className="mono text-[10px] text-txt-2 hover:text-txt-0 underline decoration-dotted"
           >
-            {open ? 'hide stream' : 'try live stream (experimental)'}
+            {open ? "hide stream" : "try live stream (experimental)"}
           </button>
         )}
       </div>
       {open && selected && (
         <div className="space-y-1.5 rounded-sm border border-line bg-bg-2/60 p-2">
-          <Caveat level="EXPERIMENTAL" note="best-effort stream, may be unavailable" tone="warn" />
+          <Caveat
+            level="EXPERIMENTAL"
+            note="best-effort stream, may be unavailable"
+            tone="warn"
+          />
           {mounts.length > 1 && (
             <select
               value={mountIdx}
@@ -189,7 +237,11 @@ function LiveAtcBlock({
   );
 }
 
-export function AirportCard({ enrichment }: { enrichment: AirportEnrichment }): JSX.Element {
+export function AirportCard({
+  enrichment,
+}: {
+  enrichment: AirportEnrichment;
+}): JSX.Element {
   const runways = enrichment.runways ?? [];
   const frequencies = enrichment.frequencies ?? [];
   const mounts = enrichment.candidate_mounts ?? [];
@@ -198,21 +250,31 @@ export function AirportCard({ enrichment }: { enrichment: AirportEnrichment }): 
     <Widget title="Airport">
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge tone={enrichment.military ? 'alert' : 'ok'}>{enrichment.military ? 'MILITARY' : 'CIVIL'}</Badge>
+          <Badge tone={enrichment.military ? "alert" : "ok"}>
+            {enrichment.military ? "MILITARY" : "CIVIL"}
+          </Badge>
           {enrichment.atype && <Badge tone="neutral">{enrichment.atype}</Badge>}
-          {enrichment.scheduled_service && <Badge tone="accent">scheduled service</Badge>}
+          {enrichment.scheduled_service && (
+            <Badge tone="accent">scheduled service</Badge>
+          )}
         </div>
 
         {enrichment.approach_capability && (
           <div className="flex items-center gap-2 flex-wrap">
             {/* Derived worldwide tier — deliberately a neutral tone + "derived"
                 suffix so it never reads as a measured FAA NASR CAT badge. */}
-            <Badge tone="neutral">{enrichment.approach_capability} · derived</Badge>
-            {enrichment.approach_capability_basis && enrichment.approach_capability_basis.length > 0 && (
-              <span className="mono text-[9.5px] text-txt-3" title={enrichment.approach_capability_basis.join('; ')}>
-                basis: {enrichment.approach_capability_basis.join('; ')}
-              </span>
-            )}
+            <Badge tone="neutral">
+              {enrichment.approach_capability} · derived
+            </Badge>
+            {enrichment.approach_capability_basis &&
+              enrichment.approach_capability_basis.length > 0 && (
+                <span
+                  className="mono text-[9.5px] text-txt-3"
+                  title={enrichment.approach_capability_basis.join("; ")}
+                >
+                  basis: {enrichment.approach_capability_basis.join("; ")}
+                </span>
+              )}
           </div>
         )}
 
@@ -221,13 +283,22 @@ export function AirportCard({ enrichment }: { enrichment: AirportEnrichment }): 
           <KVRow
             k="Longest"
             v={
-              typeof enrichment.max_runway_length_ft === 'number'
+              typeof enrichment.max_runway_length_ft === "number"
                 ? `${enrichment.max_runway_length_ft.toLocaleString()} ft`
-                : '—'
+                : "—"
             }
           />
-          <KVRow k="Elevation" v={typeof enrichment.elevation_ft === 'number' ? `${enrichment.elevation_ft} ft` : '—'} />
-          {enrichment.municipality && <KVRow k="Municipality" v={enrichment.municipality} />}
+          <KVRow
+            k="Elevation"
+            v={
+              typeof enrichment.elevation_ft === "number"
+                ? `${enrichment.elevation_ft} ft`
+                : "—"
+            }
+          />
+          {enrichment.municipality && (
+            <KVRow k="Municipality" v={enrichment.municipality} />
+          )}
         </KV>
 
         {runways.length > 0 && (
@@ -237,16 +308,29 @@ export function AirportCard({ enrichment }: { enrichment: AirportEnrichment }): 
               <table className="w-full text-left">
                 <thead>
                   <tr>
-                    <th className="mono text-[9px] uppercase text-txt-3 font-normal pb-1 pr-2">Ident</th>
-                    <th className="mono text-[9px] uppercase text-txt-3 font-normal pb-1 pr-2 text-right">Length</th>
-                    <th className="mono text-[9px] uppercase text-txt-3 font-normal pb-1 pr-2">Surface</th>
-                    <th className="mono text-[9px] uppercase text-txt-3 font-normal pb-1 pr-2">Lit</th>
-                    <th className="mono text-[9px] uppercase text-txt-3 font-normal pb-1 pl-1">ILS CAT</th>
+                    <th className="mono text-[9px] uppercase text-txt-3 font-normal pb-1 pr-2">
+                      Ident
+                    </th>
+                    <th className="mono text-[9px] uppercase text-txt-3 font-normal pb-1 pr-2 text-right">
+                      Length
+                    </th>
+                    <th className="mono text-[9px] uppercase text-txt-3 font-normal pb-1 pr-2">
+                      Surface
+                    </th>
+                    <th className="mono text-[9px] uppercase text-txt-3 font-normal pb-1 pr-2">
+                      Lit
+                    </th>
+                    <th className="mono text-[9px] uppercase text-txt-3 font-normal pb-1 pl-1">
+                      ILS CAT
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {runways.map((rw, i) => (
-                    <RunwayRow key={`${rw.le_ident ?? ''}-${rw.he_ident ?? ''}-${i}`} rw={rw} />
+                    <RunwayRow
+                      key={`${rw.le_ident ?? ""}-${rw.he_ident ?? ""}-${i}`}
+                      rw={rw}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -259,7 +343,11 @@ export function AirportCard({ enrichment }: { enrichment: AirportEnrichment }): 
             <MicroLabel>Frequencies</MicroLabel>
             <KV className="mt-1">
               {frequencies.map((f, i) => (
-                <KVRow key={`${f.type ?? ''}-${f.mhz ?? ''}-${i}`} k={f.type ?? '—'} v={typeof f.mhz === 'number' ? `${f.mhz} MHz` : '—'} />
+                <KVRow
+                  key={`${f.type ?? ""}-${f.mhz ?? ""}-${i}`}
+                  k={f.type ?? "—"}
+                  v={typeof f.mhz === "number" ? `${f.mhz} MHz` : "—"}
+                />
               ))}
             </KV>
           </div>
@@ -278,7 +366,10 @@ export function AirportCard({ enrichment }: { enrichment: AirportEnrichment }): 
           <div>
             <MicroLabel>LiveATC</MicroLabel>
             <div className="mt-1">
-              <LiveAtcBlock liveatcUrl={enrichment.liveatc_url} mounts={mounts} />
+              <LiveAtcBlock
+                liveatcUrl={enrichment.liveatc_url}
+                mounts={mounts}
+              />
             </div>
           </div>
         )}

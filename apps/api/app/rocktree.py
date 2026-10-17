@@ -23,7 +23,7 @@ import json
 import math
 import struct
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 import numpy as np
@@ -228,18 +228,48 @@ def has_child_bulk(rel: str, node: Node) -> bool:
     return len(rel) == 4 and not node.flags & _LEAF
 
 
+# Octree levels in one tileset document. A bulk is four, and one document per
+# bulk made the browser build a tile object for every node of every bulk on the
+# way down: 89 621 of them for a Manhattan view that draws 813, with the load
+# spending more of the main thread on those than on the meshes (2026-10-10).
+# ponytail: a tile whose parent sits on a document's last level and is not
+# itself a tile is never linked, where one document per bulk hung it off the
+# nearest ancestor. None in the six bulks probed; link from that ancestor if
+# a hole ever shows up under a node with no box.
+# Two for every bulk, the small coarse ones included: sending those whole (four
+# hops fewer on the way down) put the first tile on screen 0.2 s LATER and the
+# whole view 0.3 s later, four runs each way (2026-10-11).
+_DOC_LEVELS = 2
+
+
+def _is_tile(node: Node) -> bool:
+    return _drawable(node) and not (node.flags & _NODATA and node.flags & _LEAF)
+
+
 def tileset(
     head: str,
     bulk: Bulk,
     parent: tuple[Bulk, str, Node] | None,
     detail: float = GE_PER_TEXEL,
+    under: str = "",
+    known_empty: Callable[[str, int], bool] | None = None,
 ) -> dict:
-    """One bulk as a 3D Tiles tileset. `parent` locates the head node in the
-    bulk above (None for the planet root); deeper bulks hang off as external
-    tilesets, so the browser only ever pulls the branch it is looking at."""
+    """Two levels of one bulk as a 3D Tiles tileset: the nodes below `under`,
+    a path inside the bulk ("" for its head, or two digits). `parent` locates
+    the head node in the bulk above (None for the planet root). Everything
+    deeper hangs off as external tilesets, so the browser only ever pulls, and
+    only ever builds, the branch it is looking at.
+
+    Tried and dropped, 2026-10-10: one tile per node drawn a level finer (its
+    children merged into one glb). 315 models instead of 813 loaded a tenth
+    faster and cost half as much again in triangles and texture memory,
+    because a tile twice the size refines as a whole.
+    """
+    lo, hi = len(under) + 1, len(under) + _DOC_LEVELS
+    refined = {rel[:-1] for rel, node in bulk.nodes.items() if _is_tile(node)}
     tiles: dict[str, dict] = {}
     for rel, node in bulk.nodes.items():
-        if not _drawable(node) or (node.flags & _NODATA and node.flags & _LEAF):
+        if not (lo <= len(rel) <= hi and rel.startswith(under)) or not _is_tile(node):
             continue
         tile: dict = {
             "boundingVolume": {"box": _box(bulk, rel, node)},
@@ -248,7 +278,7 @@ def tileset(
         }
         if not node.flags & _NODATA:
             tile["content"] = {"uri": f"n{head}{rel}.glb"}
-        if has_child_bulk(rel, node):
+        if len(rel) == hi and (has_child_bulk(rel, node) or rel in refined):
             tile["children"].append(
                 {
                     "boundingVolume": tile["boundingVolume"],
@@ -258,8 +288,18 @@ def tileset(
             )
         tiles[rel] = tile
 
-    if parent is None:
+    if under:
+        top = bulk.nodes.get(under)
+        if top is None or not _is_tile(top):
+            raise LookupError(f"no node at {head}{under}")
         root: dict = {
+            "boundingVolume": {"box": _box(bulk, under, top)},
+            "geometricError": _node_mpt(bulk, under, top) * detail,
+            "children": [],
+        }
+        head_has_data = not top.flags & _NODATA
+    elif parent is None:
+        root = {
             "boundingVolume": {"sphere": [0, 0, 0, 6.5e6]},
             "geometricError": 1e7,
             "children": [],
@@ -278,9 +318,9 @@ def tileset(
     octants: dict[str, int] = {}  # parent rel path → bitmask of octants with a child
     for rel in sorted(tiles, key=len):
         up = rel[:-1]
-        while up and up not in tiles:
+        while len(up) > len(under) and up not in tiles:
             up = up[:-1]
-        (tiles[up] if up else root)["children"].append(tiles[rel])
+        (tiles[up] if up in tiles else root)["children"].append(tiles[rel])
         if up == rel[:-1]:
             octants[up] = octants.get(up, 0) | 1 << int(rel[-1])
 
@@ -288,13 +328,19 @@ def tileset(
     # ships children for the octants that have finer data and masks the parent
     # per octant. Each partly refined node gets one extra LEAF child carrying
     # its own triangles for the rest — a leaf, because anything that refines
-    # would drop them again one level down.
-    # ponytail: that is a fifth of all requests and over a dense city every one
-    # is empty (93 of 455, measured 2026-10-04). Folding them into a sibling is
-    # wrong (it refines); chaining the masks down a child line is the upgrade.
+    # would drop them again one level down. A node on the last level of this
+    # document gets its leftovers from the document its children are in, whose
+    # root it is.
+    # That is a quarter of all requests, and over a dense city all but one of
+    # them carry nothing: the node has no triangles where it has no child (201
+    # of 202 over Manhattan, 2026-10-10). Nothing in the metadata says so, only
+    # the node's own data does, so `known_empty` answers for the ones that were
+    # built before and those are left out.
     for up, mask in octants.items():
-        owner = tiles[up] if up else root
-        if mask == 0xFF or not (("content" in owner) if up else head_has_data):
+        owner = tiles[up] if up in tiles else root
+        if mask == 0xFF or not (("content" in owner) if up in tiles else head_has_data):
+            continue
+        if known_empty is not None and known_empty(head + up, 0xFF & ~mask):
             continue
         owner["children"].append(
             {
@@ -585,22 +631,42 @@ async def bulk(head: str) -> Bulk:
 _json: dict[tuple[str, float], tuple[float, bytes]] = {}
 
 
-async def tileset_json(head: str, detail: float = GE_PER_TEXEL) -> bytes:
-    """The serialized tileset for one bulk. Cached: building it is ~30 ms of
-    event loop per request, and a view pulls two dozen of them."""
-    hit = _json.get((head, detail))
-    if hit and time.monotonic() - hit[0] < _BULK_TTL:
+# A document that still links fillers nobody has built yet is kept this long,
+# so the next visit gets one without the ones that turned out empty.
+_UNSETTLED_TTL = 60.0
+
+
+async def tileset_json(
+    head: str,
+    detail: float = GE_PER_TEXEL,
+    empty: Callable[[str, int], bool | None] | None = None,
+) -> bytes:
+    """The serialized tileset for the two levels under `head`, a path of even
+    length. Cached: a view pulls a hundred of them. `empty(node, keep)` says
+    whether that filler has nothing in it, or None if it was never built."""
+    key = (head, detail)
+    hit = _json.get(key)
+    if hit and time.monotonic() < hit[0]:
         return hit[1]
+    settled = True
+
+    def known_empty(node: str, keep: int) -> bool:
+        nonlocal settled
+        got = empty(node, keep) if empty else False
+        settled &= got is not None
+        return bool(got)
+
+    head, under = head[: len(head) // 4 * 4], head[len(head) // 4 * 4 :]
     here = await bulk(head)
+    above = None
     if head:
         up = await bulk(head[:-4])
-        doc = tileset(head, here, (up, head[-4:], up.nodes[head[-4:]]), detail)
-    else:
-        doc = tileset(head, here, None, detail)
+        above = (up, head[-4:], up.nodes[head[-4:]])
+    doc = tileset(head, here, above, detail, under, known_empty)
     out = json.dumps(doc, separators=(",", ":")).encode()
-    if len(_json) > 512:
+    if len(_json) > 4096:
         _json.clear()
-    _json[(head, detail)] = (time.monotonic(), out)
+    _json[key] = (time.monotonic() + (_BULK_TTL if settled else _UNSETTLED_TTL), out)
     return out
 
 

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
+import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "../transport/http.js";
 
 // Coverage/density heat-strip — fed by GET /api/history/coverage (the archive
 // store's real recorded-fix density), distinct from the Row-3 density strip
@@ -64,7 +64,10 @@ export function CoverageStrip({ windowHours, onCoverage }: Props): JSX.Element {
 
   useEffect(() => {
     let aborter: AbortController | null = null;
-    const clampedWindow = Math.min(MAX_WINDOW_HOURS, Math.max(1, Math.round(windowHours)));
+    const clampedWindow = Math.min(
+      MAX_WINDOW_HOURS,
+      Math.max(1, Math.round(windowHours)),
+    );
     const bucketHours = autoBucketHours(clampedWindow);
     // A coverage query over a large archive can take far longer than POLL_MS
     // (measured: 73 s over 78 M fixes for a 168 h window). Aborting the
@@ -108,7 +111,12 @@ export function CoverageStrip({ windowHours, onCoverage }: Props): JSX.Element {
       aria-label={coverageSummary(buckets)}
       title={coverageSummary(buckets)}
     >
-      <svg width="100%" height="100%" preserveAspectRatio="none" viewBox={`0 0 ${Math.max(buckets.length, 1)} 100`}>
+      <svg
+        width="100%"
+        height="100%"
+        preserveAspectRatio="none"
+        viewBox={`0 0 ${Math.max(buckets.length, 1)} 100`}
+      >
         {buckets.map((b, i) => {
           const h = (b.count / maxCount) * 100;
           if (h <= 0) {
@@ -117,12 +125,34 @@ export function CoverageStrip({ windowHours, onCoverage }: Props): JSX.Element {
             // "we were down" and "there is simply no bar here" looked identical
             // — which is the archive telling a confident story about a period it
             // never saw. A visible mark is the whole point of a coverage strip.
-            return <rect key={b.t} x={i} y={0} width={1} height={100} fill="var(--alert)" opacity={0.22} />;
+            return (
+              <rect
+                key={b.t}
+                x={i}
+                y={0}
+                width={1}
+                height={100}
+                fill="var(--alert)"
+                opacity={0.22}
+              />
+            );
           }
-          return <rect key={b.t} x={i} y={100 - h} width={1} height={h} fill="var(--accent)" opacity={0.7} />;
+          return (
+            <rect
+              key={b.t}
+              x={i}
+              y={100 - h}
+              width={1}
+              height={h}
+              fill="var(--accent)"
+              opacity={0.7}
+            />
+          );
         })}
       </svg>
-      {gaps > 0 && <span className="sr-only">{gaps} hours with no recorded fixes</span>}
+      {gaps > 0 && (
+        <span className="sr-only">{gaps} hours with no recorded fixes</span>
+      )}
     </div>
   );
 }
@@ -138,7 +168,7 @@ export function countGaps(buckets: readonly CoverageBucket[]): number {
  *  from missing ink is a strip that lets an operator read "quiet" where the
  *  truth is "not recorded". */
 export function coverageSummary(buckets: readonly CoverageBucket[]): string {
-  if (buckets.length === 0) return 'History coverage: nothing recorded yet.';
+  if (buckets.length === 0) return "History coverage: nothing recorded yet.";
   const gaps = countGaps(buckets);
   if (gaps === 0) {
     return `History coverage: continuous across all ${buckets.length} hours shown.`;

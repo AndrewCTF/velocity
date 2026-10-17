@@ -1,11 +1,16 @@
-import * as Cesium from 'cesium';
-import { useFilters } from '../../state/stores.js';
-import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
-import { setRenderNeed } from '../renderNeeds.js';
-import { useSelection } from '../../state/stores.js';
-import { perfSetAnimated } from '../perf.js';
-import { isStale, isCorroborated, STALE_ALPHA, UNCORROBORATED_ALPHA } from './freshness.js';
-import { useSettings } from '../../state/settings.js';
+import * as Cesium from "cesium";
+import { useFilters } from "../../state/stores.js";
+import { entityPassesFilter } from "../../explorer/HistogramPanel.js";
+import { setRenderNeed } from "../renderNeeds.js";
+import { useSelection } from "../../state/stores.js";
+import { perfSetAnimated } from "../perf.js";
+import {
+  isStale,
+  isCorroborated,
+  STALE_ALPHA,
+  UNCORROBORATED_ALPHA,
+} from "./freshness.js";
+import { useSettings } from "../../state/settings.js";
 
 // Generic batched-primitive renderer for high-count map layers. Renders icons +
 // labels as ONE Cesium.BillboardCollection + ONE Cesium.LabelCollection
@@ -39,7 +44,7 @@ const FILTER_DIM_ALPHA = 0.1;
 // move a pixel.
 const ROT_EPSILON = 0.01;
 const SCALE_EPSILON = 0.02;
-const EMERGENCY_RED = '#ef4444';
+const EMERGENCY_RED = "#ef4444";
 
 // Stand-up ("see it from the side") mode. Camera pitch runs −π/2 (straight down)
 // → 0 (horizon). Past this threshold toward the horizon we swap each icon for
@@ -73,12 +78,44 @@ const VISIBLE_RECOMPUTE_MS = 500;
 // animatedPrims p50 of 22, so the cap never binds — the frustum-visible set is
 // tiny and the cost attributed to it was actually the 500 ms full pass below.
 const MAX_ANIMATED = 4000;
+// Moving icons are mirrored at most this often, whatever the display's refresh.
+// preUpdate fires on every rendered frame, so on this machine's 165 Hz panel the
+// mirror (SampledProperty interpolation + a billboard vertex rewrite per moved
+// icon) ran 165 times a second: 16 % of the main thread with every layer on,
+// measured 2026-10-17. At 30 Hz a vessel at 15 m/s moves 0.5 m a step and a
+// satellite seen from 800 km under a pixel; only an opt-in dead-reckoned
+// aircraft at street zoom steps visibly (a few px), and its position is still
+// exactly the analytic pos(t) at each step.
+// ponytail: one fixed rate for every pool; make it per-pool if DR aircraft at
+// street zoom ever need display-rate motion.
+const MIRROR_MIN_MS = 33;
+// Parsed once: the pulse used to re-parse this CSS string per emergency per frame.
+const EMERGENCY_COLOR = Cesium.Color.fromCssColorString(EMERGENCY_RED);
 // Chunking this full pass across frames was tried on 2026-07-29 and REVERTED:
 // spreading it kept the mirror busy every frame instead of leaving idle ones, and
 // measured renderMs p95 39.9 then 53.2 ms against 17.3 un-chunked. The periodic
 // full pass is cheaper than a permanently busy one.
 const _cullSphere = new Cesium.BoundingSphere();
 const _upScratch = new Cesium.Cartesian3();
+
+/** Strip the visualizers DataSourceDisplay gave a data source whose entities
+ * carry no graphics because this layer paints them. Call right after
+ * `viewer.dataSources.add(ds)`, before any entity is added.
+ *
+ * WHY: every data source gets the five visualizers GlobeCanvas installs, and
+ * Cesium updates all of them on every clock tick whether or not an entity has a
+ * billboard. GeometryVisualizer also builds a GeometryUpdaterSet per entity that
+ * re-checks ~13 geometry types on every property change, which the 1 Hz bag
+ * refresh raises thousands of times a poll. Measured 2026-10-17, all toggles,
+ * scripted pan, alternating runs: long-task time 5.4 and 5.9 s → 3.7 and 1.9 s,
+ * GC 1.3 s → 0.8 s. getBoundingSphere (trackedEntity follow) already answered
+ * FAILED for these graphics-less entities, so follow is unchanged. Uses
+ * `_visualizers`, the same Cesium internal DataSourceDisplay reads. */
+export function dropVisualizers(ds: Cesium.DataSource): void {
+  const d = ds as unknown as { _visualizers?: { destroy(): void }[] };
+  for (const v of d._visualizers ?? []) v.destroy();
+  d._visualizers = [];
+}
 
 export interface PrimitiveStyle {
   imageUri: string;
@@ -156,7 +193,6 @@ interface Prim {
   sideScale: number;
 }
 
-
 // ── shared collections ────────────────────────────────────────────────────────
 //
 // One BillboardCollection + one LabelCollection PER LAYER looked like the right
@@ -221,8 +257,16 @@ function releaseShared(scene: Cesium.Scene, key: string): void {
   pool.refs -= 1;
   if (pool.refs > 0) return;
   byKey.delete(key);
-  try { scene.primitives.remove(pool.bb); } catch { /* viewer gone */ }
-  try { scene.primitives.remove(pool.lbl); } catch { /* viewer gone */ }
+  try {
+    scene.primitives.remove(pool.bb);
+  } catch {
+    /* viewer gone */
+  }
+  try {
+    scene.primitives.remove(pool.lbl);
+  } catch {
+    /* viewer gone */
+  }
 }
 
 export class PrimitiveEntityLayer {
@@ -242,6 +286,7 @@ export class PrimitiveEntityLayer {
   // §5.4 animated-mirror LOD state.
   private readonly visibleIds = new Set<string>();
   private lastVisibleMs = 0;
+  private lastMirrorMs = 0;
   private wasAnimating = false;
   private layerOpacity = 1;
   private removePreUpdate: (() => void) | null = null;
@@ -259,7 +304,7 @@ export class PrimitiveEntityLayer {
     // SharedPool above). Aircraft and vessels opt out via `ownCollections`
     // because they own tilt / pulse / cluster state that is genuinely per-layer.
     this.usesShared = !opts.ownCollections;
-    this.poolKey = opts.poolKey ?? 'static';
+    this.poolKey = opts.poolKey ?? "static";
     if (this.usesShared) {
       const pool = acquireShared(scene, this.poolKey);
       this.bbColl = pool.bb;
@@ -276,7 +321,8 @@ export class PrimitiveEntityLayer {
       // shift, storming EVERY listener (tilt check, google-gate, GlobeOverlays)
       // through a drag. 0.15 still catches a tilt-threshold crossing but cuts the
       // event rate ~3×. Only raise it; never below the Cesium 0.5 default's intent.
-      if (scene.camera.percentageChanged > 0.15) scene.camera.percentageChanged = 0.15;
+      if (scene.camera.percentageChanged > 0.15)
+        scene.camera.percentageChanged = 0.15;
       this.tiltActive = this.computeTilt();
       const onCam = (): void => {
         const next = this.computeTilt();
@@ -286,7 +332,8 @@ export class PrimitiveEntityLayer {
         scene.requestRender();
       };
       scene.camera.changed.addEventListener(onCam);
-      this.removeCameraChanged = () => scene.camera.changed.removeEventListener(onCam);
+      this.removeCameraChanged = () =>
+        scene.camera.changed.removeEventListener(onCam);
     }
     // Mirror moving icons (orbiting sats, gliding vessels, dead-reckoned aircraft)
     // and tick the emergency pulse on the scene's OWN render cadence — when the
@@ -294,7 +341,9 @@ export class PrimitiveEntityLayer {
     // frame and preUpdate fires there, so we add NO forced renders and idle to
     // zero when the clock is paused (requestRenderMode keeps the GPU quiet).
     if (opts.shouldAnimate || opts.pulse) {
-      this.removePreUpdate = scene.preUpdate.addEventListener(() => this.onPreUpdate());
+      this.removePreUpdate = scene.preUpdate.addEventListener(() =>
+        this.onPreUpdate(),
+      );
     }
     // Re-dim every icon ONCE when the map filter changes, instead of the adapter
     // re-styling all ~13k contacts on every poll while a filter is active (the
@@ -326,20 +375,24 @@ export class PrimitiveEntityLayer {
     for (const p of this.prims.values()) {
       const stale = isStale(p.props) ? STALE_ALPHA : 1;
       const dim =
-        (active && !entityPassesFilter(p.props, clauses) ? FILTER_DIM_ALPHA : 1) *
+        (active && !entityPassesFilter(p.props, clauses)
+          ? FILTER_DIM_ALPHA
+          : 1) *
         stale *
         this.corroborationFactor(p.props);
       if (dim === p.dimFactor) continue;
       p.dimFactor = dim;
       changed = true;
-      if (!(this.opts.pulse && p.emergency)) p.bb.color = p.tint.withAlpha(this.layerOpacity * dim);
+      if (!(this.opts.pulse && p.emergency))
+        p.bb.color = p.tint.withAlpha(this.layerOpacity * dim);
     }
     if (changed) this.scene.requestRender();
   }
 
   private posOf(entity: Cesium.Entity): Cesium.Cartesian3 | undefined {
     try {
-      return entity.position?.getValue(this.opts.getClock()) as Cesium.Cartesian3 | undefined;
+      return entity.position?.getValue(this.opts.getClock()) as
+        Cesium.Cartesian3 | undefined;
     } catch {
       return undefined;
     }
@@ -359,7 +412,9 @@ export class PrimitiveEntityLayer {
     if (!this.opts.filter) return stale * uncorroborated;
     const clauses = useFilters.getState().clauses;
     const filtered =
-      clauses.length > 0 && !entityPassesFilter(props, clauses) ? FILTER_DIM_ALPHA : 1;
+      clauses.length > 0 && !entityPassesFilter(props, clauses)
+        ? FILTER_DIM_ALPHA
+        : 1;
     return stale * filtered * uncorroborated;
   }
 
@@ -405,7 +460,9 @@ export class PrimitiveEntityLayer {
   private wantLabel(id: string, emergency: boolean): boolean {
     if (emergency) return true;
     if (useSelection.getState().selectedEntityId === id) return true;
-    return this.scene.camera.positionCartographic.height < LABEL_MATERIALIZE_ALT_M;
+    return (
+      this.scene.camera.positionCartographic.height < LABEL_MATERIALIZE_ALT_M
+    );
   }
 
   // Upsert the icon + label for one contact entity. Position is read from the
@@ -423,7 +480,10 @@ export class PrimitiveEntityLayer {
     // the default top-down view never shows the side sprite, so computing it every
     // sync for ~13k moved contacts was wasted. applyTiltToAll() lazily computes +
     // caches the side sprite the moment tilt engages.
-    const side = this.opts.sideStyleFn && this.tiltActive ? this.opts.sideStyleFn(props) : null;
+    const side =
+      this.opts.sideStyleFn && this.tiltActive
+        ? this.opts.sideStyleFn(props)
+        : null;
 
     let p = this.prims.get(id);
     if (!p) {
@@ -439,14 +499,32 @@ export class PrimitiveEntityLayer {
         id: { id },
       });
       let lbl: Cesium.Label | null = null;
-      if (labelText && this.wantLabel(id, !!s.emergency) && this.labelBudgetLeft()) {
-        lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
+      if (
+        labelText &&
+        this.wantLabel(id, !!s.emergency) &&
+        this.labelBudgetLeft()
+      ) {
+        lbl = this.lblColl.add({
+          ...this.opts.labelBase(labelText),
+          position: pos,
+          id: { id },
+        });
         this.labelOps++;
       }
       p = {
-        bb, lbl, entity, props, emergency: !!s.emergency, dimFactor, labelText, tint,
-        topImage: s.imageUri, topRot: rot, topScale: s.scale,
-        sideImage: side?.imageUri ?? null, sideScale: side?.scale ?? s.scale,
+        bb,
+        lbl,
+        entity,
+        props,
+        emergency: !!s.emergency,
+        dimFactor,
+        labelText,
+        tint,
+        topImage: s.imageUri,
+        topRot: rot,
+        topScale: s.scale,
+        sideImage: side?.imageUri ?? null,
+        sideScale: side?.scale ?? s.scale,
       };
       this.prims.set(id, p);
       if (side) this.orient(p, pos); // apply current tilt mode to the new icon
@@ -458,26 +536,35 @@ export class PrimitiveEntityLayer {
       p.topImage = s.imageUri;
       p.topRot = rot;
       p.topScale = s.scale;
-      if (side) { p.sideImage = side.imageUri; p.sideScale = side.scale; }
+      if (side) {
+        p.sideImage = side.imageUri;
+        p.sideScale = side.scale;
+      }
       if (side) {
         // Stand-up layer: orient() owns image / rotation / scale per tilt mode.
         this.orient(p, pos);
       } else {
         if (p.bb.image !== s.imageUri) p.bb.image = s.imageUri;
         if (Math.abs(p.bb.rotation - rot) >= ROT_EPSILON) p.bb.rotation = rot;
-        if (Math.abs(p.bb.scale - s.scale) >= SCALE_EPSILON) p.bb.scale = s.scale;
+        if (Math.abs(p.bb.scale - s.scale) >= SCALE_EPSILON)
+          p.bb.scale = s.scale;
       }
       p.dimFactor = dimFactor;
       // Non-emergency colour is static here; emergency colour is owned by the
       // pulse rAF so we don't fight it every sync.
-      if (!(this.opts.pulse && s.emergency)) p.bb.color = tint.withAlpha(this.layerOpacity * dimFactor);
+      if (!(this.opts.pulse && s.emergency))
+        p.bb.color = tint.withAlpha(this.layerOpacity * dimFactor);
       // §5.5: materialize the Cesium Label only inside the ddc draw window (or for
       // selected/emergency). Beyond it, destroy the label so world view holds ~0
       // labels. Recreated lazily on zoom-in — same visible set as today.
       if (labelText && this.wantLabel(id, !!s.emergency)) {
         if (!p.lbl) {
           if (this.labelBudgetLeft()) {
-            p.lbl = this.lblColl.add({ ...this.opts.labelBase(labelText), position: pos, id: { id } });
+            p.lbl = this.lblColl.add({
+              ...this.opts.labelBase(labelText),
+              position: pos,
+              id: { id },
+            });
             this.labelOps++;
           }
         } else {
@@ -520,7 +607,8 @@ export class PrimitiveEntityLayer {
   setLayerOpacity(a: number): void {
     this.layerOpacity = a;
     for (const p of this.prims.values()) {
-      if (!(this.opts.pulse && p.emergency)) p.bb.color = p.tint.withAlpha(a * p.dimFactor);
+      if (!(this.opts.pulse && p.emergency))
+        p.bb.color = p.tint.withAlpha(a * p.dimFactor);
     }
     this.scene.requestRender();
   }
@@ -529,7 +617,10 @@ export class PrimitiveEntityLayer {
     // pitch: −π/2 straight down → 0 at the horizon. Stand icons up only when
     // tilted past STANDUP_PITCH AND zoomed in below STANDUP_MAX_HEIGHT_M.
     const cam = this.scene.camera;
-    return cam.pitch > STANDUP_PITCH && cam.positionCartographic.height < STANDUP_MAX_HEIGHT_M;
+    return (
+      cam.pitch > STANDUP_PITCH &&
+      cam.positionCartographic.height < STANDUP_MAX_HEIGHT_M
+    );
   }
 
   // Swap one icon between its flat top-down look and its upright side profile,
@@ -544,14 +635,17 @@ export class PrimitiveEntityLayer {
       bb.verticalOrigin = Cesium.VerticalOrigin.BOTTOM;
       if (bb.image !== p.sideImage) bb.image = p.sideImage;
       if (bb.rotation !== 0) bb.rotation = 0;
-      if (Math.abs(bb.scale - p.sideScale) >= SCALE_EPSILON) bb.scale = p.sideScale;
+      if (Math.abs(bb.scale - p.sideScale) >= SCALE_EPSILON)
+        bb.scale = p.sideScale;
     } else {
       // Restore the flat top-down look (the billboardBase orientation).
       bb.alignedAxis = Cesium.Cartesian3.UNIT_Z;
       bb.verticalOrigin = Cesium.VerticalOrigin.CENTER;
       if (bb.image !== p.topImage) bb.image = p.topImage;
-      if (Math.abs(bb.rotation - p.topRot) >= ROT_EPSILON) bb.rotation = p.topRot;
-      if (Math.abs(bb.scale - p.topScale) >= SCALE_EPSILON) bb.scale = p.topScale;
+      if (Math.abs(bb.rotation - p.topRot) >= ROT_EPSILON)
+        bb.rotation = p.topRot;
+      if (Math.abs(bb.scale - p.topScale) >= SCALE_EPSILON)
+        bb.scale = p.topScale;
     }
   }
 
@@ -570,7 +664,11 @@ export class PrimitiveEntityLayer {
         p.sideScale = side.scale;
       }
       let pos: Cesium.Cartesian3 | undefined;
-      try { pos = p.entity.position?.getValue(t) as Cesium.Cartesian3 | undefined; } catch { pos = undefined; }
+      try {
+        pos = p.entity.position?.getValue(t) as Cesium.Cartesian3 | undefined;
+      } catch {
+        pos = undefined;
+      }
       if (pos) this.orient(p, pos);
     }
   }
@@ -588,13 +686,31 @@ export class PrimitiveEntityLayer {
       // Only OUR billboards/labels leave the shared collection; the container
       // itself outlives this layer and is torn down when the last ref goes.
       for (const p of this.prims.values()) {
-        try { this.bbColl.remove(p.bb); } catch { /* collection gone */ }
-        if (p.lbl) { try { this.lblColl.remove(p.lbl); } catch { /* gone */ } }
+        try {
+          this.bbColl.remove(p.bb);
+        } catch {
+          /* collection gone */
+        }
+        if (p.lbl) {
+          try {
+            this.lblColl.remove(p.lbl);
+          } catch {
+            /* gone */
+          }
+        }
       }
       releaseShared(this.scene, this.poolKey);
     } else {
-      try { this.scene.primitives.remove(this.bbColl); } catch { /* viewer gone */ }
-      try { this.scene.primitives.remove(this.lblColl); } catch { /* viewer gone */ }
+      try {
+        this.scene.primitives.remove(this.bbColl);
+      } catch {
+        /* viewer gone */
+      }
+      try {
+        this.scene.primitives.remove(this.lblColl);
+      } catch {
+        /* viewer gone */
+      }
     }
     this.prims.clear();
     this.emergencyIds.clear();
@@ -610,12 +726,17 @@ export class PrimitiveEntityLayer {
     const pulsing = this.opts.pulse === true && this.emergencyIds.size > 0;
     if (!animate) this.wasAnimating = false;
     if (!animate && !pulsing) return;
+    const now = performance.now();
+    if (now - this.lastMirrorMs < MIRROR_MIN_MS) return;
+    this.lastMirrorMs = now;
     if (animate) {
       const t = this.opts.getClock();
-      const now = performance.now();
       // Motion just started (zoom crossed the glide altitude / deadReckon toggled
       // on): force a full pass NOW so the visible set isn't empty for up to 500 ms.
-      if (!this.wasAnimating) { this.wasAnimating = true; this.lastVisibleMs = 0; }
+      if (!this.wasAnimating) {
+        this.wasAnimating = true;
+        this.lastVisibleMs = 0;
+      }
       // §5.4 animated-mirror LOD: the expensive part is getValue() on each prim's
       // SampledPositionProperty (interpolation) + the position writes. Every ~500 ms
       // do a FULL pass — refresh every prim (so off-screen ones stay ≤2 Hz fresh) and
@@ -629,10 +750,19 @@ export class PrimitiveEntityLayer {
         this.lastVisibleMs = now;
         this.visibleIds.clear();
         const cam = this.scene.camera;
-        const cv = cam.frustum.computeCullingVolume(cam.positionWC, cam.directionWC, cam.upWC);
+        const cv = cam.frustum.computeCullingVolume(
+          cam.positionWC,
+          cam.directionWC,
+          cam.upWC,
+        );
         for (const [id, p] of this.prims) {
           let pos: Cesium.Cartesian3 | undefined;
-          try { pos = p.entity.position?.getValue(t) as Cesium.Cartesian3 | undefined; } catch { pos = undefined; }
+          try {
+            pos = p.entity.position?.getValue(t) as
+              Cesium.Cartesian3 | undefined;
+          } catch {
+            pos = undefined;
+          }
           if (!pos) continue;
           // Write EVERY prim's position here, on screen or not. Culling first and
           // writing only the visible ones was tried on 2026-07-29 and measured
@@ -654,8 +784,16 @@ export class PrimitiveEntityLayer {
           const p = this.prims.get(id);
           if (!p) continue;
           let pos: Cesium.Cartesian3 | undefined;
-          try { pos = p.entity.position?.getValue(t) as Cesium.Cartesian3 | undefined; } catch { pos = undefined; }
-          if (pos) { p.bb.position = pos; if (p.lbl) p.lbl.position = pos; }
+          try {
+            pos = p.entity.position?.getValue(t) as
+              Cesium.Cartesian3 | undefined;
+          } catch {
+            pos = undefined;
+          }
+          if (pos) {
+            p.bb.position = pos;
+            if (p.lbl) p.lbl.position = pos;
+          }
         }
       }
     }
@@ -663,7 +801,10 @@ export class PrimitiveEntityLayer {
       const a = 0.6 + 0.4 * Math.abs(Math.sin(Date.now() / 250)); // matches the old CallbackProperty
       for (const id of this.emergencyIds) {
         const p = this.prims.get(id);
-        if (p) p.bb.color = Cesium.Color.fromCssColorString(EMERGENCY_RED).withAlpha(a * this.layerOpacity * p.dimFactor);
+        if (p)
+          p.bb.color = EMERGENCY_COLOR.withAlpha(
+            a * this.layerOpacity * p.dimFactor,
+          );
       }
     }
   }

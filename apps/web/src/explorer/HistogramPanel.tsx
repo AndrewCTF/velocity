@@ -1,9 +1,17 @@
-import { useEffect, useMemo } from 'react';
-import * as Cesium from 'cesium';
-import { useFilters, type FilterFacet, type FilterMode } from '../state/stores.js';
-import { bucketLabel, type Histogram } from './facets.js';
-import { useEntityStats, setStatsViewer, acquireStats } from '../globe/entityStats.js';
-import { SectionLabel, MicroLabel, Btn, Badge } from '../shell/instruments.js';
+import { useEffect, useMemo } from "react";
+import * as Cesium from "cesium";
+import {
+  useFilters,
+  type FilterFacet,
+  type FilterMode,
+} from "../state/stores.js";
+import { bucketLabel, type Histogram } from "./facets.js";
+import {
+  useEntityStats,
+  setStatsViewer,
+  acquireStats,
+} from "../globe/entityStats.js";
+import { SectionLabel, MicroLabel, Btn, Badge } from "../shell/instruments.js";
 
 // ── Map-side faceted histogram + filter panel (C2) ──────────────────────────
 //
@@ -28,9 +36,9 @@ export {
   facetResolver,
   entityPassesFilter,
   ALT_BANDS,
-} from './facets.js';
-export type { EntityFacets, AltBand } from './facets.js';
-import { Icon } from '../normal/Icon.js';
+} from "./facets.js";
+export type { EntityFacets, AltBand } from "./facets.js";
+import { Icon } from "../normal/Icon.js";
 
 interface Props {
   viewer?: Cesium.Viewer | null;
@@ -54,7 +62,10 @@ export function HistogramPanel({ viewer }: Props = {}): JSX.Element {
     return acquireStats();
   }, [viewer]);
 
-  const nonEmpty = useMemo(() => histograms.filter((h) => h.buckets.length > 0), [histograms]);
+  const nonEmpty = useMemo(
+    () => histograms.filter((h) => h.buckets.length > 0),
+    [histograms],
+  );
 
   if (!viewer) {
     return (
@@ -68,9 +79,18 @@ export function HistogramPanel({ viewer }: Props = {}): JSX.Element {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-none">
-        <SectionLabel title="Filters" count={`${counted} contacts`} className="flex-1" />
+        <SectionLabel
+          title="Filters"
+          count={`${counted} contacts`}
+          className="flex-1"
+        />
         {clauses.length > 0 && (
-          <Btn size="sm" onClick={clearAll} title="Clear all filters" className="ml-2">
+          <Btn
+            size="sm"
+            onClick={clearAll}
+            title="Clear all filters"
+            className="ml-2"
+          >
             Clear ({clauses.length})
           </Btn>
         )}
@@ -86,8 +106,8 @@ export function HistogramPanel({ viewer }: Props = {}): JSX.Element {
               title="Remove this filter"
               className="group"
             >
-              <Badge tone={c.mode === 'not' ? 'alert' : 'accent'}>
-                {c.mode === 'not' ? '⊘ ' : ''}
+              <Badge tone={c.mode === "not" ? "alert" : "accent"}>
+                {c.mode === "not" ? "⊘ " : ""}
                 {bucketLabel(c.facet, c.value)}
                 <Icon name="x" className="w-3 h-3" />
               </Badge>
@@ -99,16 +119,23 @@ export function HistogramPanel({ viewer }: Props = {}): JSX.Element {
       <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-3">
         {nonEmpty.length === 0 ? (
           <p className="mono text-[10px] text-txt-3 mt-1">
-            No classified contacts on the globe yet. Pan to a busy region or enable a layer.
+            No classified contacts on the globe yet. Pan to a busy region or
+            enable a layer.
           </p>
         ) : (
           nonEmpty.map((h) => (
-            <HistogramBlock key={h.facet} hist={h} isActive={isActive} onToggle={toggleClause} />
+            <HistogramBlock
+              key={h.facet}
+              hist={h}
+              isActive={isActive}
+              onToggle={toggleClause}
+            />
           ))
         )}
         <p className="mono text-[10px] text-txt-4 leading-relaxed pt-1">
-          Filters dim non-matching contacts on the map. Icons stay drawn, never removed. Flag is
-          derived client-side from ICAO24 / MMSI blocks (coarse).
+          Filters dim non-matching contacts on the map. Icons stay drawn, never
+          removed. Flag is derived client-side from ICAO24 / MMSI blocks
+          (coarse).
         </p>
       </div>
     </div>
@@ -130,19 +157,19 @@ function HistogramBlock({
       <SectionLabel title={hist.title} count={hist.total} />
       <div className="mt-1.5 space-y-[3px]">
         {hist.buckets.map((b) => {
-          const onlyOn = isActive(hist.facet, b.value, 'only');
-          const notOn = isActive(hist.facet, b.value, 'not');
+          const onlyOn = isActive(hist.facet, b.value, "only");
+          const notOn = isActive(hist.facet, b.value, "not");
           const pct = (b.count / max) * 100;
           return (
             <div key={b.value} className="flex items-center gap-1.5 group">
               {/* The bar itself = "filter to" (only this bucket). */}
               <button
                 type="button"
-                onClick={() => onToggle(hist.facet, b.value, 'only')}
+                onClick={() => onToggle(hist.facet, b.value, "only")}
                 title={`Filter to ${b.label} (${b.count})`}
                 className="relative flex-1 h-[18px] rounded-sm border bg-bg-2 overflow-hidden text-left"
                 style={{
-                  borderColor: onlyOn ? 'var(--accent-line)' : 'var(--line)',
+                  borderColor: onlyOn ? "var(--accent-line)" : "var(--line)",
                 }}
               >
                 <span
@@ -150,35 +177,43 @@ function HistogramBlock({
                   style={{
                     width: `${pct}%`,
                     background: notOn
-                      ? 'var(--alert-bg)'
+                      ? "var(--alert-bg)"
                       : onlyOn
-                        ? 'var(--accent-dim)'
-                        : 'var(--line-2)',
+                        ? "var(--accent-dim)"
+                        : "var(--line-2)",
                   }}
                 />
                 <span className="relative z-10 flex items-center justify-between h-full px-2">
                   <span
                     className={`mono text-[10px] truncate ${
-                      notOn ? 'text-txt-4 line-through' : onlyOn ? 'text-accent' : 'text-txt-1'
+                      notOn
+                        ? "text-txt-4 line-through"
+                        : onlyOn
+                          ? "text-accent"
+                          : "text-txt-1"
                     }`}
                   >
                     {b.label}
                   </span>
-                  <span className="mono text-[10px] tabular-nums text-txt-3 ml-2">{b.count}</span>
+                  <span className="mono text-[10px] tabular-nums text-txt-3 ml-2">
+                    {b.count}
+                  </span>
                 </span>
               </button>
               {/* Exclude toggle (⊘ "filter out this bucket"). */}
               <button
                 type="button"
-                onClick={() => onToggle(hist.facet, b.value, 'not')}
+                onClick={() => onToggle(hist.facet, b.value, "not")}
                 title={`Filter out ${b.label}`}
                 aria-pressed={notOn}
                 className={`mono text-[10px] leading-none w-[18px] h-[18px] flex items-center justify-center rounded-sm border shrink-0 ${
                   notOn
-                    ? 'border-alert-line text-alert-fg bg-alert-bg'
-                    : 'border-line text-txt-3 hover:text-alert-fg hover:border-alert-line'
+                    ? "border-alert-line text-alert-fg bg-alert-bg"
+                    : "border-line text-txt-3 hover:text-alert-fg hover:border-alert-line"
                 }`}
-              ><Icon name="eye-off" className="w-3.5 h-3.5" /></button>
+              >
+                <Icon name="eye-off" className="w-3.5 h-3.5" />
+              </button>
             </div>
           );
         })}

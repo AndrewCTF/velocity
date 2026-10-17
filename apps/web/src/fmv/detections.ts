@@ -9,11 +9,11 @@
 // All values are deterministically computed from sim geometry. Every caller
 // MUST display a NOTIONAL // SIMULATED caveat alongside any output.
 
-import type { LatLon } from '../sim/types.js';
+import type { LatLon } from "../sim/types.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type DetectionClass = 'vehicle' | 'aircraft' | 'structure' | 'drone';
+export type DetectionClass = "vehicle" | "aircraft" | "structure" | "drone";
 
 export interface Detection {
   /** Stable id tied to the source agent / point so the bbox survives re-renders. */
@@ -61,7 +61,9 @@ function haversineKm(a: LatLon, b: LatLon): number {
   const dLon = (b.lon - a.lon) * DEG2RAD;
   const sinLat = Math.sin(dLat / 2);
   const sinLon = Math.sin(dLon / 2);
-  const h = sinLat * sinLat + Math.cos(a.lat * DEG2RAD) * Math.cos(b.lat * DEG2RAD) * sinLon * sinLon;
+  const h =
+    sinLat * sinLat +
+    Math.cos(a.lat * DEG2RAD) * Math.cos(b.lat * DEG2RAD) * sinLon * sinLon;
   return 2 * 6371 * Math.asin(Math.sqrt(h));
 }
 
@@ -112,7 +114,7 @@ function projectBbox(
   target: DetectionCandidate,
   footprintRadiusKm: number,
   index: number,
-): Detection['bbox'] {
+): Detection["bbox"] {
   const dLat = target.lat - focal.lat;
   const dLon = (target.lon - focal.lon) * Math.cos(focal.lat * DEG2RAD);
   // Map to [0,1]: centre of footprint is (0.5, 0.5); north = top.
@@ -152,7 +154,10 @@ export function projectDetections(
   const results: Detection[] = [];
 
   candidates.forEach((c, index) => {
-    const distKm = haversineKm({ lat: focal.lat, lon: focal.lon }, { lat: c.lat, lon: c.lon });
+    const distKm = haversineKm(
+      { lat: focal.lat, lon: focal.lon },
+      { lat: c.lat, lon: c.lon },
+    );
     if (distKm > rKm) return; // outside footprint
 
     // Confidence: 1.0 at centre, falls off with distance. Small per-tick
@@ -164,7 +169,7 @@ export function projectDetections(
 
     results.push({
       id: c.id,
-      cls: c.cls ?? 'vehicle',
+      cls: c.cls ?? "vehicle",
       conf,
       bbox: projectBbox(focal, c, rKm, index),
     });
@@ -177,7 +182,12 @@ export function projectDetections(
  * Count detections by class.  Useful for the class-count badge row in FmvPanel.
  */
 export function classCounts(detections: Detection[]): ClassCounts {
-  const counts: ClassCounts = { vehicle: 0, aircraft: 0, structure: 0, drone: 0 };
+  const counts: ClassCounts = {
+    vehicle: 0,
+    aircraft: 0,
+    structure: 0,
+    drone: 0,
+  };
   for (const d of detections) {
     counts[d.cls] += 1;
   }

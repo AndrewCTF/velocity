@@ -30,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -55,6 +56,8 @@ from app.osint.sources import (
     threat_feeds,
     video,
 )
+from app.routes.ontology import _refuse_overwrite_of_hidden_row
+from app.security import Principal, current_principal_or_local
 from app.upstream import get_client
 
 router = APIRouter(tags=["osint"], prefix="/api/osint")
@@ -1098,9 +1101,44 @@ async def _investigate_company(g: _Graph, name: str) -> dict[str, Any]:
     return {"cik": sec_r.get("cik", ""), **screening}
 
 
+def _real_principal(p: object) -> Principal | None:
+    """The caller's Principal, or None when the handler was called directly.
+
+    ``p: Principal = Depends(current_principal_or_local)`` is a ``Depends``
+    placeholder when ``tests/test_osint.py`` invokes the handler as a plain
+    coroutine (the same way ``R._investigate_domain`` is invoked). There is no
+    HTTP caller in that case, so the unfiltered internal path is the honest
+    answer — exactly the ``principal=None`` convention ``get_registry`` uses.
+    """
+    return p if isinstance(p, Principal) else None
+
+
+async def _refuse_overwriting_hidden_rows(
+    principal: Principal | None, ids: Iterable[str]
+) -> None:
+    """Refuse a persist step that would land on a row the caller cannot read.
+
+    These routes upsert by an id derived from caller input, and ``upsert``
+    replaces ``props`` WHOLESALE and rewrites ``classification`` — so without
+    this a clearance-0 caller who investigates a target whose id is already a
+    level-4 row (``domain:secret.example``, an ``ip:`` a cleared analyst
+    classified) declassifies and destroys it. The gate is
+    ``routes/ontology.py::_refuse_overwrite_of_hidden_row`` (the canonical copy
+    situations/maps already import), applied to every id this fan-out is about
+    to write. ``principal is None`` is the direct/internal call — no caller to
+    refuse.
+    """
+    if principal is None:
+        return
+    for oid in ids:
+        await _refuse_overwrite_of_hidden_row(principal, oid)
+
+
 @router.post("/investigate", response_model=InvestigateResponse)
 async def investigate(
-    req: InvestigateRequest, ctx: UserCtx = Depends(current_user_or_local)
+    req: InvestigateRequest,
+    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> InvestigateResponse:
     g = _Graph(ts=time.time())
 
@@ -1159,13 +1197,16 @@ async def investigate(
             summary = await _investigate_ip(g, canonical)
             root = "ip:" + canonical
 
-    reg = get_registry(ctx, get_settings())
+    principal = _real_principal(p)
+    await _refuse_overwriting_hidden_rows(principal, list(g.objs))
+    reg = get_registry(ctx, get_settings(), principal=principal)
     for obj in g.objs.values():
         # Each object's own props already carry the real connector that
         # collected it (rdap+dns, otx, urlscan, …) — stamp that as the
         # assertion source instead of falling through to upsert's "analyst"
         # default, which would mislabel automated collection as a human edit
-        # in case-report footnotes.
+        # in case-report footnotes. ``principal`` rides the registry so any read
+        # this fan-out makes answers to the caller's clearance.
         await reg.upsert(obj, source=obj.props.get("source") or "osint-investigate")
     for lk in g.links.values():
         await reg.link(lk.model_copy(update={"source": "osint-investigate"}))
@@ -1188,7 +1229,9 @@ class ReconRequest(BaseModel):
 
 @router.post("/recon", response_model=InvestigateResponse)
 async def recon(
-    req: ReconRequest, ctx: UserCtx = Depends(current_user_or_local)
+    req: ReconRequest,
+    ctx: UserCtx = Depends(current_user_or_local),
+    p: Principal = Depends(current_principal_or_local),
 ) -> InvestigateResponse:
     """Run a GPL deep-recon tool via the sidecar and persist results into the graph.
 
@@ -1233,10 +1276,13 @@ async def recon(
         eid = g.obj("email:" + em.lower(), "Email", "recon:" + req.tool, {"address": em.lower()})
         g.link(root, eid, "has_email")
 
-    reg = get_registry(ctx, s)
+    principal = _real_principal(p)
+    await _refuse_overwriting_hidden_rows(principal, list(g.objs))
+    reg = get_registry(ctx, s, principal=principal)
     for obj in g.objs.values():
-        # Same provenance fix as /investigate: stamp the real connector
-        # ("recon:" + tool) instead of the analyst default.
+        # Same provenance fix as /investigate, plus the same clearance filter on
+        # the registry: this route also upserts by an id derived from caller
+        # input, so a hidden row at one of those ids must not be rewritten.
         await reg.upsert(obj, source=obj.props.get("source") or "osint-recon")
     for lk in g.links.values():
         await reg.link(lk.model_copy(update={"source": "osint-recon"}))

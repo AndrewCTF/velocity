@@ -1,15 +1,15 @@
 // Watchbox editor — draw a circular AOI and pick an enter / exit / loiter rule.
 // Triggers fire into the Alerts rail + ticker (WatchboxLayer evaluator).
 
-import { useState } from 'react';
-import { Circle, Pencil, X } from 'lucide-react';
-import { Widget, Btn, SectionLabel, MicroLabel } from '../shell/instruments.js';
-import { getDrawController } from '../globe/draw.js';
-import { useWatchboxes, type WatchRule } from './watchboxStore.js';
+import { useState } from "react";
+import { Circle, Pencil, X } from "lucide-react";
+import { Widget, Btn, SectionLabel, MicroLabel } from "../shell/instruments.js";
+import { getDrawController } from "../globe/draw.js";
+import { useWatchboxes, type WatchRule } from "./watchboxStore.js";
 
-const RULES: WatchRule[] = ['enter', 'exit', 'loiter'];
+const RULES: WatchRule[] = ["enter", "exit", "loiter"];
 const selectCls =
-  'bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-hidden focus:border-accent-line';
+  "bg-bg-2 border border-line rounded-sm text-[10px] text-txt-1 px-1.5 py-1 mono w-full focus:outline-hidden focus:border-accent-line";
 
 export function WatchboxPanel(): JSX.Element {
   const wbs = useWatchboxes((s) => s.watchboxes);
@@ -18,8 +18,8 @@ export function WatchboxPanel(): JSX.Element {
   const remove = useWatchboxes((s) => s.remove);
   const clear = useWatchboxes((s) => s.clear);
 
-  const [rule, setRule] = useState<WatchRule>('enter');
-  const [label, setLabel] = useState('');
+  const [rule, setRule] = useState<WatchRule>("enter");
+  const [label, setLabel] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
 
@@ -28,9 +28,14 @@ export function WatchboxPanel(): JSX.Element {
 
   const drawAoi = (): void => {
     if (!draw) return;
-    setStatus('click centre, then click the edge to set the AOI radius…');
+    setStatus("click centre, then click the edge to set the AOI radius…");
     draw.drawCircle((c, rKm) => {
-      add({ label: label.trim() || `AOI ${wbs.length + 1}`, center: c, radiusKm: +rKm.toFixed(2), rule });
+      add({
+        label: label.trim() || `AOI ${wbs.length + 1}`,
+        center: c,
+        radiusKm: +rKm.toFixed(2),
+        rule,
+      });
       setStatus(`Watchbox armed (${rKm.toFixed(1)} km · ${rule})`);
     });
   };
@@ -46,7 +51,9 @@ export function WatchboxPanel(): JSX.Element {
               type="button"
               onClick={() => setRule(r)}
               className={`flex-1 text-[10px] mono py-1 rounded-sm border capitalize transition-colors ${
-                rule === r ? 'border-accent-line bg-accent-dim text-txt-0' : 'border-line text-txt-2 hover:text-txt-0'
+                rule === r
+                  ? "border-accent-line bg-accent-dim text-txt-0"
+                  : "border-line text-txt-2 hover:text-txt-0"
               }`}
             >
               {r}
@@ -55,16 +62,28 @@ export function WatchboxPanel(): JSX.Element {
         </div>
         <label className="flex flex-col gap-0.5 mt-2">
           <MicroLabel>Label (optional)</MicroLabel>
-          <input className={selectCls} placeholder="e.g. NAMED AREA OF INTEREST" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <input
+            className={selectCls}
+            placeholder="e.g. NAMED AREA OF INTEREST"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
         </label>
         <div className="mt-2">
-          <Btn tone="accent" onClick={drawAoi} disabled={noDraw} className="w-full justify-center gap-1.5">
+          <Btn
+            tone="accent"
+            onClick={drawAoi}
+            disabled={noDraw}
+            className="w-full justify-center gap-1.5"
+          >
             <Circle size={12} strokeWidth={1.75} aria-hidden />
             Draw AOI on map
           </Btn>
         </div>
         {noDraw && <MicroLabel>map not ready</MicroLabel>}
-        {status && <p className="text-[10px] text-accent mt-2 mono">{status}</p>}
+        {status && (
+          <p className="text-[10px] text-accent mt-2 mono">{status}</p>
+        )}
         <MicroLabel>triggers post to the Alerts tab + ticker</MicroLabel>
       </Widget>
 
@@ -72,7 +91,10 @@ export function WatchboxPanel(): JSX.Element {
         <div className="max-h-[200px] overflow-auto space-y-0.5">
           {wbs.map((w) =>
             editId === w.id ? (
-              <div key={w.id} className="space-y-1.5 rounded-sm bg-bg-2 px-1.5 py-1.5">
+              <div
+                key={w.id}
+                className="space-y-1.5 rounded-sm bg-bg-2 px-1.5 py-1.5"
+              >
                 <input
                   className={selectCls}
                   value={w.label}
@@ -87,7 +109,9 @@ export function WatchboxPanel(): JSX.Element {
                       type="button"
                       onClick={() => update(w.id, { rule: r })}
                       className={`flex-1 text-[10px] mono py-1 rounded-sm border capitalize ${
-                        w.rule === r ? 'border-accent-line bg-accent-dim text-txt-0' : 'border-line text-txt-2 hover:text-txt-0'
+                        w.rule === r
+                          ? "border-accent-line bg-accent-dim text-txt-0"
+                          : "border-line text-txt-2 hover:text-txt-0"
                       }`}
                     >
                       {r}
@@ -102,7 +126,11 @@ export function WatchboxPanel(): JSX.Element {
                       min={0.1}
                       step={0.1}
                       value={w.radiusKm}
-                      onChange={(e) => update(w.id, { radiusKm: Math.max(0.1, +e.target.value || 0.1) })}
+                      onChange={(e) =>
+                        update(w.id, {
+                          radiusKm: Math.max(0.1, +e.target.value || 0.1),
+                        })
+                      }
                       className={selectCls}
                       aria-label="Watchbox radius km"
                     />
@@ -113,8 +141,16 @@ export function WatchboxPanel(): JSX.Element {
                 </div>
               </div>
             ) : (
-              <div key={w.id} className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group">
-                <Circle size={11} strokeWidth={1.75} className="shrink-0 text-warn-fg" aria-hidden />
+              <div
+                key={w.id}
+                className="flex items-center gap-2 px-1.5 py-1 rounded-sm hover:bg-bg-2 group"
+              >
+                <Circle
+                  size={11}
+                  strokeWidth={1.75}
+                  className="shrink-0 text-warn-fg"
+                  aria-hidden
+                />
                 <span className="flex-1 text-[10px] text-txt-1 mono truncate">
                   {w.label} · {w.rule} · {w.radiusKm}km
                 </span>
@@ -139,11 +175,15 @@ export function WatchboxPanel(): JSX.Element {
               </div>
             ),
           )}
-          {wbs.length === 0 && <MicroLabel>no watchboxes: draw an AOI</MicroLabel>}
+          {wbs.length === 0 && (
+            <MicroLabel>no watchboxes: draw an AOI</MicroLabel>
+          )}
         </div>
         {wbs.length > 0 && (
           <div className="mt-2">
-            <Btn onClick={clear} className="w-full justify-center">Clear all</Btn>
+            <Btn onClick={clear} className="w-full justify-center">
+              Clear all
+            </Btn>
           </div>
         )}
       </Widget>

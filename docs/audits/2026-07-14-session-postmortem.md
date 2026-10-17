@@ -156,7 +156,7 @@ zygote → 0 aircraft; zustand filter-in-selector infinite-loops
 
 ## One-line summary
 
-The platform's bugs are overwhelmingly *silence* — components that keep
-smiling after they stop working — and its wins are overwhelmingly *loudness*:
+The platform's bugs are overwhelmingly _silence_ — components that keep
+smiling after they stop working — and its wins are overwhelmingly _loudness_:
 guards that fail, probes that can fail, words that are banned without a
 count. Keep converting the first into the second.

@@ -4,12 +4,13 @@
 // preprogrammed INS/GPS profile with no live link (so nothing to jam — but GPS
 // denial makes them drift). This is the layer the v1 sim was missing.
 
-import type { EwEffect } from './ew.js';
+import type { EwEffect } from "./ew.js";
 
-export type LinkType = 'rf_los' | 'rf_satcom' | 'fiber' | 'autonomous' | 'manned';
-export type NavMode = 'manual' | 'gps_ins' | 'ins_only';
-export type LinkState = 'nominal' | 'degraded' | 'lost';
-export type OnLinkLoss = 'rtl' | 'loiter' | 'crash' | 'continue_ins';
+export type LinkType =
+  "rf_los" | "rf_satcom" | "fiber" | "autonomous" | "manned";
+export type NavMode = "manual" | "gps_ins" | "ins_only";
+export type LinkState = "nominal" | "degraded" | "lost";
+export type OnLinkLoss = "rtl" | "loiter" | "crash" | "continue_ins";
 
 export interface LinkProfile {
   type: LinkType;
@@ -30,69 +31,69 @@ export interface LinkProfile {
 
 export const PROFILES: Record<string, LinkProfile> = {
   fpv_rf: {
-    type: 'rf_los',
-    label: 'FPV · RF command',
+    type: "rf_los",
+    label: "FPV · RF command",
     commsRangeKm: 10,
     losRequired: true,
     jammable: true,
-    navMode: 'manual',
+    navMode: "manual",
     gpsDependent: false,
-    onLinkLoss: 'crash', // manual pilot, no autonomy → falls when jammed
+    onLinkLoss: "crash", // manual pilot, no autonomy → falls when jammed
     insDriftMPerKm: 0,
   },
   fpv_fiber: {
-    type: 'fiber',
-    label: 'FPV · fiber-optic',
+    type: "fiber",
+    label: "FPV · fiber-optic",
     commsRangeKm: 20, // spool length; unjammable
     losRequired: false,
     jammable: false,
-    navMode: 'manual',
+    navMode: "manual",
     gpsDependent: false,
-    onLinkLoss: 'crash', // tether snapped / spooled out
+    onLinkLoss: "crash", // tether snapped / spooled out
     insDriftMPerKm: 0,
   },
   loiter_rf: {
-    type: 'rf_los',
-    label: 'Loitering · RF + INS fallback',
+    type: "rf_los",
+    label: "Loitering · RF + INS fallback",
     commsRangeKm: 40,
     losRequired: true,
     jammable: true,
-    navMode: 'gps_ins',
+    navMode: "gps_ins",
     gpsDependent: true,
-    onLinkLoss: 'continue_ins', // autonomous terminal attack
+    onLinkLoss: "continue_ins", // autonomous terminal attack
     insDriftMPerKm: 8,
   },
   owa_ins: {
-    type: 'autonomous',
-    label: 'One-way attack · GPS/INS',
+    type: "autonomous",
+    label: "One-way attack · GPS/INS",
     commsRangeKm: 0, // preprogrammed; no live link to cut
     losRequired: false,
     jammable: false,
-    navMode: 'gps_ins',
+    navMode: "gps_ins",
     gpsDependent: true,
-    onLinkLoss: 'continue_ins',
+    onLinkLoss: "continue_ins",
     insDriftMPerKm: 12, // Shahed-class drift badly under GPS denial
   },
   male_satcom: {
-    type: 'rf_satcom',
-    label: 'MALE · satcom',
+    type: "rf_satcom",
+    label: "MALE · satcom",
     commsRangeKm: 250,
     losRequired: false, // via satellite
     jammable: true, // harder, but modeled jammable
-    navMode: 'gps_ins',
+    navMode: "gps_ins",
     gpsDependent: true,
-    onLinkLoss: 'rtl', // returns to base on link loss
+    onLinkLoss: "rtl", // returns to base on link loss
     insDriftMPerKm: 4,
   },
   manned: {
-    type: 'manned',
-    label: 'Manned',
+    type: "manned",
+    label: "Manned",
     commsRangeKm: Infinity,
     losRequired: false,
     jammable: false,
-    navMode: 'gps_ins',
+    navMode: "gps_ins",
     gpsDependent: false,
-    onLinkLoss: 'continue_ins',
+    onLinkLoss: "continue_ins",
     insDriftMPerKm: 1,
   },
 };
@@ -100,16 +101,24 @@ export const PROFILES: Record<string, LinkProfile> = {
 export type ProfileKey = keyof typeof PROFILES;
 
 // Map a catalog system → its default link archetype.
-export function linkProfileFor(systemId: string, category: string): LinkProfile {
+export function linkProfileFor(
+  systemId: string,
+  category: string,
+): LinkProfile {
   const id = systemId.toLowerCase();
-  if (id.includes('fiber')) return PROFILES.fpv_fiber!;
-  if (id.includes('fpv')) return PROFILES.fpv_rf!;
-  if (id.includes('shahed') || id.includes('geran')) return PROFILES.owa_ins!;
-  if (id.includes('lancet') || id.includes('switchblade') || id.includes('warmate') || id.includes('harop'))
+  if (id.includes("fiber")) return PROFILES.fpv_fiber!;
+  if (id.includes("fpv")) return PROFILES.fpv_rf!;
+  if (id.includes("shahed") || id.includes("geran")) return PROFILES.owa_ins!;
+  if (
+    id.includes("lancet") ||
+    id.includes("switchblade") ||
+    id.includes("warmate") ||
+    id.includes("harop")
+  )
     return PROFILES.loiter_rf!;
-  if (category === 'fighter') return PROFILES.manned!;
-  if (category === 'drone') return PROFILES.male_satcom!;
-  if (category === 'loitering_munition') return PROFILES.owa_ins!;
+  if (category === "fighter") return PROFILES.manned!;
+  if (category === "drone") return PROFILES.male_satcom!;
+  if (category === "loitering_munition") return PROFILES.owa_ins!;
   return PROFILES.fpv_rf!;
 }
 
@@ -126,14 +135,14 @@ export function evaluateLink(
   const gnssDenied = p.gpsDependent && ew.gnssDenied;
 
   // Autonomous / manned have no live command link to lose.
-  if (p.type === 'autonomous' || p.type === 'manned') {
-    return { state: gnssDenied ? 'degraded' : 'nominal', gnssDenied };
+  if (p.type === "autonomous" || p.type === "manned") {
+    return { state: gnssDenied ? "degraded" : "nominal", gnssDenied };
   }
 
   let commsOk = distToStationKm <= p.commsRangeKm;
   if (p.losRequired && !losClear) commsOk = false;
   if (p.jammable && ew.commsCut) commsOk = false;
 
-  if (!commsOk) return { state: 'lost', gnssDenied };
-  return { state: gnssDenied ? 'degraded' : 'nominal', gnssDenied };
+  if (!commsOk) return { state: "lost", gnssDenied };
+  return { state: gnssDenied ? "degraded" : "nominal", gnssDenied };
 }

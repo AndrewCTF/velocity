@@ -274,6 +274,45 @@ def client() -> Iterator[TestClient]:
         app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _no_dotenv_for_tests() -> Iterator[None]:
+    """Stop the developer's own `.env` from configuring the test suite.
+
+    THE root cause, fixed once. `Settings.model_config` declares
+    `env_file=(".env", "../../.env")`, and pydantic-settings reads that as a
+    FILE — so exporting `SUPABASE_URL=""` in the shell does NOT override it.
+    Every `get_settings()` call (79 modules import it; each binds the function
+    by value at import, so patching one module's reference cannot help) then
+    sees the developer's real credentials. Measured consequences:
+
+      * `SUPABASE_URL` + `SUPABASE_ANON_KEY` present -> `_auth_enabled()` True,
+        so ApiKeyMiddleware 401s ("unauthorized"), `keys.current_user` 401s
+        ("sign-in required") and `security._multi_user` 403s ("requires the
+        admin role") — 712 tests erroring in setup, none of the assertions
+        looking like auth.
+      * Those same values also flip keyless/local branches in unrelated code
+        (e.g. `intel/watch.py:586` reads `supabase_url` to choose the LOCAL
+        SQLite rule store over the remote one), which is why patching only the
+        three auth readers moved 712 failures to 82 rather than to zero.
+
+    Rewriting `env_file` to None for the session is the one change that reaches
+    every reader, because it is consulted by `Settings.__init__` itself rather
+    than by any caller. Process env is untouched, so a per-test
+    `monkeypatch.setenv` (test_ingest_webhook._keyed_app building a KEYED box)
+    still behaves exactly as in production.
+
+    Restored afterwards: nothing outside the test session should be affected.
+    """
+    from app.config import Settings
+
+    original = Settings.model_config.get("env_file")
+    Settings.model_config["env_file"] = None
+    try:
+        yield
+    finally:
+        Settings.model_config["env_file"] = original
+
+
 @pytest.fixture(autouse=True)
 def _reset_auth_state() -> Iterator[None]:
     """Token caches and the failed-credential throttle are process-wide. Every

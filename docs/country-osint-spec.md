@@ -3,7 +3,7 @@
 Harvests every country in the **OSINT World Series** (unishka.com/osint-world-series,
 53 country/territory toolkits) into a single normalised catalog, serves it behind
 **one generic parameterized endpoint set**, and links it into the shared ontology
-graph so a national registry (`asic.gov.au`) is the *same* `domain:` node the
+graph so a national registry (`asic.gov.au`) is the _same_ `domain:` node the
 existing `investigate()` fan-out expands. No per-country code — the per-country
 variance lives entirely in data.
 
@@ -23,13 +23,20 @@ Schema:
 
 ```json
 {
-  "code": "au", "name": "Australia", "region": "Oceania", "iso2": "AU",
+  "code": "au",
+  "name": "Australia",
+  "region": "Oceania",
+  "iso2": "AU",
   "source_url": "https://unishka.substack.com/p/osint-of-australia",
-  "note": "truncated to 35 of 170",           // optional, top level
+  "note": "truncated to 35 of 170", // optional, top level
   "resources": [
-    {"name": "ABN Lookup", "url": "https://abr.business.gov.au",
-     "category": "business-registry", "note": "official company register",
-     "keyless": true}
+    {
+      "name": "ABN Lookup",
+      "url": "https://abr.business.gov.au",
+      "category": "business-registry",
+      "note": "official company register",
+      "keyless": true
+    }
   ]
 }
 ```
@@ -50,16 +57,17 @@ and exposes:
 - `CATEGORIES: tuple[str, ...]` — the vocab above.
 - `by_code(code) -> CountryRecord | None`.
 - `list_summary() -> dict` — `{count, regions, categories, countries:[{code,name,region,
-  iso2,source_url,resource_count,category_counts}]}`.
+iso2,source_url,resource_count,category_counts}]}`.
 - `build_graph(code) -> {nodes, links}` — **the single mint function**, reused by both
   the graph-preview GET and the persist POST so the linking logic exists once.
 
 ### `build_graph` linking (the "everything linked together" bridge)
 
 For country `code`:
+
 - `country:<code>` — props `{name, region, iso2, source_url, resource_count}`.
 - Per resource → `resource:<code>:<slug(name)>` — props `{name, url, category, note,
-  keyless}`; link `country:<code> -has_resource-> resource:…`.
+keyless}`; link `country:<code> -has_resource-> resource:…`.
 - If the resource URL's host is a real FQDN (`normalise_domain` from
   `app/osint/fetch.py`) → mint/reuse `domain:<host>` and link
   `resource:… -hosted_at-> domain:<host>`. **This is the bridge**: the same
@@ -79,13 +87,13 @@ source, ...}}`) so the Investigation canvas renders country nodes with no FE cha
 
 Generic, parameterized by `{code}` — the SAME shape for all 53 countries.
 
-| method | path | auth | returns |
-|--------|------|------|---------|
-| GET | `/api/osint/countries` | keyless | `list_summary()` (+ optional `?region=` `?category=` filter) |
-| GET | `/api/osint/countries/categories` | keyless | `{categories:[…], counts:{cat:total}}` cross-country |
-| GET | `/api/osint/countries/{code}` | keyless | full `CountryRecord` (404 if unknown) |
-| GET | `/api/osint/countries/{code}/graph` | keyless | `build_graph(code)` (`{nodes,links}`) — canvas preview, NOT persisted |
-| POST | `/api/osint/countries/{code}/ingest` | `current_user` | persist `build_graph(code)` into the caller's ontology (reuse `_Graph`/`reg.upsert`/`reg.link` from `routes/osint.py`); returns `{root:"country:<code>", objects, links}` + one audit row |
+| method | path                                 | auth           | returns                                                                                                                                                                                   |
+| ------ | ------------------------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/osint/countries`               | keyless        | `list_summary()` (+ optional `?region=` `?category=` filter)                                                                                                                              |
+| GET    | `/api/osint/countries/categories`    | keyless        | `{categories:[…], counts:{cat:total}}` cross-country                                                                                                                                      |
+| GET    | `/api/osint/countries/{code}`        | keyless        | full `CountryRecord` (404 if unknown)                                                                                                                                                     |
+| GET    | `/api/osint/countries/{code}/graph`  | keyless        | `build_graph(code)` (`{nodes,links}`) — canvas preview, NOT persisted                                                                                                                     |
+| POST   | `/api/osint/countries/{code}/ingest` | `current_user` | persist `build_graph(code)` into the caller's ontology (reuse `_Graph`/`reg.upsert`/`reg.link` from `routes/osint.py`); returns `{root:"country:<code>", objects, links}` + one audit row |
 
 Register the router in `app/main.py` alongside the other routers. Keyless GETs keep
 the "keyless layers keep working" invariant.
@@ -140,4 +148,4 @@ australia(au).
 2. (Python) assemble/validate → counts.
 3. (sonnet ×2) backend loader+endpoints+tests · frontend panel+test. (Opus) review.
 4. Verify: `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q` ≥ baseline
-   + new tests; `pnpm -r typecheck`; `bash scripts/verify.sh` green.
+   - new tests; `pnpm -r typecheck`; `bash scripts/verify.sh` green.

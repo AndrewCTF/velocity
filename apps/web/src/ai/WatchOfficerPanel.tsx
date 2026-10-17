@@ -8,8 +8,8 @@
 // one-click hand-off to the analyst agent, per-brief AI elaboration, and an
 // "auto-elaborate everything" mode that writes a deeper assessment on every open
 // brief. The whole panel and its queue collapse.
-import { useEffect, useRef, useState } from 'react';
-import * as Cesium from 'cesium';
+import { useEffect, useRef, useState } from "react";
+import * as Cesium from "cesium";
 import {
   Shield,
   Radio,
@@ -21,23 +21,23 @@ import {
   X,
   Sparkles,
   Loader2,
-} from 'lucide-react';
-import { flyToPosition } from '../globe/camera.js';
-import { Markdown } from '../shell/Markdown.js';
-import { useAgent } from '../state/agent.js';
-import { useAppView } from '../state/appView.js';
-import { AiLabel } from '../shell/aiLabel.js';
+} from "lucide-react";
+import { flyToPosition } from "../globe/camera.js";
+import { Markdown } from "../shell/Markdown.js";
+import { useAgent } from "../state/agent.js";
+import { useAppView } from "../state/appView.js";
+import { AiLabel } from "../shell/aiLabel.js";
 import {
   useWatchOfficerBriefs,
   useWatchOfficerStatus,
   elaborateBrief,
   type WatchOfficerBrief,
-} from '../state/watchOfficer.js';
+} from "../state/watchOfficer.js";
 
 const THREAT_TONE: Record<string, string> = {
-  high: 'text-alert border-alert-line',
-  elevated: 'text-warn border-warn-line',
-  low: 'text-txt-2 border-line',
+  high: "text-alert border-alert-line",
+  elevated: "text-warn border-warn-line",
+  low: "text-txt-2 border-line",
 };
 
 interface Elab {
@@ -48,14 +48,18 @@ interface Elab {
 }
 
 function ago(ts: number | null): string {
-  if (!ts) return 'never';
+  if (!ts) return "never";
   const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
   return `${Math.round(s / 3600)}h ago`;
 }
 
-export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }): JSX.Element {
+export function WatchOfficerPanel({
+  viewer,
+}: {
+  viewer: Cesium.Viewer | null;
+}): JSX.Element {
   const { briefs, dismiss, ack } = useWatchOfficerBriefs();
   const status = useWatchOfficerStatus();
   const setApp = useAppView((s) => s.setApp);
@@ -69,16 +73,17 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
   // re-requesting the same brief every render / poll.
   const requested = useRef<Set<string>>(new Set());
 
-  const setElab = (id: string, e: Elab): void => setElabs((m) => ({ ...m, [id]: e }));
+  const setElab = (id: string, e: Elab): void =>
+    setElabs((m) => ({ ...m, [id]: e }));
 
   const runElaborate = async (id: string): Promise<void> => {
     if (requested.current.has(id)) return;
     requested.current.add(id);
     setElab(id, { loading: true });
     const res = await elaborateBrief(id);
-    if (res === 'disabled') setElab(id, { loading: false, disabled: true });
+    if (res === "disabled") setElab(id, { loading: false, disabled: true });
     else if (res && res.ok) setElab(id, { loading: false, text: res.text });
-    else setElab(id, { loading: false, error: 'elaboration unavailable' });
+    else setElab(id, { loading: false, error: "elaboration unavailable" });
   };
 
   // Auto-elaborate everything: expand all open briefs and, one at a time (gentle
@@ -100,7 +105,8 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoElaborate, briefs]);
 
-  const allExpanded = briefs.length > 0 && briefs.every((b) => expanded.has(b.id));
+  const allExpanded =
+    briefs.length > 0 && briefs.every((b) => expanded.has(b.id));
   const toggleAll = (): void =>
     setExpanded(allExpanded ? new Set() : new Set(briefs.map((b) => b.id)));
   const toggleOne = (id: string): void =>
@@ -113,7 +119,7 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
 
   const flyTo = (b: WatchOfficerBrief): void => {
     if (!viewer || b.centroid.lon == null || b.centroid.lat == null) return;
-    setApp('map');
+    setApp("map");
     flyToPosition(viewer, b.centroid.lon, b.centroid.lat, 320_000, 1.2);
   };
 
@@ -121,10 +127,10 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
     const where =
       b.centroid.lat != null && b.centroid.lon != null
         ? ` near ${b.centroid.lat.toFixed(2)},${b.centroid.lon.toFixed(2)}`
-        : '';
-    setApp('map');
+        : "";
+    setApp("map");
     ask(
-      `Investigate this ${b.threat_level} ${b.domains.join(' + ')} convergence${where}: ` +
+      `Investigate this ${b.threat_level} ${b.domains.join(" + ")} convergence${where}: ` +
         `${b.title}. Confirm the evidence, assess intent, and recommend a detection.`,
     );
   };
@@ -142,28 +148,42 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
           aria-expanded={panelOpen}
         >
           {panelOpen ? (
-            <ChevronDown className="h-4 w-4 text-txt-3" strokeWidth={1.75} aria-hidden />
+            <ChevronDown
+              className="h-4 w-4 text-txt-3"
+              strokeWidth={1.75}
+              aria-hidden
+            />
           ) : (
-            <ChevronRight className="h-4 w-4 text-txt-3" strokeWidth={1.75} aria-hidden />
+            <ChevronRight
+              className="h-4 w-4 text-txt-3"
+              strokeWidth={1.75}
+              aria-hidden
+            />
           )}
-          <Shield className="h-4 w-4 text-accent" strokeWidth={1.75} aria-hidden />
-          <h2 className="text-[13px] font-semibold text-txt-0">Watch Officer</h2>
+          <Shield
+            className="h-4 w-4 text-accent"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+          <h2 className="text-[13px] font-semibold text-txt-0">
+            Watch Officer
+          </h2>
           <span
             className={`flex items-center gap-1 mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
-              running ? 'border-ok-line text-ok' : 'border-line text-txt-3'
+              running ? "border-ok-line text-ok" : "border-line text-txt-3"
             }`}
           >
             <span
-              className={`inline-block w-1.5 h-1.5 rounded-full ${running ? 'bg-ok animate-pulse' : 'bg-txt-4'}`}
+              className={`inline-block w-1.5 h-1.5 rounded-full ${running ? "bg-ok animate-pulse" : "bg-txt-4"}`}
             />
-            {running ? 'autonomous · running' : 'idle'}
+            {running ? "autonomous · running" : "idle"}
           </span>
         </button>
         <span className="mono text-[10px] text-txt-3 shrink-0">
           {panelOpen
             ? status
               ? `sweep every ${Math.round(status.cycle_s)}s`
-              : ''
+              : ""
             : `${briefs.length} briefs`}
         </span>
       </div>
@@ -171,9 +191,10 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
       {panelOpen && (
         <>
           <p className="text-[11px] text-txt-3">
-            Fuses live ADS-B/AIS/SAR/jamming/event signals every cycle and files a finished brief
-            when a convergence escalates: behavioural detection (AIS/ADS-B gaps, loiter, proximity),
-            no query needed. It also acts: tasks SAR on dark vessels and mints a tracked incident.
+            Fuses live ADS-B/AIS/SAR/jamming/event signals every cycle and files
+            a finished brief when a convergence escalates: behavioural detection
+            (AIS/ADS-B gaps, loiter, proximity), no query needed. It also acts:
+            tasks SAR on dark vessels and mints a tracked incident.
           </p>
 
           {/* Live telemetry chips */}
@@ -183,7 +204,11 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
               <Chip label={`last sweep ${ago(status.last_sweep_at)}`} />
               <Chip label={`${status.open} open`} on={status.open > 0} />
               {Object.entries(status.by_level).map(([lvl, n]) => (
-                <Chip key={lvl} label={`${n} ${lvl}`} tone={THREAT_TONE[lvl] ?? 'border-line text-txt-2'} />
+                <Chip
+                  key={lvl}
+                  label={`${n} ${lvl}`}
+                  tone={THREAT_TONE[lvl] ?? "border-line text-txt-2"}
+                />
               ))}
               <Chip label={`${status.total_filed} filed this session`} />
             </div>
@@ -198,8 +223,12 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
               </div>
               {status.playbooks.map((p) => (
                 <div key={p.id} className="mono text-[10px] text-txt-2">
-                  <span className="text-txt-3">on</span> {p.trigger}{' '}
-                  <ChevronRight className="inline h-3 w-3 -mt-0.5" strokeWidth={2} aria-hidden />{' '}
+                  <span className="text-txt-3">on</span> {p.trigger}{" "}
+                  <ChevronRight
+                    className="inline h-3 w-3 -mt-0.5"
+                    strokeWidth={2}
+                    aria-hidden
+                  />{" "}
                   {p.action}
                 </div>
               ))}
@@ -209,8 +238,10 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
           {/* Queue controls */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-[12px] font-semibold text-txt-1">
-              Triage queue{' '}
-              <span className="mono text-[11px] text-txt-3 tabular-nums">{briefs.length}</span>
+              Triage queue{" "}
+              <span className="mono text-[11px] text-txt-3 tabular-nums">
+                {briefs.length}
+              </span>
             </span>
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-1.5 mono text-[10px] text-txt-2 cursor-pointer select-none">
@@ -220,7 +251,11 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                   onChange={(e) => setAutoElaborate(e.target.checked)}
                   className="accent-(--accent)"
                 />
-                <Sparkles className="h-3 w-3 text-accent" strokeWidth={1.75} aria-hidden />
+                <Sparkles
+                  className="h-3 w-3 text-accent"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
                 Auto-elaborate everything
               </label>
               {briefs.length > 0 && (
@@ -229,7 +264,7 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                   onClick={toggleAll}
                   className="mono text-[10px] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:border-accent-line hover:text-accent"
                 >
-                  {allExpanded ? 'Collapse all' : 'Expand all'}
+                  {allExpanded ? "Collapse all" : "Expand all"}
                 </button>
               )}
             </div>
@@ -245,10 +280,15 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                 const tone = THREAT_TONE[b.threat_level] ?? THREAT_TONE.low;
                 const isOpen = expanded.has(b.id);
                 const sarStatus =
-                  typeof b.playbook?.sar === 'string' ? (b.playbook.sar as string) : null;
+                  typeof b.playbook?.sar === "string"
+                    ? (b.playbook.sar as string)
+                    : null;
                 const elab = elabs[b.id];
                 return (
-                  <li key={b.id} className={`rounded-sm border ${tone} bg-bg-2/50 p-2.5 space-y-2`}>
+                  <li
+                    key={b.id}
+                    className={`rounded-sm border ${tone} bg-bg-2/50 p-2.5 space-y-2`}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <button
                         type="button"
@@ -259,33 +299,62 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                         <span className="mono text-[10px] uppercase tracking-wide">
                           {b.threat_level}
                         </span>
-                        <span className="block text-[12px] text-txt-1 truncate">{b.title}</span>
+                        <span className="block text-[12px] text-txt-1 truncate">
+                          {b.title}
+                        </span>
                       </button>
                       <div className="flex gap-1 shrink-0">
                         <IconBtn
                           title="Elaborate with AI"
                           onClick={() => {
                             toggleOne(b.id);
-                            if (!expanded.has(b.id)) setExpanded((s) => new Set(s).add(b.id));
+                            if (!expanded.has(b.id))
+                              setExpanded((s) => new Set(s).add(b.id));
                             void runElaborate(b.id);
                           }}
                         >
-                          <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                          <Sparkles
+                            className="h-3.5 w-3.5"
+                            strokeWidth={1.75}
+                            aria-hidden
+                          />
                         </IconBtn>
-                        <IconBtn title="Fly the map here" onClick={() => flyTo(b)}>
-                          <Crosshair className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                        <IconBtn
+                          title="Fly the map here"
+                          onClick={() => flyTo(b)}
+                        >
+                          <Crosshair
+                            className="h-3.5 w-3.5"
+                            strokeWidth={1.75}
+                            aria-hidden
+                          />
                         </IconBtn>
                         <IconBtn
                           title="Investigate with the analyst agent"
                           onClick={() => investigate(b)}
                         >
-                          <Bot className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                          <Bot
+                            className="h-3.5 w-3.5"
+                            strokeWidth={1.75}
+                            aria-hidden
+                          />
                         </IconBtn>
                         <IconBtn title="Acknowledge" onClick={() => ack(b.id)}>
-                          <Check className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                          <Check
+                            className="h-3.5 w-3.5"
+                            strokeWidth={1.75}
+                            aria-hidden
+                          />
                         </IconBtn>
-                        <IconBtn title="Dismiss as noise" onClick={() => dismiss(b.id)}>
-                          <X className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                        <IconBtn
+                          title="Dismiss as noise"
+                          onClick={() => dismiss(b.id)}
+                        >
+                          <X
+                            className="h-3.5 w-3.5"
+                            strokeWidth={1.75}
+                            aria-hidden
+                          />
                         </IconBtn>
                       </div>
                     </div>
@@ -308,7 +377,9 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                       </div>
                     )}
 
-                    {b.narrative && <p className="text-[11px] text-txt-2">{b.narrative}</p>}
+                    {b.narrative && (
+                      <p className="text-[11px] text-txt-2">{b.narrative}</p>
+                    )}
 
                     {isOpen && (
                       <div className="space-y-2 pt-1 border-t border-line-2">
@@ -316,12 +387,20 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                         {elab && (
                           <div className="rounded-sm border border-accent-line/60 bg-accent/5 p-2 space-y-1">
                             <div className="flex items-center gap-1.5 mono text-[9px] text-accent uppercase tracking-wide">
-                              <Sparkles className="h-3 w-3" strokeWidth={1.75} aria-hidden />
+                              <Sparkles
+                                className="h-3 w-3"
+                                strokeWidth={1.75}
+                                aria-hidden
+                              />
                               AI assessment
                             </div>
                             {elab.loading && (
                               <span className="flex items-center gap-1.5 mono text-[10px] text-txt-3">
-                                <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} aria-hidden />
+                                <Loader2
+                                  className="h-3 w-3 animate-spin"
+                                  strokeWidth={2}
+                                  aria-hidden
+                                />
                                 elaborating…
                               </span>
                             )}
@@ -333,11 +412,14 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                             )}
                             {elab.disabled && (
                               <p className="mono text-[10px] text-warn">
-                                Enable “Selection AI brief” under Engine &amp; models to elaborate.
+                                Enable “Selection AI brief” under Engine &amp;
+                                models to elaborate.
                               </p>
                             )}
                             {elab.error && (
-                              <p className="mono text-[10px] text-txt-3">{elab.error}</p>
+                              <p className="mono text-[10px] text-txt-3">
+                                {elab.error}
+                              </p>
                             )}
                           </div>
                         )}
@@ -348,14 +430,21 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
                               Evidence chain
                             </div>
                             {b.evidence.map((e, i) => (
-                              <div key={i} className="mono text-[10px] text-txt-2">
+                              <div
+                                key={i}
+                                className="mono text-[10px] text-txt-2"
+                              >
                                 <span className="text-txt-3">{e.domain}</span>
-                                <span className="text-txt-4"> · {e.severity}</span>: {e.summary}
+                                <span className="text-txt-4">
+                                  {" "}
+                                  · {e.severity}
+                                </span>
+                                : {e.summary}
                                 {e.kind && (
                                   <span className="text-txt-4">
-                                    {' '}
+                                    {" "}
                                     [{e.kind}
-                                    {e.basis ? `: ${e.basis}` : ''}]
+                                    {e.basis ? `: ${e.basis}` : ""}]
                                   </span>
                                 )}
                               </div>
@@ -389,11 +478,20 @@ export function WatchOfficerPanel({ viewer }: { viewer: Cesium.Viewer | null }):
   );
 }
 
-function Chip({ label, on, tone }: { label: string; on?: boolean; tone?: string }): JSX.Element {
+function Chip({
+  label,
+  on,
+  tone,
+}: {
+  label: string;
+  on?: boolean;
+  tone?: string;
+}): JSX.Element {
   return (
     <span
       className={`mono text-[10px] px-2 py-0.5 rounded-sm border ${
-        tone ?? (on ? 'border-accent-line text-accent' : 'border-line text-txt-3')
+        tone ??
+        (on ? "border-accent-line text-accent" : "border-line text-txt-3")
       }`}
     >
       {label}

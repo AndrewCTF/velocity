@@ -1,6 +1,6 @@
-import * as Cesium from 'cesium';
-import type { Chokepoint } from '../registry/chokepoints.js';
-import { useSelection } from '../state/stores.js';
+import * as Cesium from "cesium";
+import type { Chokepoint } from "../registry/chokepoints.js";
+import { useSelection } from "../state/stores.js";
 
 // Camera helpers. All slews respect prefers-reduced-motion via the duration arg
 // passed by the caller (0 = instant set).
@@ -23,7 +23,11 @@ export function slewToEntity(
   flyToPosition(viewer, lon, lat, altMeters, durationSec);
 }
 
-export function flyToChokepoint(viewer: Cesium.Viewer, c: Chokepoint, durationSec = 1.4): void {
+export function flyToChokepoint(
+  viewer: Cesium.Viewer,
+  c: Chokepoint,
+  durationSec = 1.4,
+): void {
   const [west, south, east, north] = c.bbox;
   const rect = Cesium.Rectangle.fromDegrees(west, south, east, north);
   viewer.camera.flyTo({
@@ -60,7 +64,10 @@ export const EARTH_RADIUS_M = 6_378_137;
 
 export function globalAltitude(viewer: Cesium.Viewer, fill = 0.9): number {
   const frustum = viewer.camera.frustum as Cesium.PerspectiveFrustum;
-  const fov = typeof frustum?.fov === 'number' && Number.isFinite(frustum.fov) ? frustum.fov : 0;
+  const fov =
+    typeof frustum?.fov === "number" && Number.isFinite(frustum.fov)
+      ? frustum.fov
+      : 0;
   // Columbus/2D use an orthographic frustum with no fov. 11 Mm is the answer
   // this formula gives for a 16:9 window, so it is the right fallback.
   if (fov <= 0) return 11_000_000;
@@ -115,7 +122,10 @@ export function resetToTopDown(viewer: Cesium.Viewer, durationSec = 0.7): void {
 }
 
 // Find an entity by id across all data sources + the root collection.
-function findEntity(viewer: Cesium.Viewer, entityId: string): Cesium.Entity | null {
+function findEntity(
+  viewer: Cesium.Viewer,
+  entityId: string,
+): Cesium.Entity | null {
   for (let i = 0; i < viewer.dataSources.length; i++) {
     const e = viewer.dataSources.get(i).entities.getById(entityId);
     if (e) return e;
@@ -179,7 +189,10 @@ export function stopFollow(viewer: Cesium.Viewer): void {
   viewer.scene.requestRenderMode = true;
 }
 
-export function isFollowing(viewer: Cesium.Viewer, entityId: string | null): boolean {
+export function isFollowing(
+  viewer: Cesium.Viewer,
+  entityId: string | null,
+): boolean {
   const t = viewer.trackedEntity;
   return !!t && !!entityId && t.id === entityId;
 }

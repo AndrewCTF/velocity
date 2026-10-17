@@ -1,7 +1,7 @@
 # Phase 1 — ground truth before building (2026-08-30)
 
 Phase 1 of `Answer God's Eye View`. It edits no product code by design: its job
-is to re-establish the baseline and *observe* the seven user-visible features
+is to re-establish the baseline and _observe_ the seven user-visible features
 that `docs/exec-report-2026-07-29.md` §3 said were shipped with unit guards and
 never seen rendering. Findings here re-price the later phases.
 
@@ -31,7 +31,7 @@ There is a second, independent first-run gate the harnesses never knew about:
 when zero models are installed and llama.cpp is not running. On a genuinely clean
 profile a new self-hoster meets that modal — a picker offering 22-97 GB GGUF
 downloads — before they have seen the globe. It is deliberate and correctly
-gated; whether it should be the *first* thing a first-run user sees is an
+gated; whether it should be the _first_ thing a first-run user sees is an
 operator call, and it is recorded here as a first-run finding, not a bug.
 
 Fixed in this commit, harness-only:
@@ -53,15 +53,15 @@ ignore it, which is how the 2026-08-05 threshold outlived the UI it described.
 
 `node tools/perf/phase1_feature_sweep.mjs` (new; report + screenshots).
 
-| Feature | Verdict | Evidence |
-|---|---|---|
-| replay transport | **RENDERED** | play=1, return-to-live=1, scrubber=1 — matched by the controls' own accessible names (`TimeDock.tsx:178,201,296`), not a guessed text cluster |
-| provenance chip | **RENDERED** | selected `aircraft:a8a3ce`; tier vocabulary present; PROVENANCE section visible in the dossier |
-| archive sparkline | **RENDERED** | archive wording present, 207 svg polyline/path nodes |
-| answers panel | **RENDERED, but see below** | the card mounts and then sits on `Loading…` |
-| corroboration lens | **CONTROL RUNS** | the View menu item (`TitleBar.tsx:226`) clicks and toggles |
-| inbox keyboard path | **UNVERIFIED** | handler is real (`InboxPanel.tsx:96-137`, j/k/g/G/Enter/e on a window listener) but the triage queue was empty, and the handler returns early on an empty queue by design (`:98`). Not a defect; not evidence either |
-| staleness dimming | **UNMEASURABLE BY SCRIPT** | contacts draw as PRIMITIVES since the entity→primitive rewrite, so per-contact alpha is not reachable from the entity graph, and forcing a stale contact needs a frozen upstream. Saying so beats inventing a pass |
+| Feature             | Verdict                     | Evidence                                                                                                                                                                                                             |
+| ------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| replay transport    | **RENDERED**                | play=1, return-to-live=1, scrubber=1 — matched by the controls' own accessible names (`TimeDock.tsx:178,201,296`), not a guessed text cluster                                                                        |
+| provenance chip     | **RENDERED**                | selected `aircraft:a8a3ce`; tier vocabulary present; PROVENANCE section visible in the dossier                                                                                                                       |
+| archive sparkline   | **RENDERED**                | archive wording present, 207 svg polyline/path nodes                                                                                                                                                                 |
+| answers panel       | **RENDERED, but see below** | the card mounts and then sits on `Loading…`                                                                                                                                                                          |
+| corroboration lens  | **CONTROL RUNS**            | the View menu item (`TitleBar.tsx:226`) clicks and toggles                                                                                                                                                           |
+| inbox keyboard path | **UNVERIFIED**              | handler is real (`InboxPanel.tsx:96-137`, j/k/g/G/Enter/e on a window listener) but the triage queue was empty, and the handler returns early on an empty queue by design (`:98`). Not a defect; not evidence either |
+| staleness dimming   | **UNMEASURABLE BY SCRIPT**  | contacts draw as PRIMITIVES since the entity→primitive rewrite, so per-contact alpha is not reachable from the entity graph, and forcing a stale contact needs a frozen upstream. Saying so beats inventing a pass   |
 
 `console_frame_check.mjs`: 4/4 PASS — globe fill 0.878 of the map frame at
 11,651 km, right dock 656 chars with nothing selected, tier marks as above,
@@ -89,7 +89,7 @@ wrong.** Measured now, on a healthy snapshot with the floor met:
     total 8562 | attributed 539 | unattributed 8023 | corroborated 14 | 2.6%
     tiers: opensky 539 contacts (525 exclusive), feeds 14 (0 exclusive)
 
-Two tiers *are* live and 14 contacts *are* corroborated. The real defect is that
+Two tiers _are_ live and 14 contacts _are_ corroborated. The real defect is that
 **93.7% of contacts carry no `sources` field at all**. Pulling the snapshot
 directly: 8,588 features, 507 with `sources` (all `['opensky']`), and 8,081 with
 `properties.source == 'adsb'` and no `sources` list.

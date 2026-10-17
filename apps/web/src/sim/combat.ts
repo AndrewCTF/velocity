@@ -10,7 +10,7 @@
 // result is reproducible and explainable. The AI reasoning layer (/api/sim/reason)
 // turns these numbers into a narrative; it does not compute them.
 
-import { getSystem } from './catalog.js';
+import { getSystem } from "./catalog.js";
 
 // Max number of attacker agents the SimController renders as billboards. This is
 // a PERFORMANCE bound on the icon count, NOT a cap on the math: a raid of 1000
@@ -32,15 +32,15 @@ export const RENDER_AGENT_CAP = 200;
 // Falls back to a range-banded estimate for any id not listed.
 const SALVO_BY_ID: Record<string, number> = {
   thaad: 48,
-  's-400': 36,
-  's-300': 12,
-  'samp-t': 16,
-  'patriot-pac3': 16,
-  'buk-m3': 12,
+  "s-400": 36,
+  "s-300": 12,
+  "samp-t": 16,
+  "patriot-pac3": 16,
+  "buk-m3": 12,
   nasams: 12,
-  'iris-t-slm': 12,
-  'iron-dome': 20,
-  'pantsir-s1': 4,
+  "iris-t-slm": 12,
+  "iron-dome": 20,
+  "pantsir-s1": 4,
   avenger: 4,
   stinger: 2,
 };
@@ -118,7 +118,7 @@ export function resolveRaid(
 }
 
 export interface LanchesterResult {
-  winner: 'red' | 'blue' | 'draw';
+  winner: "red" | "blue" | "draw";
   redSurvivors: number;
   blueSurvivors: number;
   steps: number;
@@ -145,9 +145,18 @@ export function lanchesterSquare(
     blue = Math.max(0, blue - dBlue);
     steps++;
   }
-  const winner: 'red' | 'blue' | 'draw' =
-    red > 0.5 && blue <= 0.5 ? 'red' : blue > 0.5 && red <= 0.5 ? 'blue' : 'draw';
-  return { winner, redSurvivors: round1(red), blueSurvivors: round1(blue), steps };
+  const winner: "red" | "blue" | "draw" =
+    red > 0.5 && blue <= 0.5
+      ? "red"
+      : blue > 0.5 && red <= 0.5
+        ? "blue"
+        : "draw";
+  return {
+    winner,
+    redSurvivors: round1(red),
+    blueSurvivors: round1(blue),
+    steps,
+  };
 }
 
 function clamp01(x: number): number {

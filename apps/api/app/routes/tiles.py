@@ -32,8 +32,11 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import time
 from io import BytesIO
+from urllib.parse import urlsplit
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 
 from app import apple_maps, memtier, rocktree
@@ -124,14 +127,44 @@ def _tile_budget(settings: Settings) -> int:
 # 8 cap (different file, _UPSTREAM_SEMAPHORE).
 _FETCH_SEMAPHORE = asyncio.Semaphore(24)
 
+# A host that will not CONNECT is left alone for this long, and one caller at a
+# time finds out whether it is back. EOX answers a tile burst by dropping SYNs
+# for minutes; every uncached low-zoom tile then cost two attempts of two 5 s
+# connects, 20.7 s, and ended in a 502 anyway. A browser has six connections to
+# this origin, so the sixteen backdrop tiles under the Google 3D mesh held all
+# of them for a minute and the mesh (10 ms a tile) could not be asked for: first
+# mesh tile after 61 s, against 3 s with this (measured 2026-10-10, Manhattan).
+# ponytail: connect failures only. A host that accepts and then stalls still
+# costs every tile the 15 s read timeout twice; trip on that too if it is seen.
+_HOST_DOWN_S = 60.0
+_host_down: dict[str, float] = {}  # host → monotonic time of its next probe
+# Tile CDNs connect in under a second or not at all (20 to 760 ms from here).
+_TILE_TIMEOUT = httpx.Timeout(15.0, connect=2.0)
+
 
 async def _fetch_bytes(url: str) -> bytes | None:
+    host = urlsplit(url).hostname or ""
+    if time.monotonic() < _host_down.get(host, 0.0):
+        return None
     async with _FETCH_SEMAPHORE:
         for attempt in (0, 1):
+            # Again, here: this tile may have queued behind the ones that just
+            # watched the connect fail.
+            if time.monotonic() < _host_down.get(host, 0.0):
+                return None
+            if host in _host_down:
+                # The probe. Everyone else keeps skipping until it has an answer.
+                _host_down[host] = time.monotonic() + _HOST_DOWN_S
             try:
-                r = await get_client().get(url)
+                r = await get_client().get(url, timeout=_TILE_TIMEOUT)
+            except (httpx.ConnectError, httpx.ConnectTimeout):
+                # No second attempt: the transport already retried the connect.
+                _host_down[host] = time.monotonic() + _HOST_DOWN_S
+                return None
             except Exception:
                 r = None
+            else:
+                _host_down.pop(host, None)
             if r is not None and r.status_code == 200:
                 return r.content
             if attempt == 0:
@@ -473,10 +506,20 @@ def _g3d_gate(settings: Settings, commercial: bool) -> None:
         raise HTTPException(451, "Google Earth data is not licensed for commercial reuse")
 
 
+# What a filler with no triangle in it weighs: the stand-in `node_glb` ships.
+_G3D_EMPTY_BYTES = len(rocktree.node_glb(b""))
+
+
 async def _g3d_tileset(path: str, settings: Settings, commercial: bool) -> Response:
     _g3d_gate(settings, commercial)
+    cache = _cache_for(settings.tile_cache_dir, _tile_budget(settings))
+
+    def empty(node: str, keep: int) -> bool | None:
+        size = cache.size("g3d", len(node), int(node, 8), keep, "glb")
+        return None if size is None else size == _G3D_EMPTY_BYTES
+
     try:
-        body = await rocktree.tileset_json(path, settings.google_3d_detail)
+        body = await rocktree.tileset_json(path, settings.google_3d_detail, empty)
     except LookupError as e:
         raise HTTPException(404, str(e)) from e
     except Exception as e:  # noqa: BLE001 - a moved endpoint must read as a dead tile
@@ -505,7 +548,7 @@ async def g3d_root(
 
 @router.get("/tiles/g3d/t{path}.json")
 async def g3d_branch(
-    path: str = Path(..., pattern=r"^([0-7]{4}){1,7}$"),
+    path: str = Path(..., pattern=r"^([0-7]{2}){1,14}$"),
     settings: Settings = Depends(get_settings),
     commercial: bool = Depends(commercial_request),
 ) -> Response:

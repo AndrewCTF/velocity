@@ -1,59 +1,66 @@
-import * as Cesium from 'cesium';
-import { icons, cachedIcon } from '../icons.js';
+import * as Cesium from "cesium";
+import { icons, cachedIcon } from "../icons.js";
 
 // Token colors loaded at runtime from CSS variables so the chrome stays
 // in sync with theme. Cesium needs them as Cesium.Color instances.
 function cssColor(name: string, fallback: string): Cesium.Color {
-  if (typeof window === 'undefined') return Cesium.Color.fromCssColorString(fallback);
-  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  if (typeof window === "undefined")
+    return Cesium.Color.fromCssColorString(fallback);
+  const v = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
   return Cesium.Color.fromCssColorString(v || fallback);
 }
 
 export const colors = {
-  accent: () => cssColor('--accent', '#2dd4bf'),
-  warn: () => cssColor('--warn', '#f59e0b'),
-  alert: () => cssColor('--alert', '#ef4444'),
-  ok: () => cssColor('--ok', '#34d399'),
-  txt0: () => cssColor('--txt-0', '#e6edf3'),
-  txt2: () => cssColor('--txt-2', '#8b98a8'),
-  txt3: () => cssColor('--txt-3', '#5f6b7a'),
+  accent: () => cssColor("--accent", "#2dd4bf"),
+  warn: () => cssColor("--warn", "#f59e0b"),
+  alert: () => cssColor("--alert", "#ef4444"),
+  ok: () => cssColor("--ok", "#34d399"),
+  txt0: () => cssColor("--txt-0", "#e6edf3"),
+  txt2: () => cssColor("--txt-2", "#8b98a8"),
+  txt3: () => cssColor("--txt-3", "#5f6b7a"),
 };
 
-const HEX_ACCENT = '#2dd4bf';
-const HEX_WARN = '#f59e0b';
-const HEX_ALERT = '#ef4444';
-const HEX_OK = '#34d399';
-const HEX_TXT2 = '#8b98a8';
+const HEX_ACCENT = "#2dd4bf";
+const HEX_WARN = "#f59e0b";
+const HEX_ALERT = "#ef4444";
+const HEX_OK = "#34d399";
+const HEX_TXT2 = "#8b98a8";
 
 // Flightradar24-style aircraft category palette
-const HEX_AIRLINER = '#facc15';   // flightradar accent yellow
-const HEX_PRIVATE = '#2dd4bf';    // cyan for light/private
-const HEX_HELI = '#c084fc';       // magenta for rotorcraft
-const HEX_GLIDER = '#93c5fd';     // pale blue for sailplanes
-const HEX_MIL = '#f59e0b';        // orange for military
+const HEX_AIRLINER = "#facc15"; // flightradar accent yellow
+const HEX_PRIVATE = "#2dd4bf"; // cyan for light/private
+const HEX_HELI = "#c084fc"; // magenta for rotorcraft
+const HEX_GLIDER = "#93c5fd"; // pale blue for sailplanes
+const HEX_MIL = "#f59e0b"; // orange for military
 
 // AIS / ITU-R M.1371 ship-type palette. Each color is chosen so categories
 // stay legible against a dark globe and distinct from the aircraft palette.
-const HEX_VES_CARGO = '#14b8a6';      // gray-green for cargo
-const HEX_VES_TANKER = '#d97706';     // amber for tankers (fuel/chem hazard)
-const HEX_VES_FISHING = '#5eead4';    // teal for fishing
-const HEX_VES_PASSENGER = '#38bdf8';  // ocean blue for passenger ferries
-const HEX_VES_MIL = '#f59e0b';        // orange — same as mil aircraft
-const HEX_VES_SAILING = '#a5f3fc';    // pale-cyan for sailing
-const HEX_VES_PLEASURE = '#4ade80';   // light-green for pleasure craft
-const HEX_VES_TUG = '#c084fc';        // violet for tugs / service
-const HEX_VES_SAR = '#ef4444';        // red — search & rescue
+const HEX_VES_CARGO = "#14b8a6"; // gray-green for cargo
+const HEX_VES_TANKER = "#d97706"; // amber for tankers (fuel/chem hazard)
+const HEX_VES_FISHING = "#5eead4"; // teal for fishing
+const HEX_VES_PASSENGER = "#38bdf8"; // ocean blue for passenger ferries
+const HEX_VES_MIL = "#f59e0b"; // orange — same as mil aircraft
+const HEX_VES_SAILING = "#a5f3fc"; // pale-cyan for sailing
+const HEX_VES_PLEASURE = "#4ade80"; // light-green for pleasure craft
+const HEX_VES_TUG = "#c084fc"; // violet for tugs / service
+const HEX_VES_SAR = "#ef4444"; // red — search & rescue
 
-const EMERGENCY_SQUAWKS = new Set(['7500', '7600', '7700']);
+const EMERGENCY_SQUAWKS = new Set(["7500", "7600", "7700"]);
 
 // ADS-B Mode S "category" codes (airplanes.live / adsb.lol /v2/point payloads):
 //   A1 light, A2 small, A3 large, A4 high-vortex large, A5 heavy,
 //   A6 high-performance, A7 rotorcraft,
 //   B1 glider/sailplane, B2 light free balloon, B4 ultralight.
-type AircraftKind = 'airliner' | 'private' | 'helicopter' | 'glider' | 'military' | 'emergency';
+type AircraftKind =
+  "airliner" | "private" | "helicopter" | "glider" | "military" | "emergency";
 
 // ── Quakes ────────────────────────────────────────────────────────────────
-export function quakeStyle(mag: number | null): { color: Cesium.Color; pixelSize: number } {
+export function quakeStyle(mag: number | null): {
+  color: Cesium.Color;
+  pixelSize: number;
+} {
   const m = mag ?? 0;
   let color = colors.txt2();
   if (m >= 5) color = colors.alert();
@@ -73,11 +80,11 @@ export interface AircraftStyle {
 }
 
 export function aircraftStyle(props: Record<string, unknown>): AircraftStyle {
-  const trackDeg = (props['track_deg'] as number | null) ?? null;
-  const squawk = (props['squawk'] as string | null) ?? null;
-  const callsign = (props['callsign'] as string | null) ?? null;
-  const source = (props['source'] as string | null) ?? null;
-  const category = (props['category'] as string | null) ?? null;
+  const trackDeg = (props["track_deg"] as number | null) ?? null;
+  const squawk = (props["squawk"] as string | null) ?? null;
+  const callsign = (props["callsign"] as string | null) ?? null;
+  const source = (props["source"] as string | null) ?? null;
+  const category = (props["category"] as string | null) ?? null;
 
   // Coerce squawk to string before set lookup: upstream feeds frequently send
   // the integer 7700 rather than the string "7700", and `Set.has(7700)` returns
@@ -90,17 +97,19 @@ export function aircraftStyle(props: Record<string, unknown>): AircraftStyle {
   // squawk, so those aircraft were never turning red. Treat any non-empty,
   // non-"none" value as an emergency too.
   const emergFlag = (() => {
-    const e = props['emergency'];
-    if (typeof e === 'boolean') return e;
-    if (typeof e === 'string') {
+    const e = props["emergency"];
+    if (typeof e === "boolean") return e;
+    if (typeof e === "string") {
       const v = e.trim().toLowerCase();
-      return v !== '' && v !== 'none' && v !== 'no';
+      return v !== "" && v !== "none" && v !== "no";
     }
     return false;
   })();
   const emergency = emergSquawk || emergFlag;
   const military =
-    isMilitaryCallsign(callsign) || source === 'adsb_mil' || source === 'airplanes_live';
+    isMilitaryCallsign(callsign) ||
+    source === "adsb_mil" ||
+    source === "airplanes_live";
 
   // Priority: emergency → military → ADS-B category → default airliner.
   // Each branch picks (icon, color, scale) together so the FR24-like
@@ -111,34 +120,34 @@ export function aircraftStyle(props: Record<string, unknown>): AircraftStyle {
   let imageUri: string;
 
   if (emergency) {
-    kind = 'emergency';
+    kind = "emergency";
     hex = HEX_ALERT;
     scale = 1.4;
     // Reuse the airliner silhouette tinted red; pulse handled by adapter.
     imageUri = cachedIcon(`aircraft:${hex}`, () => icons.aircraft(hex));
   } else if (military) {
-    kind = 'military';
+    kind = "military";
     hex = HEX_MIL;
     scale = 1.2;
     imageUri = cachedIcon(`aircraft:${hex}`, () => icons.aircraft(hex));
-  } else if (category === 'A7' || category === 'A6') {
-    kind = 'helicopter';
+  } else if (category === "A7" || category === "A6") {
+    kind = "helicopter";
     hex = HEX_HELI;
     scale = 0.9;
     imageUri = cachedIcon(`heli:${hex}`, () => icons.helicopter(hex));
-  } else if (category === 'B1') {
-    kind = 'glider';
+  } else if (category === "B1") {
+    kind = "glider";
     hex = HEX_GLIDER;
     scale = 1.0;
     imageUri = cachedIcon(`glider:${hex}`, () => icons.glider(hex));
-  } else if (category === 'A1' || category === 'A2') {
-    kind = 'private';
+  } else if (category === "A1" || category === "A2") {
+    kind = "private";
     hex = HEX_PRIVATE;
     scale = 1.0;
     imageUri = cachedIcon(`private:${hex}`, () => icons.privateAircraft(hex));
   } else {
     // A3/A4/A5 large jets, plus anything without a category (OpenSky etc.).
-    kind = 'airliner';
+    kind = "airliner";
     hex = HEX_AIRLINER;
     scale = 1.1;
     imageUri = cachedIcon(`aircraft:${hex}`, () => icons.aircraft(hex));
@@ -151,7 +160,9 @@ export function aircraftStyle(props: Record<string, unknown>): AircraftStyle {
   // empty imageUri through would make Cesium silently fall back to a default
   // point primitive (the "blue dot" the operator complained about).
   if (!imageUri) {
-    imageUri = cachedIcon(`aircraft:${HEX_AIRLINER}`, () => icons.aircraft(HEX_AIRLINER));
+    imageUri = cachedIcon(`aircraft:${HEX_AIRLINER}`, () =>
+      icons.aircraft(HEX_AIRLINER),
+    );
   }
 
   const rotationRad = trackDeg == null ? 0 : -Cesium.Math.toRadians(trackDeg);
@@ -168,7 +179,9 @@ export function isMilitaryCallsign(cs: string | null): boolean {
   //   DERBY → also a UK regional airline historically
   //   EAGLE → American Eagle (commercial)
   //   HAWK  → used by multiple civilian charter operators
-  return /^(RCH|REACH|SAM|DUKE|GORDO|BISON|MAGMA|SCAR|PAT|SLAM|KING|EBONY|CONVOY|NAVY|GAF|ASCOT|CHAOS|TITAN|VOODOO|MAKO|TREK|TANGO|VENOM|VIPER|HOMR|RAPTR)\d/i.test(cs);
+  return /^(RCH|REACH|SAM|DUKE|GORDO|BISON|MAGMA|SCAR|PAT|SLAM|KING|EBONY|CONVOY|NAVY|GAF|ASCOT|CHAOS|TITAN|VOODOO|MAKO|TREK|TANGO|VENOM|VIPER|HOMR|RAPTR)\d/i.test(
+    cs,
+  );
 }
 
 // ── Vessels ───────────────────────────────────────────────────────────────
@@ -177,16 +190,16 @@ export function isMilitaryCallsign(cs: string | null): boolean {
 // at-a-glance distinctions (tanker vs cargo vs fishing) without an
 // overwhelming legend.
 export type VesselKind =
-  | 'cargo'
-  | 'tanker'
-  | 'fishing'
-  | 'passenger'
-  | 'military'
-  | 'sailing'
-  | 'pleasure'
-  | 'tug'
-  | 'sar'
-  | 'generic';
+  | "cargo"
+  | "tanker"
+  | "fishing"
+  | "passenger"
+  | "military"
+  | "sailing"
+  | "pleasure"
+  | "tug"
+  | "sar"
+  | "generic";
 
 export interface VesselStyle {
   imageUri: string;
@@ -200,74 +213,135 @@ export interface VesselStyle {
 // Map raw ITU-R M.1371 ship type code (0-99) to a render kind.
 // Reference: ITU-R M.1371-5 §3.1.1, Annex 8 Table 50.
 function classifyShipType(code: number | null): VesselKind {
-  if (code == null) return 'generic';
+  if (code == null) return "generic";
   // Special handheld categories first.
-  if (code === 30) return 'fishing';
-  if (code === 31 || code === 32 || code === 52) return 'tug';
-  if (code === 35) return 'military';
-  if (code === 36) return 'sailing';
-  if (code === 37) return 'pleasure';
+  if (code === 30) return "fishing";
+  if (code === 31 || code === 32 || code === 52) return "tug";
+  if (code === 35) return "military";
+  if (code === 36) return "sailing";
+  if (code === 37) return "pleasure";
   // 40-49: High-Speed Craft (HSC), nearly all passenger ferries in practice
   // (HSC carrying cargo is rare; the category is dominated by fast ferries).
-  if (code >= 40 && code <= 49) return 'passenger';
+  if (code >= 40 && code <= 49) return "passenger";
   // 50 = Pilot Vessel, 53 = Port Tender — both render best as tug-class
   // service vessels alongside the existing 31/32/52 tugs.
-  if (code === 50 || code === 53) return 'tug';
-  if (code === 51) return 'sar';
+  if (code === 50 || code === 53) return "tug";
+  if (code === 51) return "sar";
   // 55 = Law Enforcement Vessel (coast guard, customs cutters) — bucket
   // with military so it picks the orange MIL silhouette and reads as
   // "armed state asset" at a glance.
-  if (code === 55) return 'military';
-  if (code >= 60 && code <= 69) return 'passenger';
-  if (code >= 70 && code <= 79) return 'cargo';
-  if (code >= 80 && code <= 89) return 'tanker';
-  return 'generic';
+  if (code === 55) return "military";
+  if (code >= 60 && code <= 69) return "passenger";
+  if (code >= 70 && code <= 79) return "cargo";
+  if (code >= 80 && code <= 89) return "tanker";
+  return "generic";
 }
 
-function pickVesselVisual(kind: VesselKind): { hex: string; iconKey: string; factory: (h: string) => string; scale: number } {
+function pickVesselVisual(kind: VesselKind): {
+  hex: string;
+  iconKey: string;
+  factory: (h: string) => string;
+  scale: number;
+} {
   switch (kind) {
-    case 'cargo':
-      return { hex: HEX_VES_CARGO, iconKey: 'cargo', factory: icons.cargoShip, scale: 1.0 };
-    case 'tanker':
-      return { hex: HEX_VES_TANKER, iconKey: 'tanker', factory: icons.tanker, scale: 1.05 };
-    case 'fishing':
-      return { hex: HEX_VES_FISHING, iconKey: 'fishing', factory: icons.fishing, scale: 0.85 };
-    case 'passenger':
-      return { hex: HEX_VES_PASSENGER, iconKey: 'passenger', factory: icons.vessel, scale: 1.0 };
-    case 'military':
-      return { hex: HEX_VES_MIL, iconKey: 'vessel-mil', factory: icons.vessel, scale: 1.1 };
-    case 'sailing':
-      return { hex: HEX_VES_SAILING, iconKey: 'sailing', factory: icons.pleasureCraft, scale: 0.85 };
-    case 'pleasure':
-      return { hex: HEX_VES_PLEASURE, iconKey: 'pleasure', factory: icons.pleasureCraft, scale: 0.85 };
-    case 'tug':
-      return { hex: HEX_VES_TUG, iconKey: 'tug', factory: icons.vessel, scale: 0.9 };
-    case 'sar':
-      return { hex: HEX_VES_SAR, iconKey: 'sar', factory: icons.vessel, scale: 1.1 };
+    case "cargo":
+      return {
+        hex: HEX_VES_CARGO,
+        iconKey: "cargo",
+        factory: icons.cargoShip,
+        scale: 1.0,
+      };
+    case "tanker":
+      return {
+        hex: HEX_VES_TANKER,
+        iconKey: "tanker",
+        factory: icons.tanker,
+        scale: 1.05,
+      };
+    case "fishing":
+      return {
+        hex: HEX_VES_FISHING,
+        iconKey: "fishing",
+        factory: icons.fishing,
+        scale: 0.85,
+      };
+    case "passenger":
+      return {
+        hex: HEX_VES_PASSENGER,
+        iconKey: "passenger",
+        factory: icons.vessel,
+        scale: 1.0,
+      };
+    case "military":
+      return {
+        hex: HEX_VES_MIL,
+        iconKey: "vessel-mil",
+        factory: icons.vessel,
+        scale: 1.1,
+      };
+    case "sailing":
+      return {
+        hex: HEX_VES_SAILING,
+        iconKey: "sailing",
+        factory: icons.pleasureCraft,
+        scale: 0.85,
+      };
+    case "pleasure":
+      return {
+        hex: HEX_VES_PLEASURE,
+        iconKey: "pleasure",
+        factory: icons.pleasureCraft,
+        scale: 0.85,
+      };
+    case "tug":
+      return {
+        hex: HEX_VES_TUG,
+        iconKey: "tug",
+        factory: icons.vessel,
+        scale: 0.9,
+      };
+    case "sar":
+      return {
+        hex: HEX_VES_SAR,
+        iconKey: "sar",
+        factory: icons.vessel,
+        scale: 1.1,
+      };
     default:
-      return { hex: HEX_OK, iconKey: 'vessel', factory: icons.vessel, scale: 0.95 };
+      return {
+        hex: HEX_OK,
+        iconKey: "vessel",
+        factory: icons.vessel,
+        scale: 0.95,
+      };
   }
 }
 
-export function vesselStyle(props: Record<string, unknown>, opts: { darkCandidate?: boolean } = {}): VesselStyle {
-  const cog = (props['cog'] as number | null) ?? (props['heading'] as number | null) ?? null;
-  const sog = (props['sog'] as number | null) ?? null;
+export function vesselStyle(
+  props: Record<string, unknown>,
+  opts: { darkCandidate?: boolean } = {},
+): VesselStyle {
+  const cog =
+    (props["cog"] as number | null) ??
+    (props["heading"] as number | null) ??
+    null;
+  const sog = (props["sog"] as number | null) ?? null;
   // darkCandidate is set by the Sentinel-1 SAR layer (sar_vessels.py): a radar
   // target with no nearby AIS contact (true = earned dark vessel; null = AIS
   // unknown). A real absence signal, so the glyph calls it out in red. (opts
   // is kept for a future in-process AIS-gap tracker; nothing feeds it today.)
-  const dark = opts.darkCandidate ?? props['darkCandidate'] === true;
+  const dark = opts.darkCandidate ?? props["darkCandidate"] === true;
 
   // Read ITU ship-type code from any of the casings the upstream feeds use.
   const rawShipType =
-    (props['shipType'] as number | string | null | undefined) ??
-    (props['ship_type'] as number | string | null | undefined) ??
-    (props['shiptype'] as number | string | null | undefined) ??
+    (props["shipType"] as number | string | null | undefined) ??
+    (props["ship_type"] as number | string | null | undefined) ??
+    (props["shiptype"] as number | string | null | undefined) ??
     null;
   let shipTypeNum: number | null = null;
-  if (typeof rawShipType === 'number' && Number.isFinite(rawShipType)) {
+  if (typeof rawShipType === "number" && Number.isFinite(rawShipType)) {
     shipTypeNum = rawShipType;
-  } else if (typeof rawShipType === 'string' && rawShipType.trim() !== '') {
+  } else if (typeof rawShipType === "string" && rawShipType.trim() !== "") {
     const parsed = Number.parseInt(rawShipType, 10);
     if (Number.isFinite(parsed)) shipTypeNum = parsed;
   }
@@ -285,18 +359,23 @@ export function vesselStyle(props: Record<string, unknown>, opts: { darkCandidat
     imageUri = cachedIcon(`vessel:dark:${hex}`, () => icons.darkVessel(hex));
     scale = 1.25;
   } else {
-    if (kind === 'generic') {
-      if (sog != null && sog < 0.5) hex = HEX_TXT2; // anchored / drifting
+    if (kind === "generic") {
+      if (sog != null && sog < 0.5)
+        hex = HEX_TXT2; // anchored / drifting
       else if (sog != null && sog > 25) hex = HEX_WARN; // unusually fast
     }
-    imageUri = cachedIcon(`vessel:${visual.iconKey}:${hex}`, () => visual.factory(hex));
+    imageUri = cachedIcon(`vessel:${visual.iconKey}:${hex}`, () =>
+      visual.factory(hex),
+    );
   }
 
   // Same sacred invariant as aircraft: vessels MUST render as an SVG icon,
   // never as Cesium's default point. Fall back to the generic vessel
   // silhouette in OK-green if the chosen factory somehow returned empty.
   if (!imageUri) {
-    imageUri = cachedIcon(`vessel:generic:${HEX_OK}`, () => icons.vessel(HEX_OK));
+    imageUri = cachedIcon(`vessel:generic:${HEX_OK}`, () =>
+      icons.vessel(HEX_OK),
+    );
   }
 
   const rotationRad = cog == null ? 0 : -Cesium.Math.toRadians(cog);
@@ -314,12 +393,15 @@ export function vesselStyle(props: Record<string, unknown>, opts: { darkCandidat
 }
 
 // ── Fires ─────────────────────────────────────────────────────────────────
-export function fireStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
-  const frp = (props['frp'] as number | null) ?? null;
-  const conf = String(props['confidence'] ?? '').toLowerCase();
+export function fireStyle(props: Record<string, unknown>): {
+  imageUri: string;
+  scale: number;
+} {
+  const frp = (props["frp"] as number | null) ?? null;
+  const conf = String(props["confidence"] ?? "").toLowerCase();
   let hex = HEX_WARN;
   if (frp != null && frp > 50) hex = HEX_ALERT;
-  else if (conf === 'high') hex = HEX_ALERT;
+  else if (conf === "high") hex = HEX_ALERT;
   const key = `fire:${hex}`;
   return { imageUri: cachedIcon(key, () => icons.fire(hex)), scale: 0.9 };
 }
@@ -333,17 +415,21 @@ export function jammingPolygonStyle(props: Record<string, unknown>): {
   outlineColor: string;
   alpha: number;
 } {
-  const severity = (props['severity'] as string | undefined) ?? 'low';
+  const severity = (props["severity"] as string | undefined) ?? "low";
   // low/medium → warn amber, high → alert red (mirrors point style).
-  const hex = severity === 'high' ? HEX_ALERT : HEX_WARN;
+  const hex = severity === "high" ? HEX_ALERT : HEX_WARN;
   // Alpha: low=0.2, medium=0.35, high=0.55 — enough fill to read the area
   // without obscuring the terrain underneath.
-  const alpha = severity === 'high' ? 0.55 : severity === 'medium' ? 0.35 : 0.2;
+  const alpha = severity === "high" ? 0.55 : severity === "medium" ? 0.35 : 0.2;
   return { fillColor: hex, outlineColor: hex, alpha };
 }
 
 // ── Satellites ────────────────────────────────────────────────────────────
-export function satelliteStyle(): { imageUri: string; scale: number; color: Cesium.Color } {
+export function satelliteStyle(): {
+  imageUri: string;
+  scale: number;
+  color: Cesium.Color;
+} {
   const key = `sat:${HEX_ACCENT}`;
   return {
     imageUri: cachedIcon(key, () => icons.satellite(HEX_ACCENT)),
@@ -355,10 +441,12 @@ export function satelliteStyle(): { imageUri: string; scale: number; color: Cesi
 // ── CCTV cams ─────────────────────────────────────────────────────────────
 // Public webcams — neutral slate so they read as infrastructure, not as a
 // contact. Static points: no rotation, no per-poll restyle.
-const HEX_CAMERA = '#e2e8f0';
+const HEX_CAMERA = "#e2e8f0";
 export function cameraStyle(): { imageUri: string; scale: number } {
   return {
-    imageUri: cachedIcon(`camera:${HEX_CAMERA}`, () => icons.camera(HEX_CAMERA)),
+    imageUri: cachedIcon(`camera:${HEX_CAMERA}`, () =>
+      icons.camera(HEX_CAMERA),
+    ),
     scale: 1.0,
   };
 }
@@ -375,15 +463,15 @@ function placeDataUri(svg: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-const PLACE_OUT = '#05070b'; // dark outline halo (matches label pill background)
+const PLACE_OUT = "#05070b"; // dark outline halo (matches label pill background)
 
 // FR24-style airport tile: rounded slate square + an upright airplane glyph.
 // Large hubs get a brighter tile + bigger scale than medium fields, so the map
 // reads primary vs secondary airports at a glance. The slate/blue hue keeps a
 // static airport visually apart from a live yellow aircraft.
 function airportSvg(large: boolean): string {
-  const tile = large ? '#e2e8f0' : '#94a3b8'; // slate-200 hub / slate-400 field
-  const glyph = large ? '#1e3a8a' : '#1e293b'; // blue-900 / slate-800 plane
+  const tile = large ? "#e2e8f0" : "#94a3b8"; // slate-200 hub / slate-400 field
+  const glyph = large ? "#1e3a8a" : "#1e293b"; // blue-900 / slate-800 plane
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
     <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
     <path d="M12 4.6 L12.9 11 L18 13 L18 14.3 L12.9 13.1 L12.9 16.7 L14.3 17.6 L14.3 18.7 L12 18 L9.7 18.7 L9.7 17.6 L11.1 16.7 L11.1 13.1 L6 14.3 L6 13 L11.1 11 Z"
@@ -391,9 +479,12 @@ function airportSvg(large: boolean): string {
   </svg>`;
 }
 
-export function airportStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
-  const large = String(props['atype'] ?? '').toLowerCase() === 'large';
-  const key = `airport:${large ? 'lg' : 'md'}`;
+export function airportStyle(props: Record<string, unknown>): {
+  imageUri: string;
+  scale: number;
+} {
+  const large = String(props["atype"] ?? "").toLowerCase() === "large";
+  const key = `airport:${large ? "lg" : "md"}`;
   return {
     imageUri: cachedIcon(key, () => placeDataUri(airportSvg(large))),
     scale: large ? 1.0 : 0.8,
@@ -404,8 +495,8 @@ export function airportStyle(props: Record<string, unknown>): { imageUri: string
 // the vessel palette (so it reads "maritime") but the square tile + anchor make
 // it clearly a fixed berth, not a moving vessel arrow.
 function portSvg(): string {
-  const tile = '#0d9488'; // teal-600
-  const glyph = '#f0fdfa'; // near-white anchor
+  const tile = "#0d9488"; // teal-600
+  const glyph = "#f0fdfa"; // near-white anchor
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
     <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
     <circle cx="12" cy="5.9" r="1.8" fill="none" stroke="${glyph}" stroke-width="1.5"/>
@@ -419,7 +510,7 @@ function portSvg(): string {
 
 export function portStyle(): { imageUri: string; scale: number } {
   return {
-    imageUri: cachedIcon('port', () => placeDataUri(portSvg())),
+    imageUri: cachedIcon("port", () => placeDataUri(portSvg())),
     scale: 0.95,
   };
 }
@@ -429,29 +520,33 @@ export function portStyle(): { imageUri: string; scale: number } {
 // outline in the same hue so a busy map still reads which restriction class
 // a shape belongs to at a glance. Unknown/unclassified types fall back to a
 // neutral gray rather than guessing a reason.
-const HEX_TFR_SECURITY = '#ef4444';   // SECURITY / VIP / Presidential — alert red
-const HEX_TFR_HAZARD = '#f59e0b';     // HAZARDS (fire, disaster) — warn amber
-const HEX_TFR_SHOW = '#38bdf8';       // AIR SHOWS / SPORTS — sky blue
-const HEX_TFR_SPACE = '#a78bfa';      // SPACE OPERATIONS — violet
-const HEX_TFR_UAS = '#2dd4bf';        // UAS / PUBLIC GATHERING — teal
-const HEX_TFR_DEFAULT = '#8b98a8';    // everything else — neutral gray
+const HEX_TFR_SECURITY = "#ef4444"; // SECURITY / VIP / Presidential — alert red
+const HEX_TFR_HAZARD = "#f59e0b"; // HAZARDS (fire, disaster) — warn amber
+const HEX_TFR_SHOW = "#38bdf8"; // AIR SHOWS / SPORTS — sky blue
+const HEX_TFR_SPACE = "#a78bfa"; // SPACE OPERATIONS — violet
+const HEX_TFR_UAS = "#2dd4bf"; // UAS / PUBLIC GATHERING — teal
+const HEX_TFR_DEFAULT = "#8b98a8"; // everything else — neutral gray
 
 export function tfrPolygonStyle(props: Record<string, unknown>): {
   fillColor: string;
   outlineColor: string;
   alpha: number;
 } {
-  const type = String(props['type'] ?? '').toUpperCase();
+  const type = String(props["type"] ?? "").toUpperCase();
   let hex = HEX_TFR_DEFAULT;
-  if (type.includes('SECURITY') || type.includes('VIP') || type.includes('PRESIDENT')) {
+  if (
+    type.includes("SECURITY") ||
+    type.includes("VIP") ||
+    type.includes("PRESIDENT")
+  ) {
     hex = HEX_TFR_SECURITY;
-  } else if (type.includes('HAZARD')) {
+  } else if (type.includes("HAZARD")) {
     hex = HEX_TFR_HAZARD;
-  } else if (type.includes('AIR SHOW') || type.includes('SPORT')) {
+  } else if (type.includes("AIR SHOW") || type.includes("SPORT")) {
     hex = HEX_TFR_SHOW;
-  } else if (type.includes('SPACE')) {
+  } else if (type.includes("SPACE")) {
     hex = HEX_TFR_SPACE;
-  } else if (type.includes('UAS') || type.includes('PUBLIC GATHERING')) {
+  } else if (type.includes("UAS") || type.includes("PUBLIC GATHERING")) {
     hex = HEX_TFR_UAS;
   }
   return { fillColor: hex, outlineColor: hex, alpha: 0.28 };
@@ -465,9 +560,9 @@ export function tfrPolygonStyle(props: Record<string, unknown>): {
 // anchor for naval, a star for army. `branch` outside {air,naval,army} (a
 // future data-source surprise) falls back to the army star rather than
 // silently dropping the icon.
-const HEX_BASE_AIR = '#60a5fa';   // blue-400
-const HEX_BASE_NAVAL = '#2dd4bf'; // teal-400 (echoes the vessel/port palette)
-const HEX_BASE_ARMY = '#a3a380'; // olive-drab
+const HEX_BASE_AIR = "#60a5fa"; // blue-400
+const HEX_BASE_NAVAL = "#2dd4bf"; // teal-400 (echoes the vessel/port palette)
+const HEX_BASE_ARMY = "#a3a380"; // olive-drab
 
 function baseAirSvg(): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
@@ -495,18 +590,30 @@ function baseArmySvg(): string {
   </svg>`;
 }
 
-export function baseStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
-  const branch = String(props['branch'] ?? '').toLowerCase();
-  if (branch === 'naval') {
-    return { imageUri: cachedIcon('base:naval', () => placeDataUri(baseNavalSvg())), scale: 0.95 };
+export function baseStyle(props: Record<string, unknown>): {
+  imageUri: string;
+  scale: number;
+} {
+  const branch = String(props["branch"] ?? "").toLowerCase();
+  if (branch === "naval") {
+    return {
+      imageUri: cachedIcon("base:naval", () => placeDataUri(baseNavalSvg())),
+      scale: 0.95,
+    };
   }
-  if (branch === 'army') {
-    return { imageUri: cachedIcon('base:army', () => placeDataUri(baseArmySvg())), scale: 0.95 };
+  if (branch === "army") {
+    return {
+      imageUri: cachedIcon("base:army", () => placeDataUri(baseArmySvg())),
+      scale: 0.95,
+    };
   }
   // 'air' and any unrecognized branch value both render the air glyph — the
   // most common branch in the Wikidata source set — rather than dropping the
   // icon entirely.
-  return { imageUri: cachedIcon('base:air', () => placeDataUri(baseAirSvg())), scale: 0.95 };
+  return {
+    imageUri: cachedIcon("base:air", () => placeDataUri(baseAirSvg())),
+    scale: 0.95,
+  };
 }
 
 // ── Naval (NGA broadcast) warnings ───────────────────────────────────────
@@ -514,8 +621,8 @@ export function baseStyle(props: Record<string, unknown>): { imageUri: string; s
 // swaps to a visually distinct red mine glyph (a spiked circle — the
 // universal naval-mine pictogram) so the operator can spot the highest-
 // severity subset without reading the text.
-const HEX_WARNING = '#f59e0b'; // warn amber
-const HEX_MINE = '#ef4444';    // alert red
+const HEX_WARNING = "#f59e0b"; // warn amber
+const HEX_MINE = "#ef4444"; // alert red
 
 function warningSvg(): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
@@ -535,7 +642,7 @@ function mineSvg(): string {
       const y2 = 12 + Math.sin(rad) * 10.5;
       return `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${HEX_MINE}" stroke-width="1.8" stroke-linecap="round"/>`;
     })
-    .join('');
+    .join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
     ${spikes}
     <circle cx="12" cy="12" r="6.5" fill="${HEX_MINE}" stroke="${PLACE_OUT}" stroke-width="1.2"/>
@@ -543,11 +650,20 @@ function mineSvg(): string {
   </svg>`;
 }
 
-export function warningStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
-  if (props['mine'] === true) {
-    return { imageUri: cachedIcon('warning:mine', () => placeDataUri(mineSvg())), scale: 1.0 };
+export function warningStyle(props: Record<string, unknown>): {
+  imageUri: string;
+  scale: number;
+} {
+  if (props["mine"] === true) {
+    return {
+      imageUri: cachedIcon("warning:mine", () => placeDataUri(mineSvg())),
+      scale: 1.0,
+    };
   }
-  return { imageUri: cachedIcon('warning:std', () => placeDataUri(warningSvg())), scale: 0.9 };
+  return {
+    imageUri: cachedIcon("warning:std", () => placeDataUri(warningSvg())),
+    scale: 0.9,
+  };
 }
 
 // ── Critical-infrastructure / military facilities (2026-07-11 wave) ──────
@@ -555,25 +671,26 @@ export function warningStyle(props: Record<string, unknown>): { imageUri: string
 // baseStyle dispatches on props.branch — square place tiles, one glyph +
 // palette color per category. Unknown categories fall back to a neutral tile.
 const FACILITY_COLORS: Record<string, string> = {
-  power: '#f59e0b',                // amber — generation
-  nuclear: '#ef4444',              // red — nuclear
-  water_treatment: '#38bdf8',      // sky — water
-  desalination: '#2dd4bf',         // teal — desalination
-  datacenter: '#a78bfa',           // violet — compute
-  telecom_hub: '#818cf8',          // indigo — comms
-  ground_station: '#34d399',       // emerald — space downlink
-  telescope: '#c084fc',            // purple — astronomy
-  launch: '#fb923c',               // orange — launch
-  military_installation: '#f87171', // light red — DoD MIRTA
-  garrison: '#f87171',
-  training: '#fbbf24',
+  power: "#f59e0b", // amber — generation
+  nuclear: "#ef4444", // red — nuclear
+  water_treatment: "#38bdf8", // sky — water
+  desalination: "#2dd4bf", // teal — desalination
+  datacenter: "#a78bfa", // violet — compute
+  telecom_hub: "#818cf8", // indigo — comms
+  ground_station: "#34d399", // emerald — space downlink
+  telescope: "#c084fc", // purple — astronomy
+  launch: "#fb923c", // orange — launch
+  military_installation: "#f87171", // light red — DoD MIRTA
+  garrison: "#f87171",
+  training: "#fbbf24",
 };
 
 function facilityGlyph(category: string): string {
   switch (category) {
-    case 'power': // lightning bolt
+    case "power": // lightning bolt
       return '<path d="M13 3 6.5 13.2h4L10.6 21l6.9-10.4h-4z" fill="#1a1200"/>';
-    case 'nuclear': { // trefoil
+    case "nuclear": {
+      // trefoil
       const wedges = [90, 210, 330]
         .map((deg) => {
           const a1 = ((deg - 28) * Math.PI) / 180;
@@ -584,26 +701,26 @@ function facilityGlyph(category: string): string {
           const y2 = 12 + Math.sin(a2) * 7;
           return `<path d="M12 12 L${x1.toFixed(1)} ${y1.toFixed(1)} A7 7 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z" fill="#2b0505"/>`;
         })
-        .join('');
+        .join("");
       return `${wedges}<circle cx="12" cy="12" r="1.8" fill="#2b0505"/>`;
     }
-    case 'water_treatment': // droplet
+    case "water_treatment": // droplet
       return '<path d="M12 4.5c2.8 3.6 5 6.4 5 9a5 5 0 1 1-10 0c0-2.6 2.2-5.4 5-9z" fill="#062a3a"/>';
-    case 'desalination': // droplet over wave
+    case "desalination": // droplet over wave
       return '<path d="M12 4c2.3 3 4.1 5.3 4.1 7.4a4.1 4.1 0 1 1-8.2 0C7.9 9.3 9.7 7 12 4z" fill="#032b26"/><path d="M5 18.5q1.75-1.6 3.5 0t3.5 0 3.5 0 3.5 0" stroke="#032b26" stroke-width="1.6" fill="none" stroke-linecap="round"/>';
-    case 'datacenter': // server rack
+    case "datacenter": // server rack
       return '<rect x="6.5" y="5" width="11" height="4.2" rx="1" fill="#211437"/><rect x="6.5" y="10.4" width="11" height="4.2" rx="1" fill="#211437"/><rect x="6.5" y="15.8" width="11" height="3.2" rx="1" fill="#211437"/><circle cx="9" cy="7.1" r="0.8" fill="#a78bfa"/><circle cx="9" cy="12.5" r="0.8" fill="#a78bfa"/>';
-    case 'telecom_hub': // radio mast
+    case "telecom_hub": // radio mast
       return '<path d="M12 5v14M12 5l-4.5 14M12 5l4.5 14" stroke="#141737" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M7.5 7.5a6.4 6.4 0 0 1 9 0M9.2 9.6a3.6 3.6 0 0 1 5.6 0" stroke="#141737" stroke-width="1.3" fill="none" stroke-linecap="round"/>';
-    case 'ground_station': // dish
+    case "ground_station": // dish
       return '<path d="M6 8a8.5 8.5 0 0 0 10 10z" fill="#03291c"/><line x1="11" y1="13" x2="17" y2="7" stroke="#03291c" stroke-width="1.6" stroke-linecap="round"/><circle cx="17.3" cy="6.7" r="1.4" fill="#03291c"/><path d="M9.5 18.5h5" stroke="#03291c" stroke-width="1.6" stroke-linecap="round"/>';
-    case 'telescope': // scope tube on mount
+    case "telescope": // scope tube on mount
       return '<rect x="5" y="8.6" width="12.5" height="3.4" rx="1.5" transform="rotate(-25 11 10.5)" fill="#26103a"/><path d="M11 13.5 8.5 19.5M12.5 13.5 15 19.5" stroke="#26103a" stroke-width="1.6" stroke-linecap="round"/>';
-    case 'launch': // rocket
+    case "launch": // rocket
       return '<path d="M12 3.5c2.6 2 3.4 5.4 2.4 9.1l1.9 2.6-2.9-.4c-.4.7-.9 1.4-1.4 2-.5-.6-1-1.3-1.4-2l-2.9.4 1.9-2.6c-1-3.7-.2-7.1 2.4-9.1z" fill="#331303"/><path d="M10.4 17.5 12 21l1.6-3.5" stroke="#331303" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
-    case 'military_installation':
-    case 'garrison':
-    case 'training': // five-point star
+    case "military_installation":
+    case "garrison":
+    case "training": // five-point star
       return '<path d="M12 4.6l2 4.6 5 .5-3.8 3.3 1.1 4.9L12 15.3l-4.3 2.6 1.1-4.9L5 9.7l5-.5z" fill="#2b0808"/>';
     default:
       return '<circle cx="12" cy="12" r="4.5" fill="#101418"/>';
@@ -611,20 +728,26 @@ function facilityGlyph(category: string): string {
 }
 
 function facilitySvg(category: string): string {
-  const tile = FACILITY_COLORS[category] ?? '#9ca3af';
+  const tile = FACILITY_COLORS[category] ?? "#9ca3af";
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
     <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
     ${facilityGlyph(category)}
   </svg>`;
 }
 
-export function facilityStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
-  let category = String(props['category'] ?? '').toLowerCase();
+export function facilityStyle(props: Record<string, unknown>): {
+  imageUri: string;
+  scale: number;
+} {
+  let category = String(props["category"] ?? "").toLowerCase();
   // The nuclear toggle serves power rows flagged nuclear — give them the
   // trefoil regardless of which toggle fetched them.
-  if (category === 'power' && String(props['fuel'] ?? '') === 'Nuclear') category = 'nuclear';
+  if (category === "power" && String(props["fuel"] ?? "") === "Nuclear")
+    category = "nuclear";
   return {
-    imageUri: cachedIcon(`facility:${category}`, () => placeDataUri(facilitySvg(category))),
+    imageUri: cachedIcon(`facility:${category}`, () =>
+      placeDataUri(facilitySvg(category)),
+    ),
     scale: 0.95,
   };
 }
@@ -634,112 +757,112 @@ export function facilityStyle(props: Record<string, unknown>): { imageUri: strin
 // radiation/relief/chokepoint/buoy/airquality/aurora), same rounded-tile idiom
 // as facilityStyle. Air-quality tints by US AQI band; chokepoint by congestion.
 const HAZARD_COLORS: Record<string, string> = {
-  disaster: '#f97316', // orange
-  cyclone: '#a855f7', // purple
-  volcano: '#b45309', // brown
-  radiation: '#facc15', // yellow
-  relief: '#38bdf8', // sky
-  chokepoint: '#2dd4bf', // teal
-  buoy: '#60a5fa', // blue
-  airquality: '#22c55e', // green (overridden by AQI band)
-  aurora: '#34d399', // emerald
+  disaster: "#f97316", // orange
+  cyclone: "#a855f7", // purple
+  volcano: "#b45309", // brown
+  radiation: "#facc15", // yellow
+  relief: "#38bdf8", // sky
+  chokepoint: "#2dd4bf", // teal
+  buoy: "#60a5fa", // blue
+  airquality: "#22c55e", // green (overridden by AQI band)
+  aurora: "#34d399", // emerald
   // OFAC-designated hull or airframe. Rose, not the alert red already spent on
   // a GDACS red-alert tile, because a designation is a legal status and not an
   // emergency and the two must not read as the same thing.
-  sanctioned: '#e11d48',
+  sanctioned: "#e11d48",
   // National routing drop. Slate, not red: the tile means "this country's
   // announced prefixes are below its own normal", which is a measurement, and
   // the severity is in the property rather than in the colour.
-  routing: '#64748b',
+  routing: "#64748b",
   // An orbital launch at its pad. Indigo, distinct from every hazard hue: a
   // launch is a scheduled event, not a warning.
-  launch: '#818cf8',
+  launch: "#818cf8",
   // Storm surge: observed water level minus the tide prediction. Cyan, and the
   // magnitude lives in residual_m rather than in the colour.
-  surge: '#22d3ee',
+  surge: "#22d3ee",
   // 2026-08-06 mega-ledger wave.
   // An air-raid alert is the one tile allowed the plain alert red: it means a
   // population has been told to take cover right now. An oblast that is CLEAR
   // is drawn slate by hazardStyle, so red on the map always means active.
-  ua_alert: '#ef4444',
-  meteoalarm: '#fb923c', // amber-orange, tinted by CAP severity
-  fema: '#0ea5e9', // sky: a declaration is money and process, not an emergency
-  spc_storm: '#eab308', // storm-report yellow, tinted by event type
-  ds_radiation: '#facc15', // same yellow as the radiation tile it mirrors
-  ds_event: '#f472b6', // pink: DeepState's written reports are a claim
-  radio_report: '#22d3ee', // cyan: an emitter somebody heard
-  satnogs_obs: '#8b5cf6', // violet: a received pass
-  satnogs_stn: '#a78bfa', // lighter violet: the receiver itself
-  sonde: '#38bdf8', // sky: an instrument under a balloon
-  mine: '#a16207', // ore brown
-  osm_military: '#94a3b8', // slate: land use, not an activity
-  wikimapia: '#78716c', // stone: crowd-labelled, deliberately quiet
-  sdr_station: '#2dd4bf', // teal: a listening post
+  ua_alert: "#ef4444",
+  meteoalarm: "#fb923c", // amber-orange, tinted by CAP severity
+  fema: "#0ea5e9", // sky: a declaration is money and process, not an emergency
+  spc_storm: "#eab308", // storm-report yellow, tinted by event type
+  ds_radiation: "#facc15", // same yellow as the radiation tile it mirrors
+  ds_event: "#f472b6", // pink: DeepState's written reports are a claim
+  radio_report: "#22d3ee", // cyan: an emitter somebody heard
+  satnogs_obs: "#8b5cf6", // violet: a received pass
+  satnogs_stn: "#a78bfa", // lighter violet: the receiver itself
+  sonde: "#38bdf8", // sky: an instrument under a balloon
+  mine: "#a16207", // ore brown
+  osm_military: "#94a3b8", // slate: land use, not an activity
+  wikimapia: "#78716c", // stone: crowd-labelled, deliberately quiet
+  sdr_station: "#2dd4bf", // teal: a listening post
 };
 
 function aqiColor(aqi: number | null): string {
-  if (aqi === null) return '#9ca3af';
-  if (aqi <= 50) return '#22c55e';
-  if (aqi <= 100) return '#eab308';
-  if (aqi <= 150) return '#f97316';
-  if (aqi <= 200) return '#ef4444';
-  if (aqi <= 300) return '#a855f7';
-  return '#7f1d1d';
+  if (aqi === null) return "#9ca3af";
+  if (aqi <= 50) return "#22c55e";
+  if (aqi <= 100) return "#eab308";
+  if (aqi <= 150) return "#f97316";
+  if (aqi <= 200) return "#ef4444";
+  if (aqi <= 300) return "#a855f7";
+  return "#7f1d1d";
 }
 
 function hazardGlyph(kind: string): string {
   switch (kind) {
-    case 'ua_alert': // siren horn
+    case "ua_alert": // siren horn
       return '<path d="M6 14V10a6 6 0 0 1 12 0v4z" fill="#2b0000"/><path d="M4.5 14h15v2.5h-15z" fill="#2b0000"/><path d="M12 4V2M18.5 6.5 20 5M5.5 6.5 4 5" stroke="#2b0000" stroke-width="1.4" stroke-linecap="round"/>';
-    case 'meteoalarm': // cloud with a bolt
+    case "meteoalarm": // cloud with a bolt
       return '<path d="M7.5 15a3.5 3.5 0 0 1 .4-7 5 5 0 0 1 9.3 1.4A3 3 0 0 1 16.5 15z" fill="#2a1400"/><path d="M12 15.5 10 19h2l-.8 3 3.3-4.2h-2z" fill="#2a1400"/>';
-    case 'fema': // shield with a seal dot
+    case "fema": // shield with a seal dot
       return '<path d="M12 4.5 18 7v5c0 3.3-2.5 5.8-6 7-3.5-1.2-6-3.7-6-7V7z" fill="#03202e"/><circle cx="12" cy="11.5" r="2" fill="#0ea5e9"/>';
-    case 'spc_storm': // funnel cloud
+    case "spc_storm": // funnel cloud
       return '<path d="M5 6h14l-4.5 5.5v3L9.5 18v-6.5z" fill="#241f00"/><path d="M5 6h14" stroke="#241f00" stroke-width="1.6" stroke-linecap="round"/>';
-    case 'ds_radiation': // same trefoil as the radiation tile
+    case "ds_radiation": // same trefoil as the radiation tile
       return '<circle cx="12" cy="12" r="1.8" fill="#1a1400"/><path d="M12 12 5.8 8.4A7 7 0 0 1 12 5v7z" fill="#1a1400"/><path d="M12 12 18.2 8.4A7 7 0 0 0 12 5v7z" fill="#1a1400"/><path d="M12 12 12 19a7 7 0 0 0 6.2-3.6L12 12z" fill="#1a1400"/>';
-    case 'ds_event': // speech mark: somebody said this
+    case "ds_event": // speech mark: somebody said this
       return '<path d="M5 6h14v9H13l-4 4v-4H5z" fill="#2b0417"/><path d="M8.5 10.5h7M8.5 13h4.5" stroke="#f472b6" stroke-width="1.3" stroke-linecap="round"/>';
-    case 'radio_report': // an antenna radiating: mast plus two arcs
+    case "radio_report": // an antenna radiating: mast plus two arcs
       return '<path d="M12 21V9" stroke="#03303a" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7" r="1.9" fill="#03303a"/><path d="M7.6 10.4a6 6 0 0 1 0-6.8M16.4 3.6a6 6 0 0 1 0 6.8" stroke="#03303a" stroke-width="1.5" fill="none" stroke-linecap="round"/>';
-    case 'satnogs_obs': // signal arcs into a dish
+    case "satnogs_obs": // signal arcs into a dish
       return '<path d="M6 18 13 8" stroke="#1a0838" stroke-width="1.8" stroke-linecap="round"/><path d="M5 19a7 7 0 0 1 9-9z" fill="#1a0838"/><path d="M16 5a6 6 0 0 1 3 3M15.5 8.5a3 3 0 0 1 1.6 1.6" stroke="#1a0838" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
-    case 'satnogs_stn': // dish on a mast
+    case "satnogs_stn": // dish on a mast
       return '<path d="M6 15a6 6 0 0 1 8-8z" fill="#1a0838"/><path d="M11 12 17 6" stroke="#1a0838" stroke-width="1.6" stroke-linecap="round"/><path d="M9 17h8" stroke="#1a0838" stroke-width="1.5" stroke-linecap="round"/>';
-    case 'sonde': // balloon on a string with a payload
+    case "sonde": // balloon on a string with a payload
       return '<path d="M12 4a4 4 0 0 1 4 4c0 2.6-2.4 4.4-4 5.6C10.4 12.4 8 10.6 8 8a4 4 0 0 1 4-4z" fill="#042435"/><path d="M12 13.6V16" stroke="#042435" stroke-width="1.3"/><rect x="10.4" y="16" width="3.2" height="3.2" rx="0.7" fill="#042435"/>';
-    case 'mine': // crossed pick and hammer
+    case "mine": // crossed pick and hammer
       return '<path d="M5 19 15 9M9 5c3 0 6 2.4 7 5.5" stroke="#2a1a02" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M13.5 5.5 19 11l-2 2-5.5-5.5z" fill="#2a1a02"/>';
-    case 'osm_military': // fenced parcel
+    case "osm_military": // fenced parcel
       return '<rect x="5" y="7" width="14" height="10" rx="1.2" fill="none" stroke="#0f172a" stroke-width="1.8"/><path d="M8 7v10M12 7v10M16 7v10" stroke="#0f172a" stroke-width="1.2"/>';
-    case 'wikimapia': // map pin outline
+    case "wikimapia": // map pin outline
       return '<path d="M12 4.5c3 0 5.2 2.2 5.2 5 0 3.6-5.2 9-5.2 9s-5.2-5.4-5.2-9c0-2.8 2.2-5 5.2-5z" fill="none" stroke="#1c1917" stroke-width="1.8"/><circle cx="12" cy="9.5" r="1.8" fill="#1c1917"/>';
-    case 'sdr_station': // antenna radiating
+    case "sdr_station": // antenna radiating
       return '<path d="M12 8v11" stroke="#032b26" stroke-width="1.8" stroke-linecap="round"/><path d="M9 19h6" stroke="#032b26" stroke-width="1.5" stroke-linecap="round"/><path d="M8.5 8.5a5 5 0 0 1 7 0M6 6a8.5 8.5 0 0 1 12 0" stroke="#032b26" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
-    case 'launch': // rocket on a pad
+    case "launch": // rocket on a pad
       return '<path d="M12 4c2.2 2 3.2 4.6 3.2 7.2L12 15l-3.2-3.8C8.8 8.6 9.8 6 12 4z" fill="#141a3a"/><path d="M9.2 13 7 17l3-1M14.8 13 17 17l-3-1" stroke="#141a3a" stroke-width="1.5" fill="none" stroke-linecap="round"/><circle cx="12" cy="9.5" r="1.2" fill="#818cf8"/>';
-    case 'surge': // wave over a datum line
+    case "surge": // wave over a datum line
       return '<path d="M4 15q3-3 6 0t6 0 4-1" stroke="#04262c" stroke-width="1.9" fill="none" stroke-linecap="round"/><path d="M4 19h16" stroke="#04262c" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2 2"/>';
-    case 'routing': // broken link
+    case "routing": // broken link
       return '<path d="M9.5 9.5 7 12a3.5 3.5 0 0 0 5 5l1.2-1.2" stroke="#0b1220" stroke-width="1.9" fill="none" stroke-linecap="round"/><path d="M14.5 14.5 17 12a3.5 3.5 0 0 0-5-5l-1.2 1.2" stroke="#0b1220" stroke-width="1.9" fill="none" stroke-linecap="round"/><path d="M4 20 20 4" stroke="#0b1220" stroke-width="1.5" stroke-linecap="round"/>';
-    case 'sanctioned': // barred circle
+    case "sanctioned": // barred circle
       return '<circle cx="12" cy="12" r="6.4" fill="none" stroke="#2b0410" stroke-width="2"/><path d="M7.5 16.5 16.5 7.5" stroke="#2b0410" stroke-width="2" stroke-linecap="round"/>';
-    case 'radiation': // trefoil
+    case "radiation": // trefoil
       return '<circle cx="12" cy="12" r="1.8" fill="#1a1400"/><path d="M12 12 5.8 8.4A7 7 0 0 1 12 5v7z" fill="#1a1400"/><path d="M12 12 18.2 8.4A7 7 0 0 0 12 5v7z" fill="#1a1400"/><path d="M12 12 12 19a7 7 0 0 0 6.2-3.6L12 12z" fill="#1a1400"/>';
-    case 'volcano': // mountain with plume
+    case "volcano": // mountain with plume
       return '<path d="M5 19 10 9l1.5 2.5L14 9l5 10z" fill="#1a0f00"/><circle cx="12" cy="6" r="1.4" fill="#1a0f00"/>';
-    case 'cyclone': // spiral swirl
+    case "cyclone": // spiral swirl
       return '<path d="M12 6a6 6 0 1 1-5.2 3M12 18a6 6 0 0 1 5.2-3" stroke="#160020" stroke-width="1.8" fill="none" stroke-linecap="round"/><circle cx="12" cy="12" r="1.6" fill="#160020"/>';
-    case 'relief': // humanitarian cross
+    case "relief": // humanitarian cross
       return '<path d="M10 5h4v5h5v4h-5v5h-4v-5H5v-4h5z" fill="#052436"/>';
-    case 'buoy': // buoy circle + antenna
+    case "buoy": // buoy circle + antenna
       return '<circle cx="12" cy="14" r="4" fill="#04213f"/><path d="M12 10V5" stroke="#04213f" stroke-width="1.6" stroke-linecap="round"/>';
-    case 'chokepoint': // gate / narrowing
+    case "chokepoint": // gate / narrowing
       return '<path d="M6 5v14M18 5v14" stroke="#032b26" stroke-width="2" stroke-linecap="round"/><path d="M9 9l3 3-3 3M15 9l-3 3 3 3" stroke="#032b26" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
-    case 'aurora': // wavy band
+    case "aurora": // wavy band
       return '<path d="M4 14q4-6 8 0t8 0" stroke="#022c22" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M4 17q4-6 8 0t8 0" stroke="#022c22" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
-    case 'airquality': // haze dots
+    case "airquality": // haze dots
       return '<circle cx="8" cy="10" r="1.5" fill="#062b16"/><circle cx="13" cy="9" r="1.5" fill="#062b16"/><circle cx="16" cy="13" r="1.5" fill="#062b16"/><circle cx="10" cy="14" r="1.5" fill="#062b16"/>';
     default: // disaster + fallback: exclamation triangle
       return '<path d="M12 4 21 20H3z" fill="#1a1000"/><path d="M12 10v5" stroke="#f97316" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="17.5" r="1" fill="#f97316"/>';
@@ -753,40 +876,43 @@ function hazardSvg(kind: string, tile: string): string {
   </svg>`;
 }
 
-export function hazardStyle(props: Record<string, unknown>): { imageUri: string; scale: number } {
+export function hazardStyle(props: Record<string, unknown>): {
+  imageUri: string;
+  scale: number;
+} {
   // `style_kind` wins over `kind` so a feature can be drawn as one thing and
   // RESOLVED as another. A designated tanker has to draw as a sanction and open
   // as a vessel; folding both into `kind` would cost it its dossier.
-  const kind = String(props['style_kind'] ?? props['kind'] ?? '').toLowerCase();
-  let tile = HAZARD_COLORS[kind] ?? '#f97316';
+  const kind = String(props["style_kind"] ?? props["kind"] ?? "").toLowerCase();
+  let tile = HAZARD_COLORS[kind] ?? "#f97316";
   let cacheKey = `hazard:${kind}`;
-  if (kind === 'airquality') {
-    const aqi = props['us_aqi'];
-    tile = aqiColor(typeof aqi === 'number' ? aqi : null);
+  if (kind === "airquality") {
+    const aqi = props["us_aqi"];
+    tile = aqiColor(typeof aqi === "number" ? aqi : null);
     cacheKey = `hazard:aq:${tile}`;
-  } else if (kind === 'disaster' || kind === 'cyclone') {
+  } else if (kind === "disaster" || kind === "cyclone") {
     // Alert level (GDACS) tints the tile red when the modelled impact is high.
-    const alert = String(props['alert'] ?? '').toLowerCase();
-    if (alert === 'red') tile = '#ef4444';
-    else if (alert === 'orange') tile = '#f97316';
-    cacheKey = `hazard:${kind}:${alert || 'x'}`;
-  } else if (kind === 'ua_alert') {
+    const alert = String(props["alert"] ?? "").toLowerCase();
+    if (alert === "red") tile = "#ef4444";
+    else if (alert === "orange") tile = "#f97316";
+    cacheKey = `hazard:${kind}:${alert || "x"}`;
+  } else if (kind === "ua_alert") {
     // Every oblast is in the feed whether or not it is under alert, so the
     // colour has to carry the state: red is an active alert and nothing else.
-    const active = props['alert'] === true;
-    tile = active ? '#ef4444' : '#475569';
-    cacheKey = `hazard:ua:${active ? 'on' : 'off'}`;
-  } else if (kind === 'meteoalarm') {
-    const sev = String(props['severity'] ?? '').toLowerCase();
-    if (sev === 'extreme') tile = '#ef4444';
-    else if (sev === 'severe') tile = '#f97316';
-    else if (sev === 'moderate') tile = '#eab308';
-    cacheKey = `hazard:meteo:${sev || 'x'}`;
-  } else if (kind === 'chokepoint') {
-    const c = String(props['congestion'] ?? '').toLowerCase();
-    if (c === 'high') tile = '#ef4444';
-    else if (c === 'elevated') tile = '#f59e0b';
-    cacheKey = `hazard:choke:${c || 'x'}`;
+    const active = props["alert"] === true;
+    tile = active ? "#ef4444" : "#475569";
+    cacheKey = `hazard:ua:${active ? "on" : "off"}`;
+  } else if (kind === "meteoalarm") {
+    const sev = String(props["severity"] ?? "").toLowerCase();
+    if (sev === "extreme") tile = "#ef4444";
+    else if (sev === "severe") tile = "#f97316";
+    else if (sev === "moderate") tile = "#eab308";
+    cacheKey = `hazard:meteo:${sev || "x"}`;
+  } else if (kind === "chokepoint") {
+    const c = String(props["congestion"] ?? "").toLowerCase();
+    if (c === "high") tile = "#ef4444";
+    else if (c === "elevated") tile = "#f59e0b";
+    cacheKey = `hazard:choke:${c || "x"}`;
   }
   return {
     imageUri: cachedIcon(cacheKey, () => placeDataUri(hazardSvg(kind, tile))),
@@ -800,14 +926,29 @@ export function hazardPolygonStyle(props: Record<string, unknown>): {
   outlineColor: string;
   alpha: number;
 } {
-  const kind = String(props['kind'] ?? '').toLowerCase();
-  if (kind === 'fireperim') return { fillColor: '#ef4444', outlineColor: '#f97316', alpha: 0.35 };
-  const hazard = String(props['hazard'] ?? '').toUpperCase();
-  const hex =
-    hazard.includes('CONV') ? '#ef4444'
-    : hazard.includes('ASH') ? '#a855f7'
-    : hazard.includes('ICE') ? '#38bdf8'
-    : hazard.includes('TURB') ? '#f59e0b'
-    : '#f97316';
+  const kind = String(props["kind"] ?? "").toLowerCase();
+  if (kind === "fireperim")
+    return { fillColor: "#ef4444", outlineColor: "#f97316", alpha: 0.35 };
+  // AIS coverage cell: one hue, denser cells more opaque. `bucket` is the
+  // backend's count band (0 = 1-9 … 3 = 1000+); it is also in the feature id,
+  // because a polygon is styled once and only a new id repaints it.
+  if (kind === "coverage") {
+    const bucket = Math.max(0, Math.min(3, Number(props["bucket"]) || 0));
+    return {
+      fillColor: HEX_OK,
+      outlineColor: HEX_OK,
+      alpha: 0.12 + 0.11 * bucket,
+    };
+  }
+  const hazard = String(props["hazard"] ?? "").toUpperCase();
+  const hex = hazard.includes("CONV")
+    ? "#ef4444"
+    : hazard.includes("ASH")
+      ? "#a855f7"
+      : hazard.includes("ICE")
+        ? "#38bdf8"
+        : hazard.includes("TURB")
+          ? "#f59e0b"
+          : "#f97316";
   return { fillColor: hex, outlineColor: hex, alpha: 0.28 };
 }

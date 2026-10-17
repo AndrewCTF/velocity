@@ -1,0 +1,23 @@
+# Candidate keyless ADS-B endpoints extracted from the 2026-10-03 research
+# fan-out. Measured by tools/adsb_candidates.py. One request each, no
+# credentials, no credit-metered endpoint in this list.
+
+# ── Known-good control set (already hand-verified this session) ──
+https://api.adsb.lol/v2/point/0/0/20000
+https://globe.theairtraffic.com/data/aircraft.json
+https://skylink.hpradar.com/data/aircraft.json
+
+# ── Newly surfaced by research: community tar1090 instances ──
+https://adsb.330k.info/data/aircraft.json
+https://tar1090.adsb.im/data/aircraft.json
+https://radar.fdy.cz/data/aircraft.json
+https://hpradar.com/data/aircraft.json
+
+# ── adsb.lol alternate surfaces / mirrors ──
+https://api.2.adsb.lol/v2/point/0/0/20000
+https://ops-manager.adsb.lol/api/v2/point/0/0/20000
+https://api.adsb.fi/v2/point/0/0/20000
+https://opendata.adsb.fi/v2/point/0/0/20000
+
+# ── Hosted front-ends (often HTML, or login-gated: expect rejection) ──
+https://www.adsbexchange.com/api/aircraft/json

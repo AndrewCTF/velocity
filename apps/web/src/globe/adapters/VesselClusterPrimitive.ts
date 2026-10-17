@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as Cesium from "cesium";
 
 // World-view vessel count bubbles — the replacement for Cesium EntityCluster.
 //
@@ -23,20 +23,20 @@ const MIN_CLUSTER = 16; // matches the old EntityCluster minimumClusterSize floo
 let cachedRing: string | null = null;
 function vesselClusterRing(): string {
   if (cachedRing) return cachedRing;
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = 28;
   canvas.height = 28;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
   if (ctx) {
     ctx.beginPath();
     ctx.arc(14, 14, 12, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(52, 211, 153, 0.55)'; // teal #34d399 @ 55%
+    ctx.fillStyle = "rgba(52, 211, 153, 0.55)"; // teal #34d399 @ 55%
     ctx.fill();
     ctx.lineWidth = 1.25;
-    ctx.strokeStyle = '#0b0e14';
+    ctx.strokeStyle = "#0b0e14";
     ctx.stroke();
   }
-  cachedRing = canvas.toDataURL('image/png');
+  cachedRing = canvas.toDataURL("image/png");
   return cachedRing;
 }
 
@@ -59,7 +59,8 @@ export class VesselClusterPrimitive {
     const onMove = (): void => this.recompute();
     viewer.camera.moveEnd.addEventListener(onMove);
     this.removeMove = () => {
-      if (!viewer.isDestroyed()) viewer.camera.moveEnd.removeEventListener(onMove);
+      if (!viewer.isDestroyed())
+        viewer.camera.moveEnd.removeEventListener(onMove);
     };
     this.recompute();
   }
@@ -96,7 +97,10 @@ export class VesselClusterPrimitive {
       }
     }
     // Cross-fade with the individual icons (cluster opaque ≥650 km, gone ≤350 km).
-    const alpha = Math.max(0, Math.min(1, (h - FADE_GONE_M) / (FADE_FULL_M - FADE_GONE_M)));
+    const alpha = Math.max(
+      0,
+      Math.min(1, (h - FADE_GONE_M) / (FADE_FULL_M - FADE_GONE_M)),
+    );
     for (const b of bins.values()) {
       if (b.n < MIN_CLUSTER) continue;
       const pos = Cesium.Cartesian3.fromDegrees(b.lon / b.n, b.lat / b.n);
@@ -124,7 +128,15 @@ export class VesselClusterPrimitive {
 
   destroy(): void {
     this.removeMove();
-    try { this.viewer.scene.primitives.remove(this.bb); } catch { /* gone */ }
-    try { this.viewer.scene.primitives.remove(this.lbl); } catch { /* gone */ }
+    try {
+      this.viewer.scene.primitives.remove(this.bb);
+    } catch {
+      /* gone */
+    }
+    try {
+      this.viewer.scene.primitives.remove(this.lbl);
+    } catch {
+      /* gone */
+    }
   }
 }

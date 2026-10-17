@@ -9,7 +9,7 @@
 //   - isUnsafeKey(): skip the key when the target is someone else's object
 //     (a Cesium PropertyBag) that must keep its prototype.
 
-const UNSAFE = new Set(['__proto__', 'constructor', 'prototype']);
+const UNSAFE = new Set(["__proto__", "constructor", "prototype"]);
 
 export function isUnsafeKey(key: string): boolean {
   return UNSAFE.has(key);

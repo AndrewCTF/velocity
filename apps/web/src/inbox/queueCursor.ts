@@ -9,7 +9,11 @@
 
 /** Move the cursor by `delta`, clamped to the list. Never wraps: wrapping from
  *  the last row back to the first reads as a lost place, not a feature. */
-export function moveCursor(cursor: number, delta: number, length: number): number {
+export function moveCursor(
+  cursor: number,
+  delta: number,
+  length: number,
+): number {
   if (length <= 0) return 0;
   return Math.max(0, Math.min(length - 1, cursor + delta));
 }
@@ -20,7 +24,10 @@ export function moveCursor(cursor: number, delta: number, length: number): numbe
  *  removed row was the last does it step back, so the cursor stays on a real
  *  row rather than pointing past the end.
  */
-export function cursorAfterRemoval(cursor: number, lengthBefore: number): number {
+export function cursorAfterRemoval(
+  cursor: number,
+  lengthBefore: number,
+): number {
   const lengthAfter = Math.max(0, lengthBefore - 1);
   if (lengthAfter === 0) return 0;
   return Math.min(cursor, lengthAfter - 1);

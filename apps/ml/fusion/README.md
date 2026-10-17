@@ -5,10 +5,12 @@ diffusers / gsplat) — the lightweight Stage A ingest + alignment QA lives in
 `apps/api/app/fusion/` and is reused here.
 
 ## Hardware (target)
+
 RTX 5090 (32 GB, Blackwell sm_120), Ryzen 9 9950X3D, 128 GB RAM. Driver 595.x.
 Blackwell needs CUDA 12.8+ wheels (`cu128`) and torch ≥ 2.8.
 
 ## Env setup
+
 System Python is 3.14 (no torch wheels). Use a 3.12 venv via `uv`:
 
 ```bash
@@ -25,6 +27,7 @@ uv pip install --python .venv/bin/python \
 Verify: `.venv/bin/python -c "import torch;print(torch.cuda.get_device_name(0))"`
 
 ## Stages (Spec 5★)
+
 - **A. ingest + co-register** — DONE, in `apps/api/app/fusion/ingest.py` (lightweight).
 - **C. cross-modal colorizer** — reference-conditioned diffusion (SAR/pan/thermal →
   color, referenced to the AOI's own optical). Fine-tune a pretrained latent
@@ -39,6 +42,7 @@ Verify: `.venv/bin/python -c "import torch;print(torch.cuda.get_device_name(0))"
 - **G. export** — 3D Tiles / .splat → Cesium.
 
 ## Honest constraints (read before claiming results)
+
 - Single GPU ⇒ stages run **sequentially**; no large parallel sweeps.
 - Free 10 m Sentinel ⇒ every artifact is a **proof**, not VHR fidelity.
 - Stage E crisp-3D is gated on multi-view data (above). Stages C/D do not have that
@@ -46,5 +50,6 @@ Verify: `.venv/bin/python -c "import torch;print(torch.cuda.get_device_name(0))"
 - No "best / SOTA / high-fidelity" claim without a passed acceptance gate (Spec §8).
 
 ## Datasets (download targets)
+
 SEN12MS (SAR/optical pairs), SOMA-1M (SAR-optical alignment), WorldStrat (S2↔SPOT
 SR), DFC2019 (multi-view WorldView-3 for Stage E validation), xBD/BRIGHT (destruction).

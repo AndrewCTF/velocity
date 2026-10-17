@@ -121,3 +121,41 @@ def test_terrain_transcodes_terrarium_to_mapbox_rgb(
     pr, pg, pb = img.getpixel((0, 0))
     elev = (pr * 65536 + pg * 256 + pb) / 10.0 - 10000.0
     assert abs(elev - 1234.0) < 0.2
+
+
+def test_a_host_that_will_not_connect_is_asked_once(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dead tile host costs one failed connect, not one per tile. Each tile
+    used to re-pay the whole connect timeout, twice, and the browser's six
+    connections sat behind them while the Google 3D mesh waited a minute."""
+    from app.routes import tiles
+
+    asked: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(str(request.url))
+        raise httpx.ConnectError("no route to host", request=request)
+
+    dead = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(upstream, "_CLIENT", dead)
+    monkeypatch.setattr(tiles, "_host_down", {})
+
+    # Coordinates no other test here fetches: the tile cache outlives a test.
+    assert client.get("/tiles/sat/6/20/30.jpg").status_code == 502
+    first = len(asked)
+    assert 1 <= first <= 4  # the four children at most; nobody tried twice
+    assert client.get("/tiles/sat/6/21/30.jpg").status_code == 502
+    assert len(asked) == first  # the next tile never touched the dead host
+
+    # Once the window is over one caller probes, and an answer reopens the host.
+    tiles._host_down["tiles.maps.eox.at"] = 0.0
+    monkeypatch.setattr(
+        upstream,
+        "_CLIENT",
+        httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, content=_EOX_JPEG))
+        ),
+    )
+    assert client.get("/tiles/sat/6/21/30.jpg").status_code == 200
+    assert "tiles.maps.eox.at" not in tiles._host_down

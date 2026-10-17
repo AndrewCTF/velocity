@@ -42,7 +42,7 @@ agent ──stdio / http (/mcp)──▶ app.mcp_server (46 tools)
 
 ## Area-primary loading
 
-> *"When the agent wants an area, load that area PRIMARY, then only load others."*
+> _"When the agent wants an area, load that area PRIMARY, then only load others."_
 
 The guarded global snapshot (`app.routes.adsb`) is untouched. `focus_area`
 adds an **additive** mechanism on top:
@@ -66,18 +66,18 @@ fan-out's rate budget.
 All return compact JSON. Geography is accepted as a centre (`lat,lon[,radius_nm]`)
 or an explicit bbox (`min_lon,min_lat,max_lon,max_lat`).
 
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /situation` | Global orienting summary (cheap first call) |
-| `GET /area` | Load a region PRIMARY + full intel bundle in one shot |
-| `GET /density` | Aircraft density grid for an area |
-| `GET /jamming` | GPS-jamming assessment (global or scoped) |
-| `GET /aircraft` | Filtered aircraft query |
-| `GET /aircraft/{ident}` | Single-aircraft lookup (ICAO24 or callsign) |
-| `GET /vessels` | AIS vessels in an area (`dark_only` supported) |
-| `GET /anomalies` | Fused report + triage threat level |
-| `GET /aois` | Active priority areas |
-| `GET /sources` | Feed health + which feeds are key-gated |
+| Endpoint                | Purpose                                               |
+| ----------------------- | ----------------------------------------------------- |
+| `GET /situation`        | Global orienting summary (cheap first call)           |
+| `GET /area`             | Load a region PRIMARY + full intel bundle in one shot |
+| `GET /density`          | Aircraft density grid for an area                     |
+| `GET /jamming`          | GPS-jamming assessment (global or scoped)             |
+| `GET /aircraft`         | Filtered aircraft query                               |
+| `GET /aircraft/{ident}` | Single-aircraft lookup (ICAO24 or callsign)           |
+| `GET /vessels`          | AIS vessels in an area (`dark_only` supported)        |
+| `GET /anomalies`        | Fused report + triage threat level                    |
+| `GET /aois`             | Active priority areas                                 |
+| `GET /sources`          | Feed health + which feeds are key-gated               |
 
 ## MCP tools
 
@@ -114,7 +114,7 @@ MCP-restricted agent can reach them without dropping to raw HTTP:
 
 Every heavy tool takes a `detail` argument (`app/intel/shape.py`):
 
-- **`short`** (the default) — a token-frugal *digest* of the same payload:
+- **`short`** (the default) — a token-frugal _digest_ of the same payload:
   scalars and small dicts kept, long arrays capped to the top few items with a
   companion `<field>_total` giving the true size, verbose strings truncated, and
   a top-level `truncated`/`hint` flag when anything was dropped. Ideal for

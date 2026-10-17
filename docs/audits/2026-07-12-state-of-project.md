@@ -25,23 +25,23 @@ exist (AIS is WebSocket-push only, `routes/ais.py:204`); the probe has
 `git log --cherry-pick` right-only shows only patch-equivalent or
 squash-duplicated commits):
 
-| branch | merged as | status |
-|---|---|---|
-| evidence-locker-hardening-pr (HEAD) | PR #40 | merged 2026-07-12 |
-| evidence-locker-hardening | PR #39 | merged |
-| infra-country-facility-wave | PRs #37, #38 | merged |
-| local-ai-engine-model-manager | PR #36 | merged |
-| w5-places-airspace-enrichment | PR #35 | merged |
-| w4-ontology-autopopulation | PR #34 | merged |
-| roadmap-first-users | PR #33 | merged |
-| keyless-city-splats | PR #32 | merged |
-| workflows-city-foundry-overhaul | PRs #27, #31 | merged |
-| workflows-external-control | PRs #29, #30 | merged |
-| add-photo-geolocation-pipeline | PR #26 | merged |
-| mcp-context-variants-plugin | PR #25 | merged |
-| fix-flaky-dossier-age-assert / fix-readme-phase-status | PRs #28, #23 | merged |
-| sense-making-cycle / foundry-data-layer | PRs #20–#22 | merged |
-| gotham-* / feat/deepseek-* / backup/* | PRs #1–#2 era | historical snapshots |
+| branch                                                 | merged as     | status               |
+| ------------------------------------------------------ | ------------- | -------------------- |
+| evidence-locker-hardening-pr (HEAD)                    | PR #40        | merged 2026-07-12    |
+| evidence-locker-hardening                              | PR #39        | merged               |
+| infra-country-facility-wave                            | PRs #37, #38  | merged               |
+| local-ai-engine-model-manager                          | PR #36        | merged               |
+| w5-places-airspace-enrichment                          | PR #35        | merged               |
+| w4-ontology-autopopulation                             | PR #34        | merged               |
+| roadmap-first-users                                    | PR #33        | merged               |
+| keyless-city-splats                                    | PR #32        | merged               |
+| workflows-city-foundry-overhaul                        | PRs #27, #31  | merged               |
+| workflows-external-control                             | PRs #29, #30  | merged               |
+| add-photo-geolocation-pipeline                         | PR #26        | merged               |
+| mcp-context-variants-plugin                            | PR #25        | merged               |
+| fix-flaky-dossier-age-assert / fix-readme-phase-status | PRs #28, #23  | merged               |
+| sense-making-cycle / foundry-data-layer                | PRs #20–#22   | merged               |
+| gotham-* / feat/deepseek-* / backup/*                  | PRs #1–#2 era | historical snapshots |
 
 Local `master` is stale at `540a13a` (PR #32 tip, 8 PRs behind). No stashes.
 **The only uncommitted artifact in the entire repo is
@@ -59,6 +59,7 @@ MEMORY.md updated this session.
 
 **Invariants easiest to regress with a careless cleanup** (from
 `docs/decisions.md`):
+
 1. Live-path teleport vs **sanctioned replay interpolation**
    (`decisions.md:567-580`) — twin traps: "fixing" replay to teleport breaks
    trail rendering; citing replay to justify live-path glide is banned.
@@ -75,26 +76,26 @@ MEMORY.md updated this session.
 
 ## Phase 1 — Built vs trusted
 
-| subsystem | status | evidence |
-|---|---|---|
-| Globe feeds (ADS-B/AIS/sats) | **proven-live** | this-turn probe: 20k aircraft, 80% refresh/8 s; :8093 vessels JSON |
-| Evidence locker (backend) | proven by tests | 20 tests `test_evidence.py`; SSRF guard `evidence.py:335-352` incl. `::ffff:` metadata bypass; tamper-409 re-hash `:154-163` |
-| Evidence locker (frontend) | **plumbed-unverified** | mounted at `reports/ReportsApp.tsx:19`; never browser-driven |
-| Case export (HTML/JSON/PPTX) | **plumbed-unverified** | 8 tests `test_case_export.py`; export button never clicked in a real browser |
-| Replay/archive | **plumbed-unverified** (new parts) | `ARCHIVE_MODE` lifts clamp (`history.py:89`), coverage endpoint (`routes/history.py:69`) + "recording since · GB · fixes" chip (`Timeline.tsx:319-320`) exist; archive default OFF, compose sets 48 h retention; base replay validated 2026-06-20 warsim, the new scrubber dressing is not |
-| Keyless alerts + sinks | proven-live (2026-07-11) | real POST logged, `decisions.md:629-632`; guards in `test_watch.py`/`test_alert_rules.py`. Email channel = **not-built** (validated at route, nothing sends) |
-| Ontology spine + auto-mint | proven by tests | `ontology_local.py:142`; mint callers in 9 files (watch, evidence, situations, osint, extract, countries, maps, workflows, actions). 24 h "graph fills itself" live probe never run |
-| Foundry | plumbed-unverified (FE) | backend tested; Workshop FE never browser-verified |
-| Workflows + control blocks | proven-live (2026-07-10) | 21 block types; 49 tests; drone/device dry-run in preview (`blocks.py:90`, `EditorView.tsx:228`); control path proven live per memory |
-| Watch-officer | built | briefs are an in-memory dict `watch_officer.py:45` — **documented design, not rot** (docstring `:8-12`: the loop re-derives briefs next cycle; `incident_store` diff state is also process-memory, so post-restart incidents re-file as "new"). Corrected from this audit's first draft. |
-| Local-LLM brief fusion | plumbed-unverified | route + 13 tests (`ai_selection.py`); requires an active local engine to prove |
-| 3DGS satToSplat | proven-live once | 268 324 Gaussians, `decisions.md:561-562`; GPU-lab-gated |
-| Docker self-host | **plumbed-unverified** | compose exists; a stranger's clean-clone boot has never been demonstrated |
+| subsystem                    | status                             | evidence                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Globe feeds (ADS-B/AIS/sats) | **proven-live**                    | this-turn probe: 20k aircraft, 80% refresh/8 s; :8093 vessels JSON                                                                                                                                                                                                                         |
+| Evidence locker (backend)    | proven by tests                    | 20 tests `test_evidence.py`; SSRF guard `evidence.py:335-352` incl. `::ffff:` metadata bypass; tamper-409 re-hash `:154-163`                                                                                                                                                               |
+| Evidence locker (frontend)   | **plumbed-unverified**             | mounted at `reports/ReportsApp.tsx:19`; never browser-driven                                                                                                                                                                                                                               |
+| Case export (HTML/JSON/PPTX) | **plumbed-unverified**             | 8 tests `test_case_export.py`; export button never clicked in a real browser                                                                                                                                                                                                               |
+| Replay/archive               | **plumbed-unverified** (new parts) | `ARCHIVE_MODE` lifts clamp (`history.py:89`), coverage endpoint (`routes/history.py:69`) + "recording since · GB · fixes" chip (`Timeline.tsx:319-320`) exist; archive default OFF, compose sets 48 h retention; base replay validated 2026-06-20 warsim, the new scrubber dressing is not |
+| Keyless alerts + sinks       | proven-live (2026-07-11)           | real POST logged, `decisions.md:629-632`; guards in `test_watch.py`/`test_alert_rules.py`. Email channel = **not-built** (validated at route, nothing sends)                                                                                                                               |
+| Ontology spine + auto-mint   | proven by tests                    | `ontology_local.py:142`; mint callers in 9 files (watch, evidence, situations, osint, extract, countries, maps, workflows, actions). 24 h "graph fills itself" live probe never run                                                                                                        |
+| Foundry                      | plumbed-unverified (FE)            | backend tested; Workshop FE never browser-verified                                                                                                                                                                                                                                         |
+| Workflows + control blocks   | proven-live (2026-07-10)           | 21 block types; 49 tests; drone/device dry-run in preview (`blocks.py:90`, `EditorView.tsx:228`); control path proven live per memory                                                                                                                                                      |
+| Watch-officer                | built                              | briefs are an in-memory dict `watch_officer.py:45` — **documented design, not rot** (docstring `:8-12`: the loop re-derives briefs next cycle; `incident_store` diff state is also process-memory, so post-restart incidents re-file as "new"). Corrected from this audit's first draft.   |
+| Local-LLM brief fusion       | plumbed-unverified                 | route + 13 tests (`ai_selection.py`); requires an active local engine to prove                                                                                                                                                                                                             |
+| 3DGS satToSplat              | proven-live once                   | 268 324 Gaussians, `decisions.md:561-562`; GPU-lab-gated                                                                                                                                                                                                                                   |
+| Docker self-host             | **plumbed-unverified**             | compose exists; a stranger's clean-clone boot has never been demonstrated                                                                                                                                                                                                                  |
 
-**Moat thesis** (`docs/roadmap-users-2026-07.md`, one sentence): *the fusion
+**Moat thesis** (`docs/roadmap-users-2026-07.md`, one sentence): _the fusion
 globe is commoditized (World Monitor et al.); the moat is self-hosted +
 keyless + unlimited locally-owned history/replay + a provenance-first
-investigation layer.*
+investigation layer._
 
 **Trace test** — 198 commits on origin/master in the last 30 days. The
 pre-roadmap month split between moat depth (foundry, ontology, workflows,
@@ -157,11 +158,11 @@ evidence capture → case export download; (c) measure the GB/day archive
 math and decide the compose default (48 h vs archive profile) so the pitch
 matches the boot; (d) commit `docs/launch-posts-draft.md` and post
 r/selfhosted + Show HN.
-*Leverage:* maximal — the moat thesis is only tested by contact with users,
+_Leverage:_ maximal — the moat thesis is only tested by contact with users,
 and the roadmap's own decision gate cannot start until the posts exist.
-*Risk retired:* the fake/broken first-contact failure (#1 above) and the
-LAN-open default (#2). *Cost of delay:* World Monitor ships weekly against
-the same audience; every depth-week widens a moat nobody can see. *Skip:*
+_Risk retired:_ the fake/broken first-contact failure (#1 above) and the
+LAN-open default (#2). _Cost of delay:_ World Monitor ships weekly against
+the same audience; every depth-week widens a moat nobody can see. _Skip:_
 PPTX polish, multi-domain scrub perf edge cases (aircraft-first per the W1
 kill criterion), any new layer or feed.
 
@@ -200,6 +201,7 @@ jemalloc/`LD_PRELOAD` sidecar scrub must survive any Dockerfile edit
 ## Addendum (same day) — rot fixes applied
 
 Branch `rot-fixes-launch-plan` (off the fast-forwarded master):
+
 - `--live` vessel probe now reads keyless `/api/status` `vessel_count`
   (55,080 live at fix time) instead of the nonexistent `/api/ais/global`.
 - Compose nginx binds `127.0.0.1:8080:80`; the "loopback-only" safety

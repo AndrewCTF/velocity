@@ -104,11 +104,11 @@ Steps run in order over a list of dict rows. Types (`type` field):
   in-place using the same information-preserving coercion as upload type-pinning;
   unconvertible → None, str never fails (2026-07-09)
 - `{"type":"window","fn":"row_number|rank|lag:col|running_sum:col","into":"out",
-  "partition_by":["col",...]?,"order_by":"col"?,"desc":false?}` — analytic
+"partition_by":["col",...]?,"order_by":"col"?,"desc":false?}` — analytic
   window function per partition, ordered; output preserves input row order
   (2026-07-09)
 - `{"type":"pivot","index":["col",...],"column":"c","value":"v",
-  "agg":"sum|count|avg|min|max|first"}` — long→wide: one row per index tuple,
+"agg":"sum|count|avg|min|max|first"}` — long→wide: one row per index tuple,
   one column per distinct value of `c` (2026-07-09)
 
 Expression funcs added 2026-07-09: `regex_replace(value, pattern, repl)`.
@@ -135,10 +135,10 @@ with None → None.
 All responses JSON. Errors: FastAPI HTTPException with `detail`.
 
 - `GET  /summary` → `{datasets, total_rows, transforms, builds_24h,
-  failed_builds_24h, objects_synced, recent_builds:[Build×10],
-  checks_failing}` (`checks_failing` = count of enabled checks whose most
+failed_builds_24h, objects_synced, recent_builds:[Build×10],
+checks_failing}` (`checks_failing` = count of enabled checks whose most
   recent recorded result has `passed=false`)
-- `GET  /datasets` → `[Dataset]`  (Dataset = row + `latest_version`,
+- `GET  /datasets` → `[Dataset]` (Dataset = row + `latest_version`,
   `row_count`)
 - `POST /datasets` `{name, description?}` → Dataset (empty, version 0)
 - `GET  /datasets/{id}` → Dataset
@@ -167,20 +167,20 @@ All responses JSON. Errors: FastAPI HTTPException with `detail`.
 - `GET  /datasets/{id}/checks/results?version=` (default latest) →
   `[{check_id,passed,detail,created_at}]`
 - `GET  /datasets/{id}/dead-letter?limit=100` → `[{build_id,step,step_type,
-  error,row,created_at}]` — rows the most recent build quarantined (2026-07-09)
+error,row,created_at}]` — rows the most recent build quarantined (2026-07-09)
 - `GET  /datasets/{id}/docs` → Data Docs: `{dataset, schema, versions, checks,
-  check_results, lineage:{produced_by,upstream_datasets,downstream,stale},
-  dead_letter_present}` (2026-07-09)
+check_results, lineage:{produced_by,upstream_datasets,downstream,stale},
+dead_letter_present}` (2026-07-09)
 - `GET  /datasets/{id}/column-lineage` → `{dataset_id, produced_by,
-  primary_input, columns:{out_col:[src_col,...]}}` — one-hop column lineage;
+primary_input, columns:{out_col:[src_col,...]}}` — one-hop column lineage;
   identity for a raw dataset (2026-07-09)
 - `GET/POST /checks?dataset_id=`, `PUT/DELETE /checks/{id}` — data
   expectations (body: `{dataset_id, name, type, params, severity?:'warn'|
-  'fail', enabled?}`; types: `row_count_min{min}`, `row_count_max{max}`,
+'fail', enabled?}`; types: `row_count_min{min}`, `row_count_max{max}`,
   `not_null{column}`, `unique{column}`, `column_exists{column}`,
   `freshness{column, max_age_s}` (newest parsed timestamp — epoch or ISO — in
   `column` within `max_age_s` of now), `schema_contract{columns[],
-  types?{col:type}}` (required columns present + optional per-column type match,
+types?{col:type}}` (required columns present + optional per-column type match,
   i.e. schema-drift detection) (both 2026-07-09); 422 bad
   type/params, 404 bad dataset). Enforced on every version write (upload,
   append, rollback, transform build): an enabled `fail` check that fails
@@ -188,7 +188,7 @@ All responses JSON. Errors: FastAPI HTTPException with `detail`.
   failures are recorded but do not block.
 - `GET/POST /transforms`, `GET/PUT/DELETE /transforms/{id}`
   (POST/PUT body: `{name, description?, inputs:[dataset_id], output_name,
-  steps:[...]}` — output dataset auto-created as kind='derived'; 422 if the
+steps:[...]}` — output dataset auto-created as kind='derived'; 422 if the
   write would introduce a cycle in the dataset<->transform DAG)
 - `POST /transforms/{id}/preview` `{limit?:20}` → `{schema, rows}` (runs
   steps, does NOT write a version)
@@ -198,15 +198,15 @@ All responses JSON. Errors: FastAPI HTTPException with `detail`.
   every transform; `only_stale` skips transforms that are not stale)
 - `GET  /builds?limit=50` → `[Build]`; `GET /builds/{id}` → Build
   (Build = `{id, transform_id, scope, status, started_at, finished_at,
-  rows_out, error, log:[str], input_versions:{dataset_id:version}}`)
+rows_out, error, log:[str], input_versions:{dataset_id:version}}`)
 - `GET  /lineage` → `{nodes:[{id,type:'dataset'|'transform',name,row_count?,
-  kind?,stale?:bool}], edges:[{src,dst}]}` — transform nodes and their
+kind?,stale?:bool}], edges:[{src,dst}]}` — transform nodes and their
   derived-dataset outputs carry `stale`: true if the transform has no
   successful build, or any input dataset's latest version differs from what
   its most recent successful build consumed.
 - `GET/POST /bindings`, `PUT/DELETE /bindings/{id}`
   (body: `{dataset_id, object_kind, key_column, prop_map:{col:prop},
-  enabled?}`)
+enabled?}`)
 - `POST /bindings/{id}/sync` → `{minted, updated, skipped, errors:[str]}`
 - `GET/POST /schedules`, `PUT/DELETE /schedules/{id}`
   (body: `{transform_id, interval_s, enabled?}`)
@@ -230,8 +230,7 @@ drag-and-drop + file input (FormData through apiFetch).
   transform build produces new version; filter/derive/join/aggregate
   correctness; safe-expression evaluator rejects `__import__`/attribute
   access; lineage graph correct; binding sync mints objects visible through
-  `/api/ontology` routes; keyless (no auth env) end-to-end; dependent-delete
-  409.
+  `/api/ontology` routes; keyless (no auth env) end-to-end; dependent-delete 409.
 - `apps/web/src/foundry/foundry.test.tsx`: views render from mocked apiFetch;
   no raw fetch (eslint).
 - `bash scripts/verify.sh` green; backend baseline (718 passed) only rises.

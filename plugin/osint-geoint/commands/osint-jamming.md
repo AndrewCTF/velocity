@@ -1,6 +1,6 @@
 ---
 description: Hunt GPS jamming/spoofing and estimate the emitter location
-argument-hint: [place | lat,lon | global]
+argument-hint: [place | lat, lon | global]
 ---
 
 Hunt GPS jamming for: **$ARGUMENTS**

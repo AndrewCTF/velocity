@@ -1,16 +1,25 @@
-import { useEffect, useReducer, useState } from 'react';
-import type * as Cesium from 'cesium';
-import type { LayerRegistry } from '../../registry/LayerRegistry.js';
-import { Icon } from '../../normal/Icon.js';
-import { LayerRail } from '../../layer-rail/LayerRail.js';
-import { useLayerCounts, rowCount, rowState } from '../../layer-rail/useLayerCounts.js';
-import { tierOf, TIER_META, TIER_ORDER, type Tier } from '../../registry/provenance.js';
+import { useEffect, useReducer, useState } from "react";
+import type * as Cesium from "cesium";
+import type { LayerRegistry } from "../../registry/LayerRegistry.js";
+import { Icon } from "../../normal/Icon.js";
+import { LayerRail } from "../../layer-rail/LayerRail.js";
+import {
+  useLayerCounts,
+  rowCount,
+  rowState,
+} from "../../layer-rail/useLayerCounts.js";
+import {
+  tierOf,
+  TIER_META,
+  TIER_ORDER,
+  type Tier,
+} from "../../registry/provenance.js";
 import {
   MAP_LAYER_FOLDERS,
   rowEnabled,
   toggleRow,
   toggleFolder,
-} from '../../normal/layerCatalog.js';
+} from "../../normal/layerCatalog.js";
 
 // The Layers panel, built from docs/mockups/console-2026-08 and fed by the real
 // registry. It is NOT the old LayerCatalog restyled.
@@ -36,7 +45,12 @@ import {
  *  believable as its softest input and rounding that up is the laundering the
  *  tier exists to prevent. */
 export function rowTier(layerIds: readonly string[]): Tier | undefined {
-  const rank: Record<Tier, number> = { sensor: 0, registry: 1, filing: 2, claim: 3 };
+  const rank: Record<Tier, number> = {
+    sensor: 0,
+    registry: 1,
+    filing: 2,
+    claim: 3,
+  };
   let worst: Tier | undefined;
   for (const id of layerIds) {
     const t = tierOf(id);
@@ -52,7 +66,7 @@ function TierMark({ tier }: { tier: Tier | undefined }): JSX.Element {
     <abbr
       title={`${m.label} · ${m.blurb}`}
       className={`mono w-[21px] shrink-0 text-center text-[12px] no-underline ${
-        tier === 'claim' ? 'text-warn' : 'text-txt-3'
+        tier === "claim" ? "text-warn" : "text-txt-3"
       }`}
     >
       {m.short}
@@ -72,7 +86,14 @@ export function LayersPanel({
   const counts = useLayerCounts(viewer);
   const [openIds, setOpenIds] = useState<Record<string, boolean>>({});
   const toggleOpen = (id: string): void =>
-    setOpenIds((o) => ({ ...o, [id]: !(o[id] ?? MAP_LAYER_FOLDERS.find((f) => f.id === id)?.defaultOpen ?? false) }));
+    setOpenIds((o) => ({
+      ...o,
+      [id]: !(
+        o[id] ??
+        MAP_LAYER_FOLDERS.find((f) => f.id === id)?.defaultOpen ??
+        false
+      ),
+    }));
   // The curated / all switch `panels.ts` promised.
   //
   // REHOMED records `allsources` as "redundant with Layers, which gains a
@@ -86,7 +107,7 @@ export function LayersPanel({
   // is that nothing on the map is there because somebody said so. Turning it
   // back on is one click and it is a deliberate one.
   const [tiers, setTiers] = useState<ReadonlySet<Tier>>(
-    () => new Set<Tier>(['sensor', 'registry', 'filing']),
+    () => new Set<Tier>(["sensor", "registry", "filing"]),
   );
   const toggleTier = (t: Tier): void =>
     setTiers((s) => {
@@ -107,10 +128,12 @@ export function LayersPanel({
         role="group"
         aria-label="Layer source"
       >
-        {([
-          ['Curated', false],
-          ['All sources', true],
-        ] as const).map(([label, v]) => (
+        {(
+          [
+            ["Curated", false],
+            ["All sources", true],
+          ] as const
+        ).map(([label, v]) => (
           <button
             key={label}
             type="button"
@@ -118,15 +141,17 @@ export function LayersPanel({
             aria-pressed={all === v}
             className={`mono h-[20px] rounded-sm px-[7px] text-[12px] ${
               all === v
-                ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                : 'text-txt-2 hover:bg-(--hover)'
+                ? "bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]"
+                : "text-txt-2 hover:bg-(--hover)"
             }`}
           >
             {label}
           </button>
         ))}
         <span className="flex-1" />
-        <span className="mono text-[12px] tabular-nums text-txt-3">{registry.list().length}</span>
+        <span className="mono text-[12px] tabular-nums text-txt-3">
+          {registry.list().length}
+        </span>
       </div>
 
       {/* Provenance. Four buttons that say who is vouching for the data, in the
@@ -149,8 +174,8 @@ export function LayersPanel({
               title={m.blurb}
               className={`mono h-[20px] rounded-sm px-[6px] text-[12px] ${
                 on
-                  ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                  : 'text-txt-3 hover:bg-(--hover)'
+                  ? "bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]"
+                  : "text-txt-3 hover:bg-(--hover)"
               }`}
             >
               {m.short}
@@ -159,84 +184,95 @@ export function LayersPanel({
         })}
         <span className="flex-1" />
         <span className="truncate text-[12px] text-txt-3">
-          {tiers.has('claim') ? 'incl. claims' : 'observed only'}
+          {tiers.has("claim") ? "incl. claims" : "observed only"}
         </span>
       </div>
 
       {all && <LayerRail registry={registry} viewer={viewer ?? null} />}
       {!all && (
-    <>
-      {MAP_LAYER_FOLDERS.map((folder) => {
-        const rows = folder.rows.filter((r) => showsRow(r.layerIds));
-        if (rows.length === 0) return null;
-        // Counted over what the operator can actually see. `folderCounts` reads
-        // the whole folder, so with a tier filtered out it would report an `on`
-        // for a row that is not on screen.
-        const on = rows.filter((r) => rowEnabled(registry, r)).length;
-        const total = rows.length;
-        const open = openIds[folder.id] ?? folder.defaultOpen ?? on > 0;
-        const peak = Math.max(1, ...rows.map((r) => rowCount(counts, r.layerIds)));
-        return (
-          <section key={folder.id} aria-label={folder.label}>
-            <div className="mt-3 flex h-[26px] items-center gap-[6px] border-t border-line px-[14px] pt-[6px] first:mt-0 first:border-t-0 first:pt-0">
-              <button
-                type="button"
-                onClick={() => toggleOpen(folder.id)}
-                aria-expanded={open}
-                className="flex min-w-0 flex-1 items-center gap-[6px] text-left"
-              >
-                <Icon
-                  name={open ? 'chevron-down' : 'chevron-right'}
-                  className="h-3 w-3 shrink-0 text-txt-3"
-                />
-                <Icon name={folder.icon} className="h-3 w-3 shrink-0 text-txt-3" />
-                <span className="truncate text-[12px] font-semibold uppercase tracking-[0.6px] text-txt-2">
-                  {folder.label}
-                </span>
-              </button>
-              <span className="mono text-[12px] tabular-nums text-txt-3">
-                {on} of {total}
-              </span>
-              <button
-                type="button"
-                onClick={() => toggleFolder(registry, { ...folder, rows })}
-                aria-label={on > 0 ? `Turn all ${folder.label} off` : `Turn all ${folder.label} on`}
-                className="flex h-5 w-5 items-center justify-center rounded-sm text-txt-3 hover:bg-bg-2 hover:text-txt-0"
-              >
-                <Icon name="crosshair" className="h-3 w-3" />
-              </button>
-            </div>
-
-            {open && rows.map((row) => {
-              const en = rowEnabled(registry, row);
-              const n = rowCount(counts, row.layerIds);
-              const st = rowState(counts, row.layerIds, en);
-              const frac = peak > 0 ? n / peak : 0;
-              const tier = rowTier(row.layerIds);
-              return (
-                <button
-                  key={row.label}
-                  type="button"
-                  onClick={() => toggleRow(registry, row)}
-                  aria-pressed={en}
-                  className="flex h-(--g-row-2) w-full items-center gap-2 px-[14px] text-left hover:bg-(--hover)"
-                >
-                  <Icon
-                    name={row.icon}
-                    className={`h-3 w-3 shrink-0 ${en ? 'text-accent-fg' : 'text-txt-3'}`}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className={`block truncate text-[12px] ${en ? 'text-txt-0' : 'text-txt-1'}`}
-                    >
-                      {row.label}
+        <>
+          {MAP_LAYER_FOLDERS.map((folder) => {
+            const rows = folder.rows.filter((r) => showsRow(r.layerIds));
+            if (rows.length === 0) return null;
+            // Counted over what the operator can actually see. `folderCounts` reads
+            // the whole folder, so with a tier filtered out it would report an `on`
+            // for a row that is not on screen.
+            const on = rows.filter((r) => rowEnabled(registry, r)).length;
+            const total = rows.length;
+            const open = openIds[folder.id] ?? folder.defaultOpen ?? on > 0;
+            const peak = Math.max(
+              1,
+              ...rows.map((r) => rowCount(counts, r.layerIds)),
+            );
+            return (
+              <section key={folder.id} aria-label={folder.label}>
+                <div className="mt-3 flex h-[26px] items-center gap-[6px] border-t border-line px-[14px] pt-[6px] first:mt-0 first:border-t-0 first:pt-0">
+                  <button
+                    type="button"
+                    onClick={() => toggleOpen(folder.id)}
+                    aria-expanded={open}
+                    className="flex min-w-0 flex-1 items-center gap-[6px] text-left"
+                  >
+                    <Icon
+                      name={open ? "chevron-down" : "chevron-right"}
+                      className="h-3 w-3 shrink-0 text-txt-3"
+                    />
+                    <Icon
+                      name={folder.icon}
+                      className="h-3 w-3 shrink-0 text-txt-3"
+                    />
+                    <span className="truncate text-[12px] font-semibold uppercase tracking-[0.6px] text-txt-2">
+                      {folder.label}
                     </span>
+                  </button>
+                  <span className="mono text-[12px] tabular-nums text-txt-3">
+                    {on} of {total}
                   </span>
-                  {/* The tier this row's data comes from, stated on the row and
+                  <button
+                    type="button"
+                    onClick={() => toggleFolder(registry, { ...folder, rows })}
+                    aria-label={
+                      on > 0
+                        ? `Turn all ${folder.label} off`
+                        : `Turn all ${folder.label} on`
+                    }
+                    className="flex h-5 w-5 items-center justify-center rounded-sm text-txt-3 hover:bg-bg-2 hover:text-txt-0"
+                  >
+                    <Icon name="crosshair" className="h-3 w-3" />
+                  </button>
+                </div>
+
+                {open &&
+                  rows.map((row) => {
+                    const en = rowEnabled(registry, row);
+                    const n = rowCount(counts, row.layerIds);
+                    const st = rowState(counts, row.layerIds, en);
+                    const frac = peak > 0 ? n / peak : 0;
+                    const tier = rowTier(row.layerIds);
+                    return (
+                      <button
+                        key={row.label}
+                        type="button"
+                        onClick={() => toggleRow(registry, row)}
+                        aria-pressed={en}
+                        className="flex h-(--g-row-2) w-full items-center gap-2 px-[14px] text-left hover:bg-(--hover)"
+                      >
+                        <Icon
+                          name={row.icon}
+                          className={`h-3 w-3 shrink-0 ${en ? "text-accent-fg" : "text-txt-3"}`}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className={`block truncate text-[12px] ${en ? "text-txt-0" : "text-txt-1"}`}
+                          >
+                            {row.label}
+                          </span>
+                        </span>
+                        {/* The tier this row's data comes from, stated on the row and
                       not only in a filter. It is the one fact that decides how
                       much of the rest of the row to believe. */}
-                  <TierMark tier={tier} />
-                  {/* A count and a bar, never the word "on". The bar carries the
+                        <TierMark tier={tier} />
+                        {/* A count and a bar, never the word "on". The bar carries the
                       magnitude the word threw away.
                       Four states, not two. `off`, `pending`, `empty` and `live`
                       used to collapse into a blank and a lone em dash, so a
@@ -244,54 +280,56 @@ export function LayersPanel({
                       looked identical, and 58 of 64 rows read as the same grey
                       nothing. A quiet source is information; a source that never
                       loaded is a fault; they cannot share a glyph. */}
-                  <span
-                    className={`mono w-[46px] shrink-0 text-right text-[12px] tabular-nums ${
-                      st.state === 'live'
-                        ? 'text-txt-1'
-                        : st.state === 'empty'
-                          ? 'text-txt-2'
-                          : 'text-txt-3'
-                    }`}
-                    title={
-                      st.state === 'pending'
-                        ? 'Loading'
-                        : st.state === 'empty'
-                          ? 'Reported, nothing in view'
-                          : undefined
-                    }
-                  >
-                    {st.state === 'off'
-                      ? ''
-                      : st.state === 'pending'
-                        ? '…'
-                        : st.state === 'empty'
-                          ? '0'
-                          : st.n.toLocaleString()}
-                  </span>
-                  <span
-                    className="relative h-[10px] w-[36px] shrink-0 overflow-hidden rounded-[1px] bg-bg-0"
-                    aria-hidden="true"
-                  >
-                    <i
-                      className={`absolute inset-y-0 left-0 block ${en ? 'bg-accent' : 'bg-bg-4'}`}
-                      style={{ width: `${Math.max(en && n > 0 ? 3 : 0, Math.min(100, frac * 100))}%` }}
-                    />
-                  </span>
-                  {/* An eye, not a sliding pill. The pill was 26px of iOS in a
+                        <span
+                          className={`mono w-[46px] shrink-0 text-right text-[12px] tabular-nums ${
+                            st.state === "live"
+                              ? "text-txt-1"
+                              : st.state === "empty"
+                                ? "text-txt-2"
+                                : "text-txt-3"
+                          }`}
+                          title={
+                            st.state === "pending"
+                              ? "Loading"
+                              : st.state === "empty"
+                                ? "Reported, nothing in view"
+                                : undefined
+                          }
+                        >
+                          {st.state === "off"
+                            ? ""
+                            : st.state === "pending"
+                              ? "…"
+                              : st.state === "empty"
+                                ? "0"
+                                : st.n.toLocaleString()}
+                        </span>
+                        <span
+                          className="relative h-[10px] w-[36px] shrink-0 overflow-hidden rounded-[1px] bg-bg-0"
+                          aria-hidden="true"
+                        >
+                          <i
+                            className={`absolute inset-y-0 left-0 block ${en ? "bg-accent" : "bg-bg-4"}`}
+                            style={{
+                              width: `${Math.max(en && n > 0 ? 3 : 0, Math.min(100, frac * 100))}%`,
+                            }}
+                          />
+                        </span>
+                        {/* An eye, not a sliding pill. The pill was 26px of iOS in a
                       Blueprint console, and it stated a second time what the
                       accent icon and the accent bar already state. Its width is
                       what forced `Chokepoint conge…`, `Disaster alerts (G…` and
                       `Humanitarian disa…` in a 336px panel. */}
-                  <Icon
-                    name={en ? 'eye' : 'eye-off'}
-                    className={`h-3 w-3 shrink-0 ${en ? 'text-accent-fg' : 'text-txt-4'}`}
-                  />
-                </button>
-              );
-            })}
-          </section>
-        );
-      })}
+                        <Icon
+                          name={en ? "eye" : "eye-off"}
+                          className={`h-3 w-3 shrink-0 ${en ? "text-accent-fg" : "text-txt-4"}`}
+                        />
+                      </button>
+                    );
+                  })}
+              </section>
+            );
+          })}
         </>
       )}
     </div>

@@ -6,20 +6,22 @@
 //      a hosted production build refuses to bundle it (buildGuard.ts, V7.2.2).
 // When neither is present it behaves like plain fetch (keyless local dev).
 
-import { getAccessToken, getAccessTokenAsync, supabase } from './supabase.js';
-import { isMfaRequired, mfaDetail, useMfaNeeded } from '../auth/mfa.js';
+import { getAccessToken, getAccessTokenAsync, supabase } from "./supabase.js";
+import { isMfaRequired, mfaDetail, useMfaNeeded } from "../auth/mfa.js";
 
 // Spelled `import.meta.env` literally: vitest's stubEnv (http.test.ts) only
 // rewrites that exact token, not a cast-wrapped `(import.meta).env`.
 function readEnv(name: string): string | undefined {
-  const v = (import.meta.env as Record<string, string | boolean | undefined> | undefined)?.[name];
-  return typeof v === 'string' ? v : undefined;
+  const v = (
+    import.meta.env as Record<string, string | boolean | undefined> | undefined
+  )?.[name];
+  return typeof v === "string" ? v : undefined;
 }
 
 function readKey(): string | null {
   // Vite exposes import.meta.env at runtime via the bundler.
   try {
-    const k = readEnv('VITE_API_KEY');
+    const k = readEnv("VITE_API_KEY");
     return k && k.trim() ? k : null;
   } catch {
     return null;
@@ -30,17 +32,18 @@ const API_KEY = readKey();
 
 function readApiBase(): string | null {
   try {
-    const v = readEnv('VITE_API_URL');
-    return v && v.trim() ? v.trim().replace(/\/+$/, '') : null;
+    const v = readEnv("VITE_API_URL");
+    return v && v.trim() ? v.trim().replace(/\/+$/, "") : null;
   } catch {
     return null;
   }
 }
 
 function isTauriApp(): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === "undefined") return false;
   return Boolean(
-    (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
+    (window as unknown as { __TAURI_INTERNALS__?: unknown })
+      .__TAURI_INTERNALS__,
   );
 }
 
@@ -49,27 +52,27 @@ export function backendHttpBase(): string {
   if (configured) return configured;
   // ponytail: pin 127.0.0.1 not localhost — WebKitGTK (Tauri) resolves localhost
   // to IPv6 ::1 first and does not fall back; backend on IPv4 only → refused.
-  return isTauriApp() ? 'http://127.0.0.1:8000' : '';
+  return isTauriApp() ? "http://127.0.0.1:8000" : "";
 }
 
 export function backendUrl(url: string): string {
   if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url;
   const base = backendHttpBase();
   if (!base) return url;
-  return url.startsWith('/') ? `${base}${url}` : `${base}/${url}`;
+  return url.startsWith("/") ? `${base}${url}` : `${base}/${url}`;
 }
 
 export function backendWsUrl(url: string): string {
   if (/^wss?:/i.test(url)) return url;
-  if (/^https?:/i.test(url)) return url.replace(/^http/i, 'ws');
+  if (/^https?:/i.test(url)) return url.replace(/^http/i, "ws");
   const httpBase = backendHttpBase();
   if (httpBase) {
-    const wsBase = httpBase.replace(/^http/i, 'ws');
-    return url.startsWith('/') ? `${wsBase}${url}` : `${wsBase}/${url}`;
+    const wsBase = httpBase.replace(/^http/i, "ws");
+    return url.startsWith("/") ? `${wsBase}${url}` : `${wsBase}/${url}`;
   }
-  if (typeof window === 'undefined') return url;
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const path = url.startsWith('/') ? url : `/${url}`;
+  if (typeof window === "undefined") return url;
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const path = url.startsWith("/") ? url : `/${url}`;
   return `${proto}//${window.location.host}${path}`;
 }
 
@@ -97,10 +100,15 @@ async function bearerToken(): Promise<string | null> {
 // variable URL that turns out absolute never carries the session token away.
 // Protocol-relative `//host/x` is another host, not a path.
 export function isBackendUrl(resolvedUrl: string): boolean {
-  if (!/^[a-z][a-z0-9+.-]*:/i.test(resolvedUrl) && !resolvedUrl.startsWith('//')) return true;
+  if (
+    !/^[a-z][a-z0-9+.-]*:/i.test(resolvedUrl) &&
+    !resolvedUrl.startsWith("//")
+  )
+    return true;
   const base = backendHttpBase();
-  if (base && (resolvedUrl === base || resolvedUrl.startsWith(`${base}/`))) return true;
-  if (typeof window === 'undefined') return false;
+  if (base && (resolvedUrl === base || resolvedUrl.startsWith(`${base}/`)))
+    return true;
+  if (typeof window === "undefined") return false;
   try {
     return new URL(resolvedUrl).origin === window.location.origin;
   } catch {
@@ -125,9 +133,12 @@ export async function apiFetch(
   if (!isBackendUrl(resolvedUrl)) return fetch(resolvedUrl, init);
   const token = await bearerToken();
   const headers = new Headers(init.headers);
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (API_KEY) headers.set('X-API-Key', API_KEY);
-  const res = await fetch(resolvedUrl, token || API_KEY ? { ...init, headers } : init);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (API_KEY) headers.set("X-API-Key", API_KEY);
+  const res = await fetch(
+    resolvedUrl,
+    token || API_KEY ? { ...init, headers } : init,
+  );
   if (res.status === 401) unauthorized = true;
   if (res.status === 403 && token) noteMfaRequired(res);
   return res;
@@ -141,7 +152,8 @@ function noteMfaRequired(res: Response): void {
     .clone()
     .text()
     .then((body) => {
-      if (isMfaRequired(res.status, body)) useMfaNeeded.getState().report(mfaDetail(body));
+      if (isMfaRequired(res.status, body))
+        useMfaNeeded.getState().report(mfaDetail(body));
     })
     .catch(() => undefined);
 }
@@ -160,8 +172,9 @@ export function openAuthedWebSocket(url: string): WebSocket {
   const full = backendWsUrl(url);
   const key = getAccessToken() ?? API_KEY;
   if (!key) return new WebSocket(full);
-  if (WS_TOKEN_CHARS.test(key)) return new WebSocket(full, ['velocity.v1', `key.${key}`]);
-  const sep = full.includes('?') ? '&' : '?';
+  if (WS_TOKEN_CHARS.test(key))
+    return new WebSocket(full, ["velocity.v1", `key.${key}`]);
+  const sep = full.includes("?") ? "&" : "?";
   return new WebSocket(`${full}${sep}key=${encodeURIComponent(key)}`);
 }
 

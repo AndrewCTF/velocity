@@ -33,7 +33,7 @@ export interface HeatmapPosition {
   //                    10 tisb_trackfile,11 tisb_other,12 mode_ac
   lat: number;
   lon: number;
-  alt: number | 'ground' | null; // feet; null = unknown
+  alt: number | "ground" | null; // feet; null = unknown
   gs: number | null; // knots; null = unknown
   t: number; // epoch ms, from the slice separator this row belongs to
   track: number | null; // derived great-circle bearing from this hex's prior fix in this chunk
@@ -51,13 +51,20 @@ export interface DecodedHeatmapChunk {
   callsigns: HeatmapCallsign[];
 }
 
-function bearingDeg(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function bearingDeg(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   const toRad = Math.PI / 180;
   const phi1 = lat1 * toRad;
   const phi2 = lat2 * toRad;
   const dLon = (lon2 - lon1) * toRad;
   const y = Math.sin(dLon) * Math.cos(phi2);
-  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
+  const x =
+    Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
@@ -66,7 +73,9 @@ function bearingDeg(lat1: number, lon1: number, lat2: number, lon2: number): num
  *  means the buffer is not a heatmap chunk at all. */
 export function decodeHeatmapChunk(buf: ArrayBuffer): DecodedHeatmapChunk {
   if (buf.byteLength === 0 || buf.byteLength % 16 !== 0) {
-    throw new Error(`heatmap chunk: invalid byteLength ${buf.byteLength} (not a positive multiple of 16)`);
+    throw new Error(
+      `heatmap chunk: invalid byteLength ${buf.byteLength} (not a positive multiple of 16)`,
+    );
   }
   const words = new Int32Array(buf);
   const uwords = new Uint32Array(buf);
@@ -94,11 +103,11 @@ export function decodeHeatmapChunk(buf: ArrayBuffer): DecodedHeatmapChunk {
     }
 
     const hexBits = w0 & 0xffffff;
-    const hex = hexBits.toString(16).padStart(6, '0');
+    const hex = hexBits.toString(16).padStart(6, "0");
     const prefixed = (w0 & 0x1000000) !== 0 ? `~${hex}` : hex;
 
     if (w1 >= CALLSIGN_LAT_MIN) {
-      const squawk = (w1 & 0xffff).toString(10).padStart(4, '0');
+      const squawk = (w1 & 0xffff).toString(10).padStart(4, "0");
       const byteOff = 4 * (i + 2);
       const chars: string[] = [];
       for (let b = 0; b < 8; b++) {
@@ -106,7 +115,7 @@ export function decodeHeatmapChunk(buf: ArrayBuffer): DecodedHeatmapChunk {
         if (c === 0) break;
         chars.push(String.fromCharCode(c));
       }
-      const callsign = chars.join('').replace(/\s+$/, '');
+      const callsign = chars.join("").replace(/\s+$/, "");
       callsigns.push({ hex: prefixed, squawk, callsign, t: sliceTs });
       continue;
     }
@@ -115,7 +124,8 @@ export function decodeHeatmapChunk(buf: ArrayBuffer): DecodedHeatmapChunk {
     const lat = w1 / 1e6;
     const lon = words[i + 2]! / 1e6;
     const rawAlt = (w3 << 16) >> 16;
-    const alt: number | 'ground' | null = rawAlt === -123 ? 'ground' : rawAlt === -124 ? null : rawAlt * 25;
+    const alt: number | "ground" | null =
+      rawAlt === -123 ? "ground" : rawAlt === -124 ? null : rawAlt * 25;
     const rawGs = w3 >> 16;
     const gs = rawGs === -1 ? null : rawGs / 10;
 
@@ -123,7 +133,16 @@ export function decodeHeatmapChunk(buf: ArrayBuffer): DecodedHeatmapChunk {
     const track = prev ? bearingDeg(prev.lat, prev.lon, lat, lon) : null;
     lastByHex.set(prefixed, { lat, lon });
 
-    positions.push({ hex: prefixed, addrtype, lat, lon, alt, gs, t: sliceTs, track });
+    positions.push({
+      hex: prefixed,
+      addrtype,
+      lat,
+      lon,
+      alt,
+      gs,
+      t: sliceTs,
+      track,
+    });
   }
 
   return { positions, callsigns };
@@ -137,7 +156,7 @@ export const CHUNK_MS = 30 * 60 * 1000;
 export const CHUNKS_PER_DAY = 48;
 
 function pad2(n: number): string {
-  return String(n).padStart(2, '0');
+  return String(n).padStart(2, "0");
 }
 
 /** "YYYY-MM-DD" in UTC for an epoch-ms instant. */

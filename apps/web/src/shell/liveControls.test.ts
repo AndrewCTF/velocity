@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { resolve, dirname, join, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { describe, it, expect } from "vitest";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { resolve, dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // A control that renders must run.
 //
@@ -30,7 +30,7 @@ function tsxUnder(dir: string): string[] {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) out.push(...tsxUnder(p));
-    else if (name.endsWith('.tsx') && !name.includes('.test.')) out.push(p);
+    else if (name.endsWith(".tsx") && !name.includes(".test.")) out.push(p);
   }
   return out;
 }
@@ -43,30 +43,34 @@ function openingTag(src: string, from: number): string {
   for (let i = from; i < src.length; i++) {
     const c = src[i] as string;
     if (quote) {
-      if (c === quote && src[i - 1] !== '\\') quote = null;
+      if (c === quote && src[i - 1] !== "\\") quote = null;
       continue;
     }
-    if (c === '"' || c === "'" || c === '`') quote = c;
-    else if (c === '{') depth++;
-    else if (c === '}') depth--;
-    else if (c === '>' && depth === 0) return src.slice(from, i + 1);
+    if (c === '"' || c === "'" || c === "`") quote = c;
+    else if (c === "{") depth++;
+    else if (c === "}") depth--;
+    else if (c === ">" && depth === 0) return src.slice(from, i + 1);
   }
   return src.slice(from);
 }
 
-describe('shell controls are live', () => {
+describe("shell controls are live", () => {
   const files = tsxUnder(HERE);
 
-  it('scans the whole shell, so a new file is covered by default', () => {
+  it("scans the whole shell, so a new file is covered by default", () => {
     expect(files.length).toBeGreaterThan(10);
   });
 
   it.each(files.map((f) => [relative(HERE, f), f] as const))(
-    'every <button> in %s has something to run',
+    "every <button> in %s has something to run",
     (_name, file) => {
-      const src = readFileSync(file, 'utf8');
+      const src = readFileSync(file, "utf8");
       const dead: string[] = [];
-      for (let i = src.indexOf('<button'); i >= 0; i = src.indexOf('<button', i + 1)) {
+      for (
+        let i = src.indexOf("<button");
+        i >= 0;
+        i = src.indexOf("<button", i + 1)
+      ) {
         const tag = openingTag(src, i);
         const live =
           /\bonClick=/.test(tag) ||
@@ -76,24 +80,29 @@ describe('shell controls are live', () => {
           /type="submit"/.test(tag) ||
           // A spread can carry the handler in from a props object.
           /\{\.\.\./.test(tag);
-        if (!live) dead.push(`line ${src.slice(0, i).split('\n').length}: ${tag.slice(0, 90)}`);
+        if (!live)
+          dead.push(
+            `line ${src.slice(0, i).split("\n").length}: ${tag.slice(0, 90)}`,
+          );
       }
-      expect(dead, `buttons with no handler:\n${dead.join('\n')}`).toEqual([]);
+      expect(dead, `buttons with no handler:\n${dead.join("\n")}`).toEqual([]);
     },
   );
 
-  it('never prints a keyboard hint nothing listens for', () => {
+  it("never prints a keyboard hint nothing listens for", () => {
     // Menu items print a `hint`. Each of these was advertised in the UI while
     // nothing bound it: the panel numbers in the Help menu and every tab
     // tooltip, and ⇧T beside the scheme cycler.
-    const app = readFileSync(resolve(HERE, '..', 'App.tsx'), 'utf8');
-    const consoleSrc = readFileSync(join(HERE, 'Console.tsx'), 'utf8');
-    const titlebar = readFileSync(join(HERE, 'TitleBar.tsx'), 'utf8');
+    const app = readFileSync(resolve(HERE, "..", "App.tsx"), "utf8");
+    const consoleSrc = readFileSync(join(HERE, "Console.tsx"), "utf8");
+    const titlebar = readFileSync(join(HERE, "TitleBar.tsx"), "utf8");
 
-    if (/⇧T/.test(titlebar)) expect(app, '⇧T is printed but nothing binds it').toMatch(/shiftKey/);
+    if (/⇧T/.test(titlebar))
+      expect(app, "⇧T is printed but nothing binds it").toMatch(/shiftKey/);
     if (/1-4 left panels/.test(titlebar))
-      expect(consoleSrc, 'the panel numbers are printed but nothing binds them').toMatch(
-        /addEventListener\('keydown'/,
-      );
+      expect(
+        consoleSrc,
+        "the panel numbers are printed but nothing binds them",
+      ).toMatch(/addEventListener\(["']keydown["']/);
   });
 });

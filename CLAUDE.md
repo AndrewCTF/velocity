@@ -36,32 +36,33 @@ there. Read the one for the code you are about to touch — the guards fail loud
 regardless, but the file tells you which operator decision you are about to
 undo and why it was made.
 
-| Directory | Covers |
-| --- | --- |
-| `apps/web/CLAUDE.md` | icons and labels, refresh and motion, the no-synthesis rule, auth wrappers, dashboard copy and voice |
-| `apps/api/CLAUDE.md` | snapshot cadence and union, AIS, sidecar supervision, egress tiers, ontology, model prose |
-| `apps/ml/CLAUDE.md` | which of the three venvs each module needs |
-| `apps/desktop/CLAUDE.md` | Tauri watcher excludes, YOLO sidecar env |
-| `packages/shared/CLAUDE.md` | the web↔api contract, `Observation.t` semantics |
-| `tools/CLAUDE.md` | feeder processes, the real-Chrome tier, perf harnesses |
-| `scripts/CLAUDE.md` | boot, verify, kill-port, release smoke |
-| `infra/CLAUDE.md` | the two SQL trees and which one you actually want |
+| Directory                   | Covers                                                                                               |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `apps/web/CLAUDE.md`        | icons and labels, refresh and motion, the no-synthesis rule, auth wrappers, dashboard copy and voice |
+| `apps/api/CLAUDE.md`        | snapshot cadence and union, AIS, sidecar supervision, egress tiers, ontology, model prose            |
+| `apps/ml/CLAUDE.md`         | which of the three venvs each module needs                                                           |
+| `apps/desktop/CLAUDE.md`    | Tauri watcher excludes, YOLO sidecar env                                                             |
+| `packages/shared/CLAUDE.md` | the web↔api contract, `Observation.t` semantics                                                      |
+| `tools/CLAUDE.md`           | feeder processes, the real-Chrome tier, perf harnesses                                               |
+| `scripts/CLAUDE.md`         | boot, verify, kill-port, release smoke                                                               |
+| `infra/CLAUDE.md`           | the two SQL trees and which one you actually want                                                    |
 
 ## Environment facts / traps
 
 - Backend tests from the **repo ROOT** (from `apps/api` the `.env` auth
   resolves → wall of 401s):
   `OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q`
-  Baseline: **3007 passed + 21 skipped in ~266 s** (skips = opt-in live probes
-  + the 17 Timescale tests that run only with `HISTORY_PG_TEST_DSN`, which CI
-  sets; measured 2026-10-05, branch keyless-google-earth-3d).
-  Runs SERIAL by default: `-n auto --dist
-  loadfile` groups different files per worker on different core counts, so a
-  suite with module-state leaks answers differently per machine and CI (4 cores)
-  failed a branch that was green locally (16). Opt in per-machine, never commit
-  it as the default. Never commit below the baseline you inherited. When you raise it, update the number/date/wave here and move the
-  displaced line to `docs/decisions.md#backend-test-baseline-history` — this
-  bullet stays a three-line fact, not a changelog.
+  Baseline: **3159 passed + 21 skipped in ~273 s** (skips are the opt-in live
+  probes and the 17 Timescale tests that run only with `HISTORY_PG_TEST_DSN`,
+  which CI sets; measured 2026-10-17, branch frontend-speed-2026-10).
+  Runs SERIAL by default: `-n auto --dist loadfile` groups different files per
+  worker on different core counts, so a suite with module-state leaks answers
+  differently per machine and CI (4 cores) failed a branch that was green
+  locally (16). Opt in per-machine, never commit it as the default. Never
+  commit below the baseline you inherited. When you raise it, update the
+  number/date/wave here and move the displaced line to
+  `docs/decisions.md#backend-test-baseline-history`; this bullet stays a
+  three-line fact, not a changelog.
 - `pnpm -r typecheck` green at every commit boundary. `bash scripts/verify.sh`
   = typecheck + lint + web unit + api tests in one command.
 - Boot: `bash scripts/run-api.sh` from repo ROOT (:8000), Vite :5173. Restart

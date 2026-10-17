@@ -3,8 +3,8 @@
 // useChip. Holds the active AOI, the nearby ground photos, and the desktop-CUDA
 // detections per photo. One AOI at a time.
 
-import { create } from 'zustand';
-import type { GroundDetection, GroundPhotoFeature } from './types.js';
+import { create } from "zustand";
+import type { GroundDetection, GroundPhotoFeature } from "./types.js";
 
 export interface GroundAoi {
   lat: number;
@@ -57,9 +57,18 @@ export const useGround = create<GroundState>((set) => ({
       openSeq: s.openSeq + 1,
       fetchSeq: s.fetchSeq + 1,
     })),
-  refresh: () => set((s) => ({ fetchSeq: s.fetchSeq + 1, loading: true, error: null })),
+  refresh: () =>
+    set((s) => ({ fetchSeq: s.fetchSeq + 1, loading: true, error: null })),
   clear: () =>
-    set({ aoi: null, photos: [], selectedId: null, detections: {}, error: null, note: null, loading: false }),
+    set({
+      aoi: null,
+      photos: [],
+      selectedId: null,
+      detections: {},
+      error: null,
+      note: null,
+      loading: false,
+    }),
   setPhotos: (photos, note) => set({ photos, note, loading: false }),
   setLoading: (b) => set({ loading: b }),
   setError: (e) => set({ error: e, loading: false }),
@@ -68,6 +77,7 @@ export const useGround = create<GroundState>((set) => ({
     set((s) => ({ detections: { ...s.detections, [id]: dets } })),
 }));
 
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useGround: typeof useGround }).__useGround = useGround;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (window as unknown as { __useGround: typeof useGround }).__useGround =
+    useGround;
 }

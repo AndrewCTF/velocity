@@ -11,7 +11,7 @@ function dataUri(svg: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-const STEEL = '#c3cee0';
+const STEEL = "#c3cee0";
 
 // 120×44, nose to the right. Each family is a few primitives — a recognition
 // glyph, not a scale drawing.
@@ -100,14 +100,14 @@ function ship(c: string): string {
 }
 
 export type AirframeFamily =
-  | 'widebody'
-  | 'narrowbody'
-  | 'turboprop'
-  | 'lightGa'
-  | 'helicopter'
-  | 'fighter'
-  | 'drone'
-  | 'glider';
+  | "widebody"
+  | "narrowbody"
+  | "turboprop"
+  | "lightGa"
+  | "helicopter"
+  | "fighter"
+  | "drone"
+  | "glider";
 
 const FAMILY_SVG: Record<AirframeFamily, (c: string) => string> = {
   widebody,
@@ -122,13 +122,118 @@ const FAMILY_SVG: Record<AirframeFamily, (c: string) => string> = {
 
 // Prefix tables — checked longest-first inside resolveAircraftFamily. Sourced
 // from common ICAO type designators; intentionally coarse (family, not type).
-const WIDEBODY = ['A30', 'A31', 'A33', 'A34', 'A35', 'A38', 'B74', 'B76', 'B77', 'B78', 'MD11', 'IL96', 'IL86', 'A124', 'AN12', 'C5', 'C17'];
-const NARROWBODY = ['A19', 'A20', 'A21', 'A22', 'BCS', 'B71', 'B72', 'B73', 'B75', 'MD8', 'MD9', 'DC9', 'E190', 'E195', 'E170', 'E175', 'SU95', 'B37', 'C919'];
-const TURBOPROP = ['AT4', 'AT5', 'AT7', 'DH8', 'DHC', 'SF34', 'SB20', 'JS', 'BE20', 'BE9', 'C208', 'PC12', 'TBM', 'AN24', 'AN26', 'L410', 'D328'];
-const HELI = ['EC', 'H1', 'H2', 'H5', 'H6', 'AS3', 'AS35', 'AS50', 'AS65', 'R22', 'R44', 'R66', 'B06', 'B47', 'S76', 'S92', 'S70', 'AW1', 'AW3', 'UH', 'CH', 'MI', 'KA', 'EH'];
-const FIGHTER = ['F15', 'F16', 'F18', 'F22', 'F35', 'F4', 'F5', 'F14', 'EUFI', 'RAFL', 'TOR', 'GR4', 'MIG', 'SU2', 'SU3', 'SU5', 'A10', 'AV8', 'JAS', 'J10', 'J20', 'FA50', 'T38'];
-const DRONE = ['MQ', 'RQ', 'TB2', 'GH', 'UAV', 'SHAH'];
-const GLIDER = ['GLID', 'AS2', 'DG', 'LS', 'DUO', 'ASK', 'ASW', 'STD'];
+const WIDEBODY = [
+  "A30",
+  "A31",
+  "A33",
+  "A34",
+  "A35",
+  "A38",
+  "B74",
+  "B76",
+  "B77",
+  "B78",
+  "MD11",
+  "IL96",
+  "IL86",
+  "A124",
+  "AN12",
+  "C5",
+  "C17",
+];
+const NARROWBODY = [
+  "A19",
+  "A20",
+  "A21",
+  "A22",
+  "BCS",
+  "B71",
+  "B72",
+  "B73",
+  "B75",
+  "MD8",
+  "MD9",
+  "DC9",
+  "E190",
+  "E195",
+  "E170",
+  "E175",
+  "SU95",
+  "B37",
+  "C919",
+];
+const TURBOPROP = [
+  "AT4",
+  "AT5",
+  "AT7",
+  "DH8",
+  "DHC",
+  "SF34",
+  "SB20",
+  "JS",
+  "BE20",
+  "BE9",
+  "C208",
+  "PC12",
+  "TBM",
+  "AN24",
+  "AN26",
+  "L410",
+  "D328",
+];
+const HELI = [
+  "EC",
+  "H1",
+  "H2",
+  "H5",
+  "H6",
+  "AS3",
+  "AS35",
+  "AS50",
+  "AS65",
+  "R22",
+  "R44",
+  "R66",
+  "B06",
+  "B47",
+  "S76",
+  "S92",
+  "S70",
+  "AW1",
+  "AW3",
+  "UH",
+  "CH",
+  "MI",
+  "KA",
+  "EH",
+];
+const FIGHTER = [
+  "F15",
+  "F16",
+  "F18",
+  "F22",
+  "F35",
+  "F4",
+  "F5",
+  "F14",
+  "EUFI",
+  "RAFL",
+  "TOR",
+  "GR4",
+  "MIG",
+  "SU2",
+  "SU3",
+  "SU5",
+  "A10",
+  "AV8",
+  "JAS",
+  "J10",
+  "J20",
+  "FA50",
+  "T38",
+];
+const DRONE = ["MQ", "RQ", "TB2", "GH", "UAV", "SHAH"];
+const GLIDER = ["GLID", "AS2", "DG", "LS", "DUO", "ASK", "ASW", "STD"];
 
 function matchPrefix(code: string, table: readonly string[]): boolean {
   return table.some((p) => code.startsWith(p));
@@ -143,51 +248,52 @@ export function resolveAircraftFamily(
   typeCode?: string | null,
   category?: string | null,
 ): AirframeFamily | null {
-  const code = (typeCode ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const code = (typeCode ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (code) {
-    if (matchPrefix(code, DRONE)) return 'drone';
-    if (matchPrefix(code, FIGHTER)) return 'fighter';
-    if (matchPrefix(code, WIDEBODY)) return 'widebody';
-    if (matchPrefix(code, NARROWBODY)) return 'narrowbody';
-    if (matchPrefix(code, TURBOPROP)) return 'turboprop';
-    if (matchPrefix(code, HELI)) return 'helicopter';
-    if (matchPrefix(code, GLIDER)) return 'glider';
+    if (matchPrefix(code, DRONE)) return "drone";
+    if (matchPrefix(code, FIGHTER)) return "fighter";
+    if (matchPrefix(code, WIDEBODY)) return "widebody";
+    if (matchPrefix(code, NARROWBODY)) return "narrowbody";
+    if (matchPrefix(code, TURBOPROP)) return "turboprop";
+    if (matchPrefix(code, HELI)) return "helicopter";
+    if (matchPrefix(code, GLIDER)) return "glider";
     // Single-letter GA families (Cessna C*, Piper PA*/P28*, Beech BE*, etc.)
-    if (/^(C1|C2|C3|C4|P2|P3|PA|BE|SR2|DA[24]|DV|M20|RV|G1|G2)/.test(code)) return 'lightGa';
+    if (/^(C1|C2|C3|C4|P2|P3|PA|BE|SR2|DA[24]|DV|M20|RV|G1|G2)/.test(code))
+      return "lightGa";
   }
   // ADS-B emitter category code (A1–A7, B1/B4) when no type designator matched.
-  const cat = (category ?? '').toUpperCase();
+  const cat = (category ?? "").toUpperCase();
   switch (cat) {
-    case 'A1':
-      return 'lightGa';
-    case 'A2':
-      return 'turboprop';
-    case 'A3':
-    case 'A4':
-      return 'narrowbody';
-    case 'A5':
-      return 'widebody';
-    case 'A6':
-      return 'fighter';
-    case 'A7':
-      return 'helicopter';
-    case 'B1':
-      return 'glider';
-    case 'B4':
-    case 'B6':
-      return 'drone';
+    case "A1":
+      return "lightGa";
+    case "A2":
+      return "turboprop";
+    case "A3":
+    case "A4":
+      return "narrowbody";
+    case "A5":
+      return "widebody";
+    case "A6":
+      return "fighter";
+    case "A7":
+      return "helicopter";
+    case "B1":
+      return "glider";
+    case "B4":
+    case "B6":
+      return "drone";
   }
   switch (category) {
-    case 'airliner':
-      return 'narrowbody';
-    case 'military':
-      return 'fighter';
-    case 'helicopter':
-      return 'helicopter';
-    case 'glider':
-      return 'glider';
-    case 'private':
-      return 'lightGa';
+    case "airliner":
+      return "narrowbody";
+    case "military":
+      return "fighter";
+    case "helicopter":
+      return "helicopter";
+    case "glider":
+      return "glider";
+    case "private":
+      return "lightGa";
     default:
       return null;
   }
@@ -196,7 +302,10 @@ export function resolveAircraftFamily(
 const _cache = new Map<string, string>();
 
 /** Data-URI side-view silhouette for an airframe family. */
-export function aircraftSilhouette(family: AirframeFamily, color = STEEL): string {
+export function aircraftSilhouette(
+  family: AirframeFamily,
+  color = STEEL,
+): string {
   const key = `${family}:${color}`;
   let v = _cache.get(key);
   if (!v) {

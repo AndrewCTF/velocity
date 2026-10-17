@@ -1,8 +1,8 @@
-import { defineConfig, type Plugin } from 'vite';
-import react from '@vitejs/plugin-react';
-import cesium from 'vite-plugin-cesium';
-import { buildCsp } from './csp';
-import { bundledApiKeyError } from './buildGuard';
+import { defineConfig, type Plugin } from "vite";
+import react from "@vitejs/plugin-react";
+import cesium from "vite-plugin-cesium";
+import { buildCsp } from "./csp";
+import { bundledApiKeyError } from "./buildGuard";
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -18,30 +18,34 @@ declare const process: { env: Record<string, string | undefined> };
 // dev proxy's Node process resolves `localhost` to IPv6 `::1` first, but uvicorn
 // binds IPv4 only → ECONNREFUSED, surfacing in the browser as a bare
 // "NetworkError" on /api/config. Same trap the Tauri path pins around.
-const apiTarget = process.env['API_PROXY_TARGET'] ?? 'http://127.0.0.1:8000';
-const wsTarget = apiTarget.replace(/^http/, 'ws');
+const apiTarget = process.env["API_PROXY_TARGET"] ?? "http://127.0.0.1:8000";
+const wsTarget = apiTarget.replace(/^http/, "ws");
+// TILES_PROXY_TARGET is the tile lane (apps/api/app/tiles_main.py): the same
+// tile routes in a process with nothing else on its event loop. start.sh runs
+// it and sets this. Unset, tiles come from the API as they always did.
+const tilesTarget = process.env["TILES_PROXY_TARGET"] ?? apiTarget;
 
 // Every production build carries a CSP (csp.ts says what each source is for).
 // VELOCITY_DESKTOP=1 adds the Tauri loopback backend and IPC bridge. Build
 // only: the dev server's HMR client needs inline script and eval.
-const desktop = process.env['VELOCITY_DESKTOP'] === '1';
+const desktop = process.env["VELOCITY_DESKTOP"] === "1";
 
 function cspPlugin(): Plugin {
   let env: Record<string, string> = {};
   return {
-    name: 'velocity-csp',
-    apply: 'build',
+    name: "velocity-csp",
+    apply: "build",
     configResolved(config) {
       env = config.env as Record<string, string>;
     },
     transformIndexHtml: {
       // After vite-plugin-cesium has added its tags.
-      order: 'post',
+      order: "post",
       handler(html: string): string {
         const content = buildCsp({
           desktop,
-          apiUrl: env['VITE_API_URL'],
-          supabaseUrl: env['VITE_SUPABASE_URL'],
+          apiUrl: env["VITE_API_URL"],
+          supabaseUrl: env["VITE_SUPABASE_URL"],
         });
         const meta = `<meta http-equiv="Content-Security-Policy" content="${content}" />`;
         // A meta CSP governs only what the parser meets AFTER it, so placement
@@ -52,7 +56,8 @@ function cspPlugin(): Plugin {
         // file; the app bundle, workers, and anything injected later are all
         // under the policy, and a later eval from Cesium is still refused.
         const cesiumTag = /<script src="[^"]*\/Cesium\.js"><\/script>/;
-        if (cesiumTag.test(html)) return html.replace(cesiumTag, (tag) => `${tag}\n    ${meta}`);
+        if (cesiumTag.test(html))
+          return html.replace(cesiumTag, (tag) => `${tag}\n    ${meta}`);
         return html.replace(/<head>/, `<head>\n    ${meta}`);
       },
     },
@@ -64,8 +69,8 @@ function cspPlugin(): Plugin {
 // the shell environment.
 function bundledKeyGuardPlugin(): Plugin {
   return {
-    name: 'velocity-no-bundled-api-key',
-    apply: 'build',
+    name: "velocity-no-bundled-api-key",
+    apply: "build",
     configResolved(config) {
       const err = bundledApiKeyError({
         env: config.env as Record<string, string | undefined>,
@@ -80,7 +85,7 @@ function bundledKeyGuardPlugin(): Plugin {
 export default defineConfig({
   plugins: [bundledKeyGuardPlugin(), react(), cesium(), cspPlugin()],
   server: {
-    host: '0.0.0.0',
+    host: "0.0.0.0",
     port: 5173,
     // Static assets that never need HMR (~6.2k files: pre-rendered dark tiles
     // + self-hosted fonts). Keeping them out of the watch set matters on this
@@ -90,10 +95,10 @@ export default defineConfig({
     // is the committed fallback when the budget is exhausted by OTHER
     // processes; the durable host fix is raising the sysctl.
     watch: {
-      ignored: ['**/public/darktiles/**', '**/public/fonts/**', '**/dist/**'],
+      ignored: ["**/public/darktiles/**", "**/public/fonts/**", "**/dist/**"],
     },
     proxy: {
-      '/api': { target: apiTarget, changeOrigin: true },
+      "/api": { target: apiTarget, changeOrigin: true },
       // ws: true with lifecycle wiring. The bare proxy never tore down the
       // UPSTREAM leg when a browser WS reconnected (the /ws/adsb 8-50s churn) —
       // http-proxy left it half-open, so the backend socket rotted in CLOSE-WAIT
@@ -101,31 +106,35 @@ export default defineConfig({
       // Bind the upstream request's lifetime to the client socket: when the
       // browser side closes or errors, destroy the upstream so the backend's
       // receive loop sees the FIN and frees the fd.
-      '/ws': {
+      "/ws": {
         target: wsTarget,
         ws: true,
         changeOrigin: true,
         configure: (proxy) => {
-          proxy.on('proxyReqWs', (proxyReq, _req, socket) => {
+          proxy.on("proxyReqWs", (proxyReq, _req, socket) => {
             const kill = (): void => {
               proxyReq.destroy();
             };
-            socket.on('close', kill);
-            socket.on('error', kill);
+            socket.on("close", kill);
+            socket.on("error", kill);
           });
-          proxy.on('error', (_err, _req, target) => {
+          proxy.on("error", (_err, _req, target) => {
             (target as { destroy?: () => void })?.destroy?.();
           });
         },
       },
-      '/tiles': { target: apiTarget, changeOrigin: true },
+      // Ahead of "/tiles": the first key that matches wins. Only the families
+      // the Google 3D view pulls and that keep no state in the API process;
+      // Apple tiles need the signing session the API holds.
+      "^/tiles/(g3d|sat|terrain)/": { target: tilesTarget, changeOrigin: true },
+      "/tiles": { target: apiTarget, changeOrigin: true },
     },
   },
   build: {
-    target: 'es2022',
+    target: "es2022",
     // 'hidden' still emits the .map files for local symbolication but omits
     // the sourceMappingURL comment, so browsers never download the ~20 MB of
     // maps alongside the bundle.
-    sourcemap: 'hidden',
+    sourcemap: "hidden",
   },
 });

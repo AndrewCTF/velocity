@@ -3,15 +3,15 @@
 // the SimController renders on Cesium. No Cesium types leak in here so the
 // engine stays unit-testable.
 
-import type { LinkProfile } from './links.js';
-import type { Jammer } from './ew.js';
+import type { LinkProfile } from "./links.js";
+import type { Jammer } from "./ew.js";
 
 export interface LatLon {
   lat: number;
   lon: number;
 }
 
-export type ScenarioKind = 'drone-swarm' | 'drone-landing' | 'attack';
+export type ScenarioKind = "drone-swarm" | "drone-landing" | "attack";
 
 export interface SwarmParams {
   launch: LatLon;
@@ -102,7 +102,7 @@ export interface UnitFix {
   alt: number; // metres
 }
 
-export type UnitKind = 'drone' | 'uav';
+export type UnitKind = "drone" | "uav";
 
 export interface UnitTrack {
   id: string; // sim:<scenario>:<n>

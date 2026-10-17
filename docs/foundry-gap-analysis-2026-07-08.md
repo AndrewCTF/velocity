@@ -31,29 +31,29 @@ follows.
 Legend: ✅ covered (tested), 🟡 partial, ❌ missing. "Palantir" column cites
 PDF pages; "ours" cites code.
 
-| # | Palantir capability (PDF) | Ours | Evidence |
-|---|---|---|---|
-| 1 | Datasets ingested + normalized into a store (p5) | ✅ CSV/JSON/NDJSON upload, schema inference | `foundry/ingest.py:115-148`, tests |
-| 2 | Versioned, auditable transformation configs w/ rollback (Deep Dive p7) | ✅ immutable dataset versions + rollback-as-new-version | `store.py:354-434,521-556` |
-| 3 | Data quality rules at transform level (p7) | ✅ 5 check types, warn/fail, enforced on every version write | `checks.py:14-82`, `store.py:304-328` |
-| 4 | No-code / visual pipeline builder (OSINT p5, Deep Dive p6) | 🟡 step-form editor + JSON fallback + SVG DAG; no drag-wire canvas, no per-step validation at save time | `PipelineView.tsx:1-623`; L10 below |
-| 5 | Transform DSL (custom Python/Java code blocks, regex, lookups — p6) | 🟡 9 step types + AST-whitelist expressions; **no regex, no dates, no custom code, 8 functions total** | `transforms.py:22-31,218-352` |
-| 6 | Lineage (implied by pipeline/binding architecture) | 🟡 dataset/transform-level DAG + stale flags; **no version-level or column-level lineage** | `builds.py:203-238` |
-| 7 | Ontology binding — raw records mapped to ontology objects (Kinetic bindings, p5) | ✅ column→prop map, mint via `upsert`, provenance source `foundry:<id>` | `binding.py:28-65` |
-| 8 | Real-time change propagation to ontology objects (p5) | ❌ sync is manual/button-driven; no on-build auto-sync, no streaming | `routes/foundry.py:521-529` |
-| 9 | Scheduled/orchestrated pipeline execution | 🟡 interval scheduler exists but is **plumbed-unverified** (never runs in CI, `OSINT_DISABLE_BACKGROUND=1`) and swallows errors at DEBUG | `scheduler.py:26-46`; Q1/Q4/Q12 |
-| 10 | Universal connectors — DBs, APIs, streams, WFS/WMS, STIX (p6) | ❌ upload-only; no connectors, no Parquet/Excel | `ingest.py:115-148` |
-| 11 | Streaming/CDC ingestion (Kafka/Flink/Debezium, p7-8) | ❌ | — |
-| 12 | Entity resolution — deterministic + probabilistic dedup w/ review queue (p7) | ❌ in foundry (exact-key upsert only; separate intel-layer resolution exists but is not wired into binding sync) | `binding.py:38-44` |
-| 13 | Quarantine / auto-repair / dead-letter remediation (p7) | ❌ fail-checks block the write wholesale; no quarantine of bad rows | `store.py:304-328` |
-| 14 | Data-level security: ABAC/RBAC/MLS, per-user query results (p6, p14-15) | ❌ deliberately: keyless single-operator by design | `routes/foundry.py:7-8`; L2/L3 |
-| 15 | Scale: billions of records, sub-second, distributed (p5, p17) | ❌ deliberately: 200k rows/25MB caps, in-memory Python transforms, sync builds | L4/L5/L11/L12 |
-| 16 | Branching of data/pipelines | ❌ linear version history only | `store.py:51-57` |
-| 17 | NLP/NER auto-extraction into ontology (p20) | ❌ in foundry (exists elsewhere in intel layer, not bound to datasets) | — |
-| 18 | Auto connection discovery on new source integration (OSINT p5) | ❌ | — |
+| #   | Palantir capability (PDF)                                                        | Ours                                                                                                                                     | Evidence                              |
+| --- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| 1   | Datasets ingested + normalized into a store (p5)                                 | ✅ CSV/JSON/NDJSON upload, schema inference                                                                                              | `foundry/ingest.py:115-148`, tests    |
+| 2   | Versioned, auditable transformation configs w/ rollback (Deep Dive p7)           | ✅ immutable dataset versions + rollback-as-new-version                                                                                  | `store.py:354-434,521-556`            |
+| 3   | Data quality rules at transform level (p7)                                       | ✅ 5 check types, warn/fail, enforced on every version write                                                                             | `checks.py:14-82`, `store.py:304-328` |
+| 4   | No-code / visual pipeline builder (OSINT p5, Deep Dive p6)                       | 🟡 step-form editor + JSON fallback + SVG DAG; no drag-wire canvas, no per-step validation at save time                                  | `PipelineView.tsx:1-623`; L10 below   |
+| 5   | Transform DSL (custom Python/Java code blocks, regex, lookups — p6)              | 🟡 9 step types + AST-whitelist expressions; **no regex, no dates, no custom code, 8 functions total**                                   | `transforms.py:22-31,218-352`         |
+| 6   | Lineage (implied by pipeline/binding architecture)                               | 🟡 dataset/transform-level DAG + stale flags; **no version-level or column-level lineage**                                               | `builds.py:203-238`                   |
+| 7   | Ontology binding — raw records mapped to ontology objects (Kinetic bindings, p5) | ✅ column→prop map, mint via `upsert`, provenance source `foundry:<id>`                                                                  | `binding.py:28-65`                    |
+| 8   | Real-time change propagation to ontology objects (p5)                            | ❌ sync is manual/button-driven; no on-build auto-sync, no streaming                                                                     | `routes/foundry.py:521-529`           |
+| 9   | Scheduled/orchestrated pipeline execution                                        | 🟡 interval scheduler exists but is **plumbed-unverified** (never runs in CI, `OSINT_DISABLE_BACKGROUND=1`) and swallows errors at DEBUG | `scheduler.py:26-46`; Q1/Q4/Q12       |
+| 10  | Universal connectors — DBs, APIs, streams, WFS/WMS, STIX (p6)                    | ❌ upload-only; no connectors, no Parquet/Excel                                                                                          | `ingest.py:115-148`                   |
+| 11  | Streaming/CDC ingestion (Kafka/Flink/Debezium, p7-8)                             | ❌                                                                                                                                       | —                                     |
+| 12  | Entity resolution — deterministic + probabilistic dedup w/ review queue (p7)     | ❌ in foundry (exact-key upsert only; separate intel-layer resolution exists but is not wired into binding sync)                         | `binding.py:38-44`                    |
+| 13  | Quarantine / auto-repair / dead-letter remediation (p7)                          | ❌ fail-checks block the write wholesale; no quarantine of bad rows                                                                      | `store.py:304-328`                    |
+| 14  | Data-level security: ABAC/RBAC/MLS, per-user query results (p6, p14-15)          | ❌ deliberately: keyless single-operator by design                                                                                       | `routes/foundry.py:7-8`; L2/L3        |
+| 15  | Scale: billions of records, sub-second, distributed (p5, p17)                    | ❌ deliberately: 200k rows/25MB caps, in-memory Python transforms, sync builds                                                           | L4/L5/L11/L12                         |
+| 16  | Branching of data/pipelines                                                      | ❌ linear version history only                                                                                                           | `store.py:51-57`                      |
+| 17  | NLP/NER auto-extraction into ontology (p20)                                      | ❌ in foundry (exists elsewhere in intel layer, not bound to datasets)                                                                   | —                                     |
+| 18  | Auto connection discovery on new source integration (OSINT p5)                   | ❌                                                                                                                                       | —                                     |
 
 Score against the PDFs' data-platform capability set: **5 covered, 4 partial,
-9 missing**. Against the *personal, keyless-local* scope the roadmap actually
+9 missing**. Against the _personal, keyless-local_ scope the roadmap actually
 set (docs/roadmap-ontology-2026-07.md §6 explicitly rejects "out-Palantiring
 Palantir"), rows 14-15 and arguably 10-11 are out of scope by operator
 decision, which leaves the honest in-scope gap list at rows 4-6, 8-9, 12-13,

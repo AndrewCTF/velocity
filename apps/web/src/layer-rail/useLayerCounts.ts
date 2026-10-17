@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type * as Cesium from 'cesium';
+import { useEffect, useState } from "react";
+import type * as Cesium from "cesium";
 
 // Live per-layer contact counts, keyed by Cesium DataSource name (which is the
 // registry layer id).
@@ -13,12 +13,15 @@ import type * as Cesium from 'cesium';
 // EntityCluster aggregates them visually, because clustering is a render-time
 // grouping and not a collection mutation. So this counts real contacts, not
 // icons on screen. Verified for vessels, which do cluster.
-export function useLayerCounts(viewer: Cesium.Viewer | null | undefined): Record<string, number> {
+export function useLayerCounts(
+  viewer: Cesium.Viewer | null | undefined,
+): Record<string, number> {
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
     const perDsUnsub = new Map<Cesium.DataSource, () => void>();
+    let last: Record<string, number> = {};
 
     const recount = (): void => {
       // A destroyed viewer (HMR / globe ErrorBoundary) throws on .dataSources.
@@ -28,27 +31,41 @@ export function useLayerCounts(viewer: Cesium.Viewer | null | undefined): Record
         const ds = viewer.dataSources.get(i);
         next[ds.name] = ds.entities.values.length;
       }
+      // collectionChanged also fires for entities that only CHANGED (every poll's
+      // property refresh), so most recounts find the same numbers. A new object
+      // each time re-rendered the whole Layers panel on every drain and every
+      // 2 s tick; keep the old one when nothing moved.
+      if (sameCounts(last, next)) return;
+      last = next;
       setCounts(next);
     };
 
     const attach = (ds: Cesium.DataSource): void => {
       if (perDsUnsub.has(ds)) return;
-      perDsUnsub.set(ds, ds.entities.collectionChanged.addEventListener(recount));
+      perDsUnsub.set(
+        ds,
+        ds.entities.collectionChanged.addEventListener(recount),
+      );
     };
     const detach = (ds: Cesium.DataSource): void => {
       perDsUnsub.get(ds)?.();
       perDsUnsub.delete(ds);
     };
 
-    for (let i = 0; i < viewer.dataSources.length; i++) attach(viewer.dataSources.get(i));
-    const removeAdded = viewer.dataSources.dataSourceAdded.addEventListener((_c, ds) => {
-      attach(ds);
-      recount();
-    });
-    const removeRemoved = viewer.dataSources.dataSourceRemoved.addEventListener((_c, ds) => {
-      detach(ds);
-      recount();
-    });
+    for (let i = 0; i < viewer.dataSources.length; i++)
+      attach(viewer.dataSources.get(i));
+    const removeAdded = viewer.dataSources.dataSourceAdded.addEventListener(
+      (_c, ds) => {
+        attach(ds);
+        recount();
+      },
+    );
+    const removeRemoved = viewer.dataSources.dataSourceRemoved.addEventListener(
+      (_c, ds) => {
+        detach(ds);
+        recount();
+      },
+    );
 
     // Initial count, plus a 2 s safety net for any source that mutates without
     // firing collectionChanged.
@@ -67,8 +84,21 @@ export function useLayerCounts(viewer: Cesium.Viewer | null | undefined): Record
   return counts;
 }
 
+function sameCounts(
+  a: Record<string, number>,
+  b: Record<string, number>,
+): boolean {
+  const keys = Object.keys(b);
+  if (Object.keys(a).length !== keys.length) return false;
+  for (const k of keys) if (a[k] !== b[k]) return false;
+  return true;
+}
+
 /** Sum of the live counts for every registry layer a catalog row maps to. */
-export function rowCount(counts: Record<string, number>, layerIds: readonly string[]): number {
+export function rowCount(
+  counts: Record<string, number>,
+  layerIds: readonly string[],
+): number {
   let n = 0;
   for (const id of layerIds) n += counts[id] ?? 0;
   return n;
@@ -83,19 +113,19 @@ export function rowCount(counts: Record<string, number>, layerIds: readonly stri
  *  A DataSource exists only once the compositor has spawned and fetched the
  *  layer, so a missing key IS the pending case. */
 export type RowState =
-  | { state: 'off' }
-  | { state: 'pending' }
-  | { state: 'empty' }
-  | { state: 'live'; n: number };
+  | { state: "off" }
+  | { state: "pending" }
+  | { state: "empty" }
+  | { state: "live"; n: number };
 
 export function rowState(
   counts: Record<string, number>,
   layerIds: readonly string[],
   enabled: boolean,
 ): RowState {
-  if (!enabled) return { state: 'off' };
+  if (!enabled) return { state: "off" };
   const known = layerIds.filter((id) => counts[id] !== undefined);
-  if (known.length === 0) return { state: 'pending' };
+  if (known.length === 0) return { state: "pending" };
   const n = known.reduce((a, id) => a + (counts[id] ?? 0), 0);
-  return n > 0 ? { state: 'live', n } : { state: 'empty' };
+  return n > 0 ? { state: "live", n } : { state: "empty" };
 }

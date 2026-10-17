@@ -80,3 +80,29 @@ def test_haversine_nm_handles_antipodal_without_domain_error() -> None:
     # finite ~half-circumference distance (~10,800 nm), never a domain ValueError.
     d = haversine_nm(0.0, 0.0, 180.0, 0.0)
     assert math.isfinite(d) and 10_000 < d < 11_000
+
+
+def test_proximity_finds_exactly_the_pairs_a_full_pairwise_walk_does() -> None:
+    """The latitude sweep is a shortcut, not a different answer: same pairs, same
+    order, same distances as measuring every pair, in ports, at the poles and
+    across the antimeridian."""
+    import random
+
+    rng = random.Random(7)
+    spots = [(103.8, 1.26), (4.1, 51.95), (179.999, -18.1), (-179.999, -18.1), (20.0, 89.99)]
+    tracks = []
+    for i in range(400):
+        lon, lat = rng.choice(spots) if i % 3 else (rng.uniform(-180, 180), rng.uniform(-85, 85))
+        lon, lat = lon + rng.uniform(-0.02, 0.02), max(-90, min(90, lat + rng.uniform(-0.02, 0.02)))
+        tracks.append({"id": f"v{i}", "points": [(lon, lat, 0.0)]})
+
+    want = []
+    for i in range(len(tracks)):
+        for j in range(i + 1, len(tracks)):
+            (lon_a, lat_a, _), (lon_b, lat_b, _) = tracks[i]["points"][-1], tracks[j]["points"][-1]
+            nm = detectors.haversine_nm(lon_a, lat_a, lon_b, lat_b)
+            if nm <= 0.5:
+                want.append({"a": f"v{i}", "b": f"v{j}", "nm": round(nm, 3)})
+
+    assert len(want) > 50  # the fixture really has rendezvous in it
+    assert detectors.proximity(tracks, max_nm=0.5) == want

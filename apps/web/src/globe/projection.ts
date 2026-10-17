@@ -35,18 +35,30 @@ export function destinationPoint(
 }
 
 // Great-circle distance between two points (km).
-export function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): number {
+export function haversineKm(
+  aLat: number,
+  aLon: number,
+  bLat: number,
+  bLon: number,
+): number {
   const dphi = toRad(bLat - aLat);
   const dlam = toRad(bLon - aLon);
   const phi1 = toRad(aLat);
   const phi2 = toRad(bLat);
-  const a = Math.sin(dphi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dlam / 2) ** 2;
+  const a =
+    Math.sin(dphi / 2) ** 2 +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(dlam / 2) ** 2;
   return 2 * R_KM * Math.asin(Math.sqrt(a));
 }
 
 // A reachable ring of radius `radiusKm` around (lat,lon), as a flat
 // [lon,lat,lon,lat,…] array ready for Cesium.Cartesian3.fromDegreesArray.
-export function reachableRing(lat: number, lon: number, radiusKm: number, n = 96): number[] {
+export function reachableRing(
+  lat: number,
+  lon: number,
+  radiusKm: number,
+  n = 96,
+): number[] {
   const flat: number[] = [];
   for (let i = 0; i <= n; i++) {
     const b = (i / n) * 360;

@@ -7,8 +7,8 @@
 // Sampling does network tile fetches, so callers sample ONCE per scenario
 // (a profile along each route) and look the cached values up per tick.
 
-import * as Cesium from 'cesium';
-import { backendUrl } from '../transport/http.js';
+import * as Cesium from "cesium";
+import { backendUrl } from "../transport/http.js";
 
 export interface LatLon {
   lat: number;
@@ -21,10 +21,10 @@ export interface LatLon {
 let _providerP: Promise<Cesium.TerrainProvider> | null = null;
 async function provider(): Promise<Cesium.TerrainProvider> {
   if (!_providerP) {
-    _providerP = import('@macrostrat/cesium-martini').then(
+    _providerP = import("@macrostrat/cesium-martini").then(
       (m) =>
         new m.MapboxTerrainProvider({
-          urlTemplate: backendUrl('/tiles/terrain/{z}/{x}/{y}.png'),
+          urlTemplate: backendUrl("/tiles/terrain/{z}/{x}/{y}.png"),
           maxZoom: 15,
           tileSize: 256,
         }) as unknown as Cesium.TerrainProvider,
@@ -37,7 +37,9 @@ async function provider(): Promise<Cesium.TerrainProvider> {
 // the caller degrades gracefully to flat-earth (LOS always clear, alt = MSL).
 export async function sampleGround(points: LatLon[]): Promise<number[]> {
   if (points.length === 0) return [];
-  const cartos = points.map((p) => Cesium.Cartographic.fromDegrees(p.lon, p.lat));
+  const cartos = points.map((p) =>
+    Cesium.Cartographic.fromDegrees(p.lon, p.lat),
+  );
   try {
     await Cesium.sampleTerrainMostDetailed(await provider(), cartos);
     return cartos.map((c) => (Number.isFinite(c.height) ? c.height : 0));
@@ -50,11 +52,20 @@ export async function sampleGround(points: LatLon[]): Promise<number[]> {
 // route planner grids a whole bbox (thousands of points); most-detailed (z15)
 // would load thousands of tiles, so it caps the level by bbox span to bound tile
 // loads. Same graceful-0 fallback as sampleGround.
-export async function sampleGroundLevel(points: LatLon[], level: number): Promise<number[]> {
+export async function sampleGroundLevel(
+  points: LatLon[],
+  level: number,
+): Promise<number[]> {
   if (points.length === 0) return [];
-  const cartos = points.map((p) => Cesium.Cartographic.fromDegrees(p.lon, p.lat));
+  const cartos = points.map((p) =>
+    Cesium.Cartographic.fromDegrees(p.lon, p.lat),
+  );
   try {
-    await Cesium.sampleTerrain(await provider(), Math.max(0, Math.round(level)), cartos);
+    await Cesium.sampleTerrain(
+      await provider(),
+      Math.max(0, Math.round(level)),
+      cartos,
+    );
     return cartos.map((c) => (Number.isFinite(c.height) ? c.height : 0));
   } catch {
     return points.map(() => 0);
@@ -65,7 +76,10 @@ function lerpPoints(a: LatLon, b: LatLon, n: number): LatLon[] {
   const out: LatLon[] = [];
   for (let i = 1; i < n; i++) {
     const f = i / n;
-    out.push({ lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + (b.lon - a.lon) * f });
+    out.push({
+      lat: a.lat + (b.lat - a.lat) * f,
+      lon: a.lon + (b.lon - a.lon) * f,
+    });
   }
   return out;
 }
@@ -87,7 +101,12 @@ export async function losBlocked(
 
 // Pure terrain-masking test: given endpoint altitudes and the ground heights at
 // the evenly-spaced interior points, is the line of sight blocked?
-export function lineMasked(altA: number, altB: number, ground: number[], clearanceM = 15): boolean {
+export function lineMasked(
+  altA: number,
+  altB: number,
+  ground: number[],
+  clearanceM = 15,
+): boolean {
   const n = ground.length + 1;
   for (let i = 0; i < ground.length; i++) {
     const f = (i + 1) / n;
@@ -99,11 +118,18 @@ export function lineMasked(altA: number, altB: number, ground: number[], clearan
 
 // Sample a ground-height profile along a route (launch→target) at `n` points,
 // for nap-of-earth altitude lookup. Returns heights for fractions 0..1.
-export async function routeGroundProfile(launch: LatLon, target: LatLon, n = 32): Promise<number[]> {
+export async function routeGroundProfile(
+  launch: LatLon,
+  target: LatLon,
+  n = 32,
+): Promise<number[]> {
   const pts: LatLon[] = [];
   for (let i = 0; i <= n; i++) {
     const f = i / n;
-    pts.push({ lat: launch.lat + (target.lat - launch.lat) * f, lon: launch.lon + (target.lon - launch.lon) * f });
+    pts.push({
+      lat: launch.lat + (target.lat - launch.lat) * f,
+      lon: launch.lon + (target.lon - launch.lon) * f,
+    });
   }
   return sampleGround(pts);
 }
@@ -111,6 +137,9 @@ export async function routeGroundProfile(launch: LatLon, target: LatLon, n = 32)
 // Lookup a value from a 0..1-indexed profile at fraction f (nearest sample).
 export function profileAt(profile: number[], f: number): number {
   if (profile.length === 0) return 0;
-  const i = Math.max(0, Math.min(profile.length - 1, Math.round(f * (profile.length - 1))));
+  const i = Math.max(
+    0,
+    Math.min(profile.length - 1, Math.round(f * (profile.length - 1))),
+  );
   return profile[i]!;
 }

@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as Cesium from "cesium";
 
 // Shared label styling for entity name/callsign chips rendered next to icons
 // (aircraft callsigns, vessel names/MMSI, etc.). Centralised so adapters do
@@ -19,17 +19,19 @@ import * as Cesium from 'cesium';
 //   label (CLAUDE.md invariant); it's just distance-culled exactly like the
 //   billboard already is, so only the handful near the camera draw text. The
 //   cluster bubbles cover identification at wider zoom.
-export function labelFor(text: string): Cesium.LabelGraphics.ConstructorOptions {
+export function labelFor(
+  text: string,
+): Cesium.LabelGraphics.ConstructorOptions {
   return {
     text,
     font: 'bold 11px "IBM Plex Mono", monospace',
     pixelOffset: new Cesium.Cartesian2(12, -2),
-    fillColor: Cesium.Color.fromCssColorString('#c9d4e0'),
-    outlineColor: Cesium.Color.fromCssColorString('#0b0e14'),
+    fillColor: Cesium.Color.fromCssColorString("#c9d4e0"),
+    outlineColor: Cesium.Color.fromCssColorString("#0b0e14"),
     outlineWidth: 3,
     style: Cesium.LabelStyle.FILL_AND_OUTLINE,
     showBackground: true,
-    backgroundColor: Cesium.Color.fromCssColorString('#0b0e14').withAlpha(0.65),
+    backgroundColor: Cesium.Color.fromCssColorString("#0b0e14").withAlpha(0.65),
     backgroundPadding: new Cesium.Cartesian2(4, 2),
     scaleByDistance: new Cesium.NearFarScalar(1.5e5, 1.0, 4.0e5, 0.85),
     distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 400_000),
@@ -39,12 +41,18 @@ export function labelFor(text: string): Cesium.LabelGraphics.ConstructorOptions 
 // Resolve the best human-readable identifier for an aircraft feature.
 // Preference order: callsign (e.g. "DAL123") → registration (tail) → ICAO 24-bit
 // hex (uppercased). Returns null only when nothing identifying is available.
-export function aircraftLabelText(props: Record<string, unknown>): string | null {
-  const cs = (props['callsign'] as string | null | undefined)?.toString().trim() ?? null;
+export function aircraftLabelText(
+  props: Record<string, unknown>,
+): string | null {
+  const cs =
+    (props["callsign"] as string | null | undefined)?.toString().trim() ?? null;
   if (cs) return cs;
-  const reg = (props['registration'] as string | null | undefined)?.toString().trim() ?? null;
+  const reg =
+    (props["registration"] as string | null | undefined)?.toString().trim() ??
+    null;
   if (reg) return reg;
-  const icao = (props['icao24'] as string | null | undefined)?.toString().trim() ?? null;
+  const icao =
+    (props["icao24"] as string | null | undefined)?.toString().trim() ?? null;
   if (icao) return icao.toUpperCase();
   return null;
 }
@@ -54,27 +62,33 @@ export function aircraftLabelText(props: Record<string, unknown>): string | null
 // ShipStaticData) take precedence; otherwise we fall back to "MMSI 123456789"
 // so the operator can still identify the contact in dense traffic.
 export function vesselLabelText(props: Record<string, unknown>): string | null {
-  const nm = (props['name'] as string | null | undefined)?.toString().trim() ?? null;
+  const nm =
+    (props["name"] as string | null | undefined)?.toString().trim() ?? null;
   if (nm) return nm;
-  const mmsi = props['mmsi'];
-  if (mmsi != null && String(mmsi).trim() !== '') return `MMSI ${mmsi}`;
+  const mmsi = props["mmsi"];
+  if (mmsi != null && String(mmsi).trim() !== "") return `MMSI ${mmsi}`;
   return null;
 }
 
 // Resolve the label for an airport marker. Preference order: IATA code
 // (compact, what operators scan for — "LHR") → full name. Returns null only
 // when neither is available.
-export function airportLabelText(props: Record<string, unknown>): string | null {
-  const iata = (props['iata'] as string | null | undefined)?.toString().trim() ?? null;
+export function airportLabelText(
+  props: Record<string, unknown>,
+): string | null {
+  const iata =
+    (props["iata"] as string | null | undefined)?.toString().trim() ?? null;
   if (iata) return iata.toUpperCase();
-  const name = (props['name'] as string | null | undefined)?.toString().trim() ?? null;
+  const name =
+    (props["name"] as string | null | undefined)?.toString().trim() ?? null;
   if (name) return name;
   return null;
 }
 
 // Resolve the label for a port marker: its name. Returns null when unnamed.
 export function portLabelText(props: Record<string, unknown>): string | null {
-  const name = (props['name'] as string | null | undefined)?.toString().trim() ?? null;
+  const name =
+    (props["name"] as string | null | undefined)?.toString().trim() ?? null;
   return name || null;
 }
 
@@ -82,25 +96,33 @@ export function portLabelText(props: Record<string, unknown>): string | null {
 // controlling ATC facility — short and human-legible) → notam_id (always
 // present, the fallback identifier).
 export function tfrLabelText(props: Record<string, unknown>): string | null {
-  const facility = (props['facility'] as string | null | undefined)?.toString().trim() ?? null;
+  const facility =
+    (props["facility"] as string | null | undefined)?.toString().trim() ?? null;
   if (facility) return facility;
-  const notamId = (props['notam_id'] as string | null | undefined)?.toString().trim() ?? null;
+  const notamId =
+    (props["notam_id"] as string | null | undefined)?.toString().trim() ?? null;
   return notamId || null;
 }
 
 // Resolve the label for a military-base marker: its name. Returns null when
 // unnamed.
 export function baseLabelText(props: Record<string, unknown>): string | null {
-  const name = (props['name'] as string | null | undefined)?.toString().trim() ?? null;
+  const name =
+    (props["name"] as string | null | undefined)?.toString().trim() ?? null;
   return name || null;
 }
 
 // Resolve the label for an NGA naval warning point: "NAVAREA <n> #<msgNumber>"
 // so the operator can cross-reference the source bulletin at a glance.
-export function warningLabelText(props: Record<string, unknown>): string | null {
-  const navArea = (props['navArea'] as string | number | null | undefined) ?? null;
-  const msgNumber = (props['msgNumber'] as string | number | null | undefined) ?? null;
-  if (navArea != null && msgNumber != null) return `NAVAREA ${navArea} #${msgNumber}`;
+export function warningLabelText(
+  props: Record<string, unknown>,
+): string | null {
+  const navArea =
+    (props["navArea"] as string | number | null | undefined) ?? null;
+  const msgNumber =
+    (props["msgNumber"] as string | number | null | undefined) ?? null;
+  if (navArea != null && msgNumber != null)
+    return `NAVAREA ${navArea} #${msgNumber}`;
   if (msgNumber != null) return `#${msgNumber}`;
   if (navArea != null) return `NAVAREA ${navArea}`;
   return null;
@@ -108,9 +130,14 @@ export function warningLabelText(props: Record<string, unknown>): string | null 
 
 // Facility (infrastructure/military) label: name, else the professional
 // subcategory label ("nuclear power station", "desalination plant", …).
-export function facilityLabelText(props: Record<string, unknown>): string | null {
-  const name = (props['name'] as string | null | undefined)?.toString().trim() ?? null;
+export function facilityLabelText(
+  props: Record<string, unknown>,
+): string | null {
+  const name =
+    (props["name"] as string | null | undefined)?.toString().trim() ?? null;
   if (name) return name;
-  const sub = (props['subcategory'] as string | null | undefined)?.toString().trim() ?? null;
+  const sub =
+    (props["subcategory"] as string | null | undefined)?.toString().trim() ??
+    null;
   return sub || null;
 }

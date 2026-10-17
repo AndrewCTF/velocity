@@ -9,10 +9,10 @@
 // That distinction is the entire argument for owning history rather than
 // renting a live feed (docs/research-last30days-2026-07-29.md §1.1: every
 // competitor surveyed is stateless and structurally cannot draw this).
-import { useEffect, useState } from 'react';
-import * as Cesium from 'cesium';
-import { apiFetch } from '../transport/http.js';
-import { SectionLabel, Btn } from '../shell/instruments.js';
+import { useEffect, useState } from "react";
+import * as Cesium from "cesium";
+import { apiFetch } from "../transport/http.js";
+import { SectionLabel, Btn } from "../shell/instruments.js";
 
 interface SeriesPoint {
   t: number;
@@ -27,10 +27,10 @@ const WINDOW_SEC = 3600;
 // heading/speed +/- 2 std dev), never a model. "Project 1 h" is a fixed
 // horizon — no dial, so the label always matches what was actually asked for.
 const PROJECTION_HORIZON_S = 3600;
-const PROJECTION_DS_NAME = 'projection';
+const PROJECTION_DS_NAME = "projection";
 // Distinct from the live selection magenta (#d946ef, apps/web/CLAUDE.md) so an
 // analytic overlay is never mistaken for an observed track.
-const PROJECTION_COLOR = Cesium.Color.fromCssColorString('#f59e0b');
+const PROJECTION_COLOR = Cesium.Color.fromCssColorString("#f59e0b");
 
 interface ProjectionEta {
   name: string;
@@ -40,11 +40,11 @@ interface ProjectionEta {
 }
 
 interface ProjectionResult {
-  status: 'ok' | 'insufficient';
+  status: "ok" | "insufficient";
   reason?: string;
   mean_kn?: number;
   mean_hdg?: number;
-  cone?: { type: 'Polygon'; coordinates: number[][][] };
+  cone?: { type: "Polygon"; coordinates: number[][][] };
   eta?: ProjectionEta[];
 }
 
@@ -65,18 +65,21 @@ function formatDuration(seconds: number): string {
 function useProjectionOverlay(
   viewer: Cesium.Viewer | null | undefined,
   id: string | null,
-  cone: ProjectionResult['cone'] | undefined,
+  cone: ProjectionResult["cone"] | undefined,
 ): void {
   useEffect(() => {
     if (!viewer || !id || !cone || viewer.isDestroyed()) return;
-    let ds = viewer.dataSources.getByName(PROJECTION_DS_NAME)[0] as Cesium.CustomDataSource | undefined;
+    let ds = viewer.dataSources.getByName(PROJECTION_DS_NAME)[0] as
+      Cesium.CustomDataSource | undefined;
     if (!ds) {
       ds = new Cesium.CustomDataSource(PROJECTION_DS_NAME);
       viewer.dataSources.add(ds);
     }
     const entityId = `proj:${id}`;
     const ring = cone.coordinates[0] ?? [];
-    const positions = ring.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon as number, lat as number));
+    const positions = ring.map(([lon, lat]) =>
+      Cesium.Cartesian3.fromDegrees(lon as number, lat as number),
+    );
     ds.entities.removeById(entityId);
     if (positions.length >= 3) {
       ds.entities.add({
@@ -89,7 +92,10 @@ function useProjectionOverlay(
         polyline: {
           positions: [...positions, positions[0]!],
           width: 2,
-          material: new Cesium.PolylineDashMaterialProperty({ color: PROJECTION_COLOR, dashLength: 12 }),
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: PROJECTION_COLOR,
+            dashLength: 12,
+          }),
           clampToGround: true,
         },
       });
@@ -120,7 +126,9 @@ export function Trace({
   width?: number;
   height?: number;
 }): JSX.Element | null {
-  const nums = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+  const nums = values.filter(
+    (v): v is number => typeof v === "number" && Number.isFinite(v),
+  );
   if (nums.length < 2) return null;
   const min = Math.min(...nums);
   const max = Math.max(...nums);
@@ -129,18 +137,23 @@ export function Trace({
   const segs: string[] = [];
   let penDown = false;
   values.forEach((v, i) => {
-    if (typeof v !== 'number' || !Number.isFinite(v)) {
+    if (typeof v !== "number" || !Number.isFinite(v)) {
       penDown = false; // break the line rather than bridging the gap
       return;
     }
     const x = i * step;
     const y = height - ((v - min) / range) * (height - 2) - 1;
-    segs.push(`${penDown ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`);
+    segs.push(`${penDown ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`);
     penDown = true;
   });
   return (
     <svg width={width} height={height} className="block">
-      <path d={segs.join(' ')} fill="none" stroke="var(--accent)" strokeWidth="1.2" />
+      <path
+        d={segs.join(" ")}
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="1.2"
+      />
     </svg>
   );
 }
@@ -186,7 +199,7 @@ export function ArchiveSeriesCard({
         }
       } catch {
         if (!cancelled) {
-          setError('unreachable');
+          setError("unreachable");
           setSeries(null);
         }
       }
@@ -229,7 +242,7 @@ export function ArchiveSeriesCard({
         }
       } catch {
         if (!cancelled) {
-          setProjError('unreachable');
+          setProjError("unreachable");
           setProjection(null);
         }
       }
@@ -239,24 +252,34 @@ export function ArchiveSeriesCard({
     };
   }, [id, projecting]);
 
-  useProjectionOverlay(viewer, projecting ? id : null, projecting ? projection?.cone : undefined);
+  useProjectionOverlay(
+    viewer,
+    projecting ? id : null,
+    projecting ? projection?.cone : undefined,
+  );
 
-  if (!id || (kind !== 'aircraft' && kind !== 'vessel')) return null;
+  if (!id || (kind !== "aircraft" && kind !== "vessel")) return null;
 
   const alt = (series ?? []).map((s) => s.alt_m);
   const sog = (series ?? []).map((s) => s.sog);
-  const haveAlt = alt.filter((v) => typeof v === 'number').length >= 2;
-  const haveSog = sog.filter((v) => typeof v === 'number').length >= 2;
+  const haveAlt = alt.filter((v) => typeof v === "number").length >= 2;
+  const haveSog = sog.filter((v) => typeof v === "number").length >= 2;
 
   return (
     <section>
       <SectionLabel
         title="Archive"
-        count={series == null ? '' : `${series.length} fixes · 1h`}
+        count={series == null ? "" : `${series.length} fixes · 1h`}
       />
       <div className="mt-1.5 space-y-1.5">
-        {error && <div className="mono text-[10px] text-alert-fg">Archive unavailable ({error}).</div>}
-        {!error && series == null && <div className="mono text-[10px] text-txt-4">Loading…</div>}
+        {error && (
+          <div className="mono text-[10px] text-alert-fg">
+            Archive unavailable ({error}).
+          </div>
+        )}
+        {!error && series == null && (
+          <div className="mono text-[10px] text-txt-4">Loading…</div>
+        )}
         {!error && series != null && series.length === 0 && (
           // An empty archive is a real, useful answer and it says which it is:
           // nothing recorded, not nothing happened.
@@ -276,21 +299,26 @@ export function ArchiveSeriesCard({
             <Trace values={sog} />
           </div>
         )}
-        {!error && series != null && series.length > 0 && !haveAlt && !haveSog && (
-          <div className="mono text-[10px] text-txt-4">
-            {series.length} positions recorded, no altitude or speed among them.
-          </div>
-        )}
+        {!error &&
+          series != null &&
+          series.length > 0 &&
+          !haveAlt &&
+          !haveSog && (
+            <div className="mono text-[10px] text-txt-4">
+              {series.length} positions recorded, no altitude or speed among
+              them.
+            </div>
+          )}
       </div>
       <div className="mt-2 space-y-1.5">
         <div className="flex items-center justify-between">
           <span className="micro">projection</span>
           <Btn
             size="sm"
-            tone={projecting ? 'accent' : 'neutral'}
+            tone={projecting ? "accent" : "neutral"}
             title={
               projecting
-                ? 'Stop projecting this contact forward'
+                ? "Stop projecting this contact forward"
                 : "Project this contact's position 1 hour ahead from its own recorded track"
             }
             onClick={() => setProjecting((p) => !p)}
@@ -299,30 +327,37 @@ export function ArchiveSeriesCard({
           </Btn>
         </div>
         {projecting && projError && (
-          <div className="mono text-[10px] text-alert-fg">Projection unavailable ({projError}).</div>
+          <div className="mono text-[10px] text-alert-fg">
+            Projection unavailable ({projError}).
+          </div>
         )}
         {projecting && !projError && projection == null && (
           <div className="mono text-[10px] text-txt-4">Loading…</div>
         )}
-        {projecting && !projError && projection?.status === 'insufficient' && (
+        {projecting && !projError && projection?.status === "insufficient" && (
           <div className="mono text-[10px] text-txt-4">
             Not enough recorded history to project this contact forward
-            {projection.reason ? ` (${projection.reason}).` : '.'}
+            {projection.reason ? ` (${projection.reason}).` : "."}
           </div>
         )}
-        {projecting && !projError && projection?.status === 'ok' && (
+        {projecting && !projError && projection?.status === "ok" && (
           <div className="space-y-1">
-            {typeof projection.mean_kn === 'number' && typeof projection.mean_hdg === 'number' && (
-              <div className="mono text-[10px] text-txt-3">
-                {projection.mean_kn.toFixed(1)} kn · heading {projection.mean_hdg.toFixed(0)}°
-              </div>
-            )}
+            {typeof projection.mean_kn === "number" &&
+              typeof projection.mean_hdg === "number" && (
+                <div className="mono text-[10px] text-txt-3">
+                  {projection.mean_kn.toFixed(1)} kn · heading{" "}
+                  {projection.mean_hdg.toFixed(0)}°
+                </div>
+              )}
             {(projection.eta ?? []).length === 0 && (
-              <div className="mono text-[10px] text-txt-4">No chokepoint lies on this heading.</div>
+              <div className="mono text-[10px] text-txt-4">
+                No chokepoint lies on this heading.
+              </div>
             )}
             {(projection.eta ?? []).map((e) => (
               <div key={e.name} className="mono text-[10px] text-txt-2">
-                {e.name} · {formatDuration(e.eta_s)} · {e.in_cone ? 'in cone' : 'outside cone'}
+                {e.name} · {formatDuration(e.eta_s)} ·{" "}
+                {e.in_cone ? "in cone" : "outside cone"}
               </div>
             ))}
           </div>

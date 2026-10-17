@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Widget, Caveat } from '../shell/instruments.js';
-import { apiFetch } from '../transport/http.js';
+import { useEffect, useState } from "react";
+import { Widget, Caveat } from "../shell/instruments.js";
+import { apiFetch } from "../transport/http.js";
 
 // One organisation across four registries, from `/api/org/resolve`.
 //
@@ -47,37 +47,43 @@ interface Resolution {
 }
 
 type State =
-  | { status: 'loading' }
-  | { status: 'error'; code: number }
-  | { status: 'done'; data: Resolution };
+  | { status: "loading" }
+  | { status: "error"; code: number }
+  | { status: "done"; data: Resolution };
 
 function usd(n: number | null): string {
-  if (n === null || !Number.isFinite(n)) return '—';
+  if (n === null || !Number.isFinite(n)) return "—";
   if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
   if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}k`;
   return `$${Math.round(n)}`;
 }
 
-export function OrgCard({ name }: { name: string | null | undefined }): JSX.Element | null {
+export function OrgCard({
+  name,
+}: {
+  name: string | null | undefined;
+}): JSX.Element | null {
   const [state, setState] = useState<State | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!open || !name) return;
-    setState({ status: 'loading' });
+    setState({ status: "loading" });
     const ab = new AbortController();
-    apiFetch(`/api/org/resolve?name=${encodeURIComponent(name)}`, { signal: ab.signal })
+    apiFetch(`/api/org/resolve?name=${encodeURIComponent(name)}`, {
+      signal: ab.signal,
+    })
       .then(async (r) => {
         if (ab.signal.aborted) return;
         if (!r.ok) {
-          setState({ status: 'error', code: r.status });
+          setState({ status: "error", code: r.status });
           return;
         }
-        setState({ status: 'done', data: (await r.json()) as Resolution });
+        setState({ status: "done", data: (await r.json()) as Resolution });
       })
       .catch(() => {
-        if (!ab.signal.aborted) setState({ status: 'error', code: 0 });
+        if (!ab.signal.aborted) setState({ status: "error", code: 0 });
       });
     return () => ab.abort();
   }, [open, name]);
@@ -88,7 +94,9 @@ export function OrgCard({ name }: { name: string | null | undefined }): JSX.Elem
     return (
       <Widget title="Organisation">
         <div className="flex items-center gap-2 px-[14px] py-[6px]">
-          <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">{name}</span>
+          <span className="min-w-0 flex-1 truncate text-[12px] text-txt-1">
+            {name}
+          </span>
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -102,18 +110,22 @@ export function OrgCard({ name }: { name: string | null | undefined }): JSX.Elem
     );
   }
 
-  if (!state || state.status === 'loading') {
+  if (!state || state.status === "loading") {
     return (
       <Widget title="Organisation">
-        <div className="px-[14px] py-[6px] text-[12px] text-txt-3">resolving…</div>
+        <div className="px-[14px] py-[6px] text-[12px] text-txt-3">
+          resolving…
+        </div>
       </Widget>
     );
   }
-  if (state.status === 'error') {
+  if (state.status === "error") {
     return (
       <Widget title="Organisation">
         <div className="px-[14px] py-[6px] text-[12px] text-txt-2">
-          {state.code ? `Resolution unavailable (HTTP ${state.code})` : 'Resolution unavailable'}
+          {state.code
+            ? `Resolution unavailable (HTTP ${state.code})`
+            : "Resolution unavailable"}
         </div>
       </Widget>
     );
@@ -124,29 +136,35 @@ export function OrgCard({ name }: { name: string | null | undefined }): JSX.Elem
 
   return (
     <Widget title="Organisation">
-      <div className="px-[14px] pb-[4px] pt-[6px] text-[12px] text-txt-1">{d.query}</div>
+      <div className="px-[14px] pb-[4px] pt-[6px] text-[12px] text-txt-1">
+        {d.query}
+      </div>
 
       {d.sanctions && (
         <Sect label="Designated">
           <Line
-            k={d.sanctions.lists.join(' · ')}
-            v={d.sanctions.programs.slice(0, 3).join(' · ') || '—'}
+            k={d.sanctions.lists.join(" · ")}
+            v={d.sanctions.programs.slice(0, 3).join(" · ") || "—"}
           />
         </Sect>
       )}
 
       <Sect label={`Legal entity (${d.lei.length})`}>
         {d.lei.length === 0 ? (
-          <Empty ok={d.reached.includes('GLEIF')} what="LEI register" />
+          <Empty ok={d.reached.includes("GLEIF")} what="LEI register" />
         ) : (
           d.lei.slice(0, 4).map((l) => (
             <div key={l.lei} className="px-[14px] py-[2px]">
               <div className="flex items-baseline gap-2 text-[12px]">
-                <span className="min-w-0 flex-1 truncate text-txt-1">{l.legal_name ?? '—'}</span>
-                <span className="mono shrink-0 text-txt-3">{l.country ?? '—'}</span>
+                <span className="min-w-0 flex-1 truncate text-txt-1">
+                  {l.legal_name ?? "—"}
+                </span>
+                <span className="mono shrink-0 text-txt-3">
+                  {l.country ?? "—"}
+                </span>
               </div>
               <div className="mono text-[12px] text-txt-3">
-                {l.lei} · {l.registration_status ?? '—'}
+                {l.lei} · {l.registration_status ?? "—"}
               </div>
             </div>
           ))
@@ -155,41 +173,55 @@ export function OrgCard({ name }: { name: string | null | undefined }): JSX.Elem
 
       <Sect label={`Filings (${d.filings.length})`}>
         {d.filings.length === 0 ? (
-          <Empty ok={d.reached.includes('SEC EDGAR')} what="SEC EDGAR" />
+          <Empty ok={d.reached.includes("SEC EDGAR")} what="SEC EDGAR" />
         ) : (
-          d.filings.slice(0, 5).map((f, i) => (
-            <Line
-              key={`${f.adsh ?? i}`}
-              k={f.filer ?? '—'}
-              v={`${Array.isArray(f.forms) ? f.forms.join('/') : (f.forms ?? '—')} · ${f.filed ?? '—'}`}
-            />
-          ))
+          d.filings
+            .slice(0, 5)
+            .map((f, i) => (
+              <Line
+                key={`${f.adsh ?? i}`}
+                k={f.filer ?? "—"}
+                v={`${Array.isArray(f.forms) ? f.forms.join("/") : (f.forms ?? "—")} · ${f.filed ?? "—"}`}
+              />
+            ))
         )}
       </Sect>
 
       <Sect label={`Federal awards (${d.awards.length})`}>
         {d.awards.length === 0 ? (
-          <Empty ok={d.reached.includes('USAspending')} what="USAspending" />
+          <Empty ok={d.reached.includes("USAspending")} what="USAspending" />
         ) : (
-          d.awards.slice(0, 5).map((a, i) => (
-            <Line key={a.award_id ?? i} k={a.agency ?? '—'} v={usd(a.amount_usd)} />
-          ))
+          d.awards
+            .slice(0, 5)
+            .map((a, i) => (
+              <Line
+                key={a.award_id ?? i}
+                k={a.agency ?? "—"}
+                v={usd(a.amount_usd)}
+              />
+            ))
         )}
       </Sect>
 
       <Caveat
-        tone={missing.length ? 'warn' : 'neutral'}
+        tone={missing.length ? "warn" : "neutral"}
         note={
           missing.length
-            ? `${d.reached.length} of ${d.reached.length + missing.length} registries answered. ${missing.join(' · ')} did not, so those sections are not zeroes. Joined on the name only.`
-            : 'All four registries answered. Joined on the name only, so treat every row as a candidate until an LEI, a CIK or a hull number agrees.'
+            ? `${d.reached.length} of ${d.reached.length + missing.length} registries answered. ${missing.join(" · ")} did not, so those sections are not zeroes. Joined on the name only.`
+            : "All four registries answered. Joined on the name only, so treat every row as a candidate until an LEI, a CIK or a hull number agrees."
         }
       />
     </Widget>
   );
 }
 
-function Sect({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
+function Sect({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}): JSX.Element {
   return (
     <div>
       <div className="px-[14px] pb-[2px] pt-[6px] text-[12px] font-semibold uppercase tracking-[0.6px] text-txt-2">
@@ -213,7 +245,9 @@ function Line({ k, v }: { k: string; v: string }): JSX.Element {
 function Empty({ ok, what }: { ok: boolean; what: string }): JSX.Element {
   return (
     <p className="px-[14px] py-[2px] text-[12px] leading-relaxed text-txt-3">
-      {ok ? `${what} answered and had nothing.` : `${what} did not answer, so this is not a zero.`}
+      {ok
+        ? `${what} answered and had nothing.`
+        : `${what} did not answer, so this is not a zero.`}
     </p>
   );
 }

@@ -8,21 +8,20 @@ actually proved, rather than patching further.
 
 Eight sites captured live at 1440px, 2026-07-25, scrolled to force lazy load.
 
-| Site | Height | Bordered els | Images | 1 image per | Motion | Font sizes | Density | H1 |
-|---|---|---|---|---|---|---|---|---|
-| Anduril | 5,403 | **0.0%** | 11 | 491px | 3 | 8 | 166 | visual-led |
-| Saronic | 9,362 | 0.8% | 6 | 1,560px | 5 | 10 | 135 | 21px |
-| Epirus | 10,581 | 1.3% | 52 | 203px | 8 | 8 | 567 | 90px / **300** |
-| Palantir | 6,649 | 1.9% | 39 | **170px** | 6 | **16** | **1,695** | 80px / **400** |
-| Primer | 10,470 | 2.7% | 7 | 1,496px | 7 | 6 | 388 | 80px / 700 |
-| Applied Intuition | 5,229 | 5.0% | 7 | 747px | 0 | 6 | 348 | 36px |
-| Shield AI | 5,937 | 7.4% | 20 | 297px | **14** | 12 | 155 | 100px / **400** |
-| Velocity v2 | 8,962 | 11.7% | 11 | 815px | 2 | 11 | 475 | 98px / 400 |
+| Site              | Height | Bordered els | Images | 1 image per | Motion | Font sizes | Density   | H1              |
+| ----------------- | ------ | ------------ | ------ | ----------- | ------ | ---------- | --------- | --------------- |
+| Anduril           | 5,403  | **0.0%**     | 11     | 491px       | 3      | 8          | 166       | visual-led      |
+| Saronic           | 9,362  | 0.8%         | 6      | 1,560px     | 5      | 10         | 135       | 21px            |
+| Epirus            | 10,581 | 1.3%         | 52     | 203px       | 8      | 8          | 567       | 90px / **300**  |
+| Palantir          | 6,649  | 1.9%         | 39     | **170px**   | 6      | **16**     | **1,695** | 80px / **400**  |
+| Primer            | 10,470 | 2.7%         | 7      | 1,496px     | 7      | 6          | 388       | 80px / 700      |
+| Applied Intuition | 5,229  | 5.0%         | 7      | 747px       | 0      | 6          | 348       | 36px            |
+| Shield AI         | 5,937  | 7.4%         | 20     | 297px       | **14** | 12         | 155       | 100px / **400** |
+| Velocity v2       | 8,962  | 11.7%        | 11     | 815px       | 2      | 11         | 475       | 98px / 400      |
 
 Four findings drive this rebuild:
 
-1. **Display type is light, not heavy.** Palantir 400, Shield AI 400, Epirus
-   300. v1 and most of v2 ran 560 to 620 on the theory that heavy reads as
+1. **Display type is light, not heavy.** Palantir 400, Shield AI 400, Epirus 300. v1 and most of v2 ran 560 to 620 on the theory that heavy reads as
    authority. It reads as loud. Fixed late in v2; this plan bakes it in.
 2. **Borders are near zero.** Anduril literally 0.0%, Palantir 1.9%. v2 still
    sits at 11.7% and it is the worst in the set. Separation comes from surface,
@@ -62,22 +61,22 @@ survived client review; none of it is reopened here.
 
 Heights are targets at 1440. Accent column is bone, CTAs only.
 
-| # | Section | Family | Belief | Artifacts | Motion | Target h |
-|---|---|---|---|---|---|---|
-| 1 | Release strip | fixed strip | it ships, recently | dated release, linked | retract | 40 |
-| 2 | Nav | transparent bar | orientation | 5 links, GitHub | fade | 64 |
-| 3 | Hero | full-bleed loop | an operational system | H1 98/400, 2 CTA, data rule | 360 loop | 900 |
-| 4 | Live scale | graphite strip | the numbers are measured | 6 count-ups | count-up | 210 |
-| 5 | Console | full-bleed live recording | real, dense, moving | caption chip | live loop | 600 |
-| 6 | Domain index | hairline rows | breadth is real per domain | 6 rows, number-led | reveal | 760 |
-| 7 | Archive | LIGHT band | the archive is the argument | table, note, replay loop | replay loop | 900 |
-| 8 | Workspace | edge-to-edge bento | twelve apps, not one map | 6 tiles, names at 26px | hover | 760 |
-| 9 | Agent | asymmetric terminal | agents get real eyes | terminal, 46 tools | reveal | 520 |
-| 10 | Evidence | hairline chain | findings survive scrutiny | 3 steps, hashes | reveal | 470 |
-| 11 | Limits | 4 truths | it states its own edges | 4 truths, unchanged copy | reveal | 600 |
-| 12 | FAQ | accordion before exit | objections answered | 6 items | expand | 700 |
-| 13 | Close | quick start, one ask | one thing to do | 4 commands, copy, 1 CTA | reveal | 520 |
-| 14 | Footer | 5-column index | there is a system here | apps, domains, sources, legal | none | 460 |
+| #   | Section       | Family                    | Belief                      | Artifacts                     | Motion      | Target h |
+| --- | ------------- | ------------------------- | --------------------------- | ----------------------------- | ----------- | -------- |
+| 1   | Release strip | fixed strip               | it ships, recently          | dated release, linked         | retract     | 40       |
+| 2   | Nav           | transparent bar           | orientation                 | 5 links, GitHub               | fade        | 64       |
+| 3   | Hero          | full-bleed loop           | an operational system       | H1 98/400, 2 CTA, data rule   | 360 loop    | 900      |
+| 4   | Live scale    | graphite strip            | the numbers are measured    | 6 count-ups                   | count-up    | 210      |
+| 5   | Console       | full-bleed live recording | real, dense, moving         | caption chip                  | live loop   | 600      |
+| 6   | Domain index  | hairline rows             | breadth is real per domain  | 6 rows, number-led            | reveal      | 760      |
+| 7   | Archive       | LIGHT band                | the archive is the argument | table, note, replay loop      | replay loop | 900      |
+| 8   | Workspace     | edge-to-edge bento        | twelve apps, not one map    | 6 tiles, names at 26px        | hover       | 760      |
+| 9   | Agent         | asymmetric terminal       | agents get real eyes        | terminal, 46 tools            | reveal      | 520      |
+| 10  | Evidence      | hairline chain            | findings survive scrutiny   | 3 steps, hashes               | reveal      | 470      |
+| 11  | Limits        | 4 truths                  | it states its own edges     | 4 truths, unchanged copy      | reveal      | 600      |
+| 12  | FAQ           | accordion before exit     | objections answered         | 6 items                       | expand      | 700      |
+| 13  | Close         | quick start, one ask      | one thing to do             | 4 commands, copy, 1 CTA       | reveal      | 520      |
+| 14  | Footer        | 5-column index            | there is a system here      | apps, domains, sources, legal | none        | 460      |
 
 Target roughly 8,500 of scroll at meaningfully higher density than v2, since two
 statement bands leave and the index and footer both carry far more per pixel.
@@ -85,6 +84,7 @@ statement bands leave and the index and footer both carry far more per pixel.
 ## Lints
 
 Floors:
+
 - 5 or more moving elements.
 - 5 or more full-bleed bands.
 - 12 or more real images, every one a capture of the running product.
@@ -93,6 +93,7 @@ Floors:
   backend at capture time.
 
 Ceilings:
+
 - Bordered elements under 6%. Table rules, FAQ separators and control
   boundaries are the only permitted borders.
 - 2 accent fills, both CTAs. No accent bands, no accent cards.

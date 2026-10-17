@@ -13,7 +13,7 @@ Every "already exists" claim below cites a file verified this session.
 ## 1. What "ecosystem" concretely means here
 
 The platform is already more substrate than app. An ecosystem play is mostly
-*exposing and gluing what exists*, not new capability. The pieces:
+_exposing and gluing what exists_, not new capability. The pieces:
 
 - **HTTP API + auth wrapper.** Every browser→backend call goes through
   `apps/web/src/transport/http.ts` (`apiFetch` / WS key wrap), authenticating
@@ -26,7 +26,7 @@ The platform is already more substrate than app. An ecosystem play is mostly
   (`apps/api/app/main.py:494`, gzip-bypassed at `main.py:124`). Agents get a
   typed world model (query aircraft/vessels/jamming/SAR/incidents) over the
   same box. This is the "let any agent drive it" surface.
-- **Plugin marketplace.** The repo *is* a Claude Code plugin marketplace:
+- **Plugin marketplace.** The repo _is_ a Claude Code plugin marketplace:
   `plugin/osint-geoint/` bundles a skill (`skills/osint-intel/SKILL.md`),
   commands (`osint-brief`, `osint-jamming`, `osint-watch`), and an agent
   (`agents/osint-watch-officer.md`) with cross-platform installers. This is the
@@ -38,7 +38,7 @@ The platform is already more substrate than app. An ecosystem play is mostly
   the codebase.
 - **Actuation / egress blocks.** `apps/api/app/workflows/control.py` +
   `mavlink_bridge.py` (documented in `docs/workflows-control-blocks.md`) give
-  `op.http` / webhook / drone / device blocks — the platform can *act*, not just
+  `op.http` / webhook / drone / device blocks — the platform can _act_, not just
   observe. Downstream systems can be driven from a workflow.
 - **Alert delivery sinks.** `apps/api/app/intel/alert_rules_local.py` +
   `routes/alert_rules.py` define `discord` / `webhook` channels with a
@@ -71,14 +71,15 @@ credential-issuance problem layered on substrate that already runs.
 
 ---
 
-## 2. Mobile app: the realistic options for *this* codebase
+## 2. Mobile app: the realistic options for _this_ codebase
 
 The mobile value proposition is narrow and clear: **an analyst's watch-officer
 in their pocket** — alerts pushed to the phone, a watchlist they can check,
-entity lookup, and incident briefs to read. Read-mostly. It is *not* a second
+entity lookup, and incident briefs to read. Read-mostly. It is _not_ a second
 full console. The question is only which shell delivers that against this repo.
 
 ### Option A — PWA of the existing web app
+
 Wrap `apps/web` as an installable PWA. Lowest nominal effort, but the web app is
 a Cesium/WebGL globe SPA with a large bundle; it is built for a desktop GPU and
 a mouse. On a phone it is heavy, awkward, and battery-hostile, and the one
@@ -87,7 +88,8 @@ exactly what PWAs do worst (iOS web-push is constrained and historically
 unreliable for this use case). A PWA drags the whole heavyweight frontend to get
 a poor version of the one thing we need. Reject as the primary path.
 
-### Option B — React Native / Expo, reusing the TS transport layer  ✅ recommended
+### Option B — React Native / Expo, reusing the TS transport layer ✅ recommended
+
 Build a purpose-made read-mostly app in Expo. It reuses the existing
 framework-agnostic transport code (`apps/web/src/transport/*.ts` — `http.ts`
 `apiFetch`, `config.ts`, `entity.ts`, `search.ts`) by extracting it into a
@@ -99,8 +101,9 @@ mobile. 2D mapping has mature native libraries (MapLibre GL Native /
 react-native-maps). Medium effort; highest payoff.
 
 ### Option C — Tauri 2 mobile
+
 The desktop shell is already Tauri (`apps/desktop/src-tauri/tauri.conf.json`,
-which *already* carries an `android` block), so Tauri 2 mobile is superficially
+which _already_ carries an `android` block), so Tauri 2 mobile is superficially
 "free." But Tauri mobile renders a **webview** — it would either ship the same
 heavyweight Cesium SPA (Option A's problem in a native wrapper) or require a
 separate lightweight web frontend built anyway, at which point Option B's native
@@ -108,6 +111,7 @@ UI is the better spend. Tauri 2 mobile's background-push story is also less
 mature than Expo's. Keep Tauri for desktop; do not stretch it to phone v1.
 
 ### Recommendation
+
 **React Native / Expo (Option B).** The deciding factor is push: the mobile
 app's reason to exist is turning the existing keyless alert engine
 (`alert_rules_local.py` / `watch.py`) into a phone notification, and native push
@@ -116,6 +120,7 @@ layer being plain TS makes the reuse real, not aspirational. Bonus: extracting
 `transport/` into a shared package is a healthy refactor regardless.
 
 ### What mobile v1 ships (read-mostly)
+
 - **Push alerts** from the existing rules engine ("aircraft went dark",
   "vessel entered AOI", "watchlist hit") — the headline feature.
 - **Watchlist** view/manage against the existing entity + alert-rule routes.
@@ -127,6 +132,7 @@ layer being plain TS makes the reuse real, not aspirational. Bonus: extracting
   an AOI — enough to orient, not to fuse.
 
 ### What v1 explicitly does NOT ship
+
 - **No Cesium globe port.** The 3D fused globe stays desktop/web only. A 2D map
   is the mobile surface; do not attempt the WebGL globe on a phone in v1.
 - No workflow editing, no Foundry, no imagery/SAR, no data entry beyond
@@ -157,7 +163,7 @@ a feature (your data never leaves your box), and it shapes the design.
   VPN. The app treats all three as just a base URL; only docs differ.
 - **Push is the hard part, name it honestly.** A self-hosted box behind NAT
   cannot itself hold an APNs/FCM connection per device without a push service.
-  Two honest options: **(1)** background notifications ride the *existing*
+  Two honest options: **(1)** background notifications ride the _existing_
   Discord/webhook sink (`_deliver_sinks`) — the phone's OS notifies from
   Discord/Telegram, zero new infra, ships day one; **(2)** a thin, optional
   Velocity push relay that the instance POSTs firings to and that fans out to
@@ -180,29 +186,29 @@ the hard dependency for anything mobile, and launch/replay come first. Do not
 start Phase M1 before the platform has users asking for a phone client.
 
 - **E0 — API contract freeze (S).** Document the small read surface third-party
-  clients (incl. mobile) may build against; add a version header. *Depends on:*
-  nothing. *Kill:* if no external client demand materializes post-launch, this
+  clients (incl. mobile) may build against; add a version header. _Depends on:_
+  nothing. _Kill:_ if no external client demand materializes post-launch, this
   stays a one-page doc and goes no further.
 - **E1 — Extract shared transport package (S).** Lift `apps/web/src/transport/*`
-  into a shared TS package consumed by web now, mobile later. *Depends on:* E0.
-  *Kill:* if the mobile track is abandoned, this is still a net-positive refactor
+  into a shared TS package consumed by web now, mobile later. _Depends on:_ E0.
+  _Kill:_ if the mobile track is abandoned, this is still a net-positive refactor
   — no kill needed.
 - **M1 — Pairing flow (S/M).** QR mint on desktop + `X-API-Key` scoped key
-  issuance. *Depends on:* E0. *Kill:* if the security review can't bound a
+  issuance. _Depends on:_ E0. _Kill:_ if the security review can't bound a
   phone-scoped key's blast radius acceptably, defer mobile entirely.
 - **M2 — Mobile v1 (Expo), read-mostly (L).** Alerts (via Discord/webhook sink
-  in v1), watchlist, entity lookup, briefs, 2D map. *Depends on:* E1, M1, and
+  in v1), watchlist, entity lookup, briefs, 2D map. _Depends on:_ E1, M1, and
   **users-roadmap W3** (keyless alert push must actually fire server-side).
-  *Kill:* if W3's keyless firing isn't reliable, mobile has nothing to notify
+  _Kill:_ if W3's keyless firing isn't reliable, mobile has nothing to notify
   about — hold until it is.
 - **M3 — Optional push relay (M).** Opaque-ping APNs/FCM fan-out for off-LAN
-  background push. *Depends on:* M2 shipped and a real user asking. *Kill:* if
+  background push. _Depends on:_ M2 shipped and a real user asking. _Kill:_ if
   demand is absent, the Discord/webhook path is sufficient — never build the
   relay speculatively; it adds the first always-on Velocity-operated service and
   must be justified by real users.
 - **E2 — MCP/plugin public contract (S/M).** Semver the MCP tools + list the
-  plugin, *after* rate-limiting the MCP layer (users-roadmap W5). *Depends on:*
-  W5 rate limiting. *Kill:* if agent traffic can't be kept off the throttled
+  plugin, _after_ rate-limiting the MCP layer (users-roadmap W5). _Depends on:_
+  W5 rate limiting. _Kill:_ if agent traffic can't be kept off the throttled
   upstreams, do not list publicly.
 
 ---
@@ -222,7 +228,7 @@ start Phase M1 before the platform has users asking for a phone client.
 - **App-store friction / ToS.** Shipping an OSINT client that surfaces
   aircraft/vessel positions may draw store review scrutiny; the feeds' own
   redistribution ToS (adsb.lol, airplanes.live, AIS) constrain what a
-  *published* app may show vs. what a user's own instance shows them. Legal
+  _published_ app may show vs. what a user's own instance shows them. Legal
   surface is larger than for a self-hosted web console.
 - **Maintaining two frontends** (web + Expo) doubles UI upkeep. The shared
   transport package limits the damage to the view layer, but it is real ongoing

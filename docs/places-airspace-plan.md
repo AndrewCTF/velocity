@@ -18,6 +18,7 @@ Phase 0 (parallel-independent): D  — build scripts + committed JSON
 Phase 1 (after D):               B1, B2 — backend routes/enrichment
 Phase 2 (after B1/B2 routes up): F1, F2, F3 — frontend
 ```
+
 F3 (basemaps) depends on NOTHING backend — may start in Phase 0. Tests: each
 owner writes their own, listed per agent.
 
@@ -96,8 +97,8 @@ routers too, added last after B2 modules land).
   - `airport:` → look up by IATA/ICAO code (id is `airport:{code}`, see
     `_airport_record` :65), merge base row + `airport_detail(icao)` (runways,
     frequencies, mil flag, elevation), attach LiveATC (`liveatc_url =
-    https://www.liveatc.net/search/?icao=<icao>`, `candidate_mounts =
-    [s1-fmt2.liveatc.net/<icao>_twr, …]` clearly labeled best-effort — search
+https://www.liveatc.net/search/?icao=<icao>`, `candidate_mounts =
+[s1-fmt2.liveatc.net/<icao>_twr, …]` clearly labeled best-effort — search
     page is Cloudflare-403, mounts are guessable not enumerable). METAR is
     fetched frontend-side via §weather, or inline here if cheap.
   - `port:` → look up by `wpi` (id is `port:{slug}-{idx}` today — see
@@ -145,19 +146,19 @@ Owns: `apps/api/app/routes/airspace.py` (new), `apps/api/app/routes/maritime.py`
     TESSELLATE ~64 points into a polygon ring.
   - Altitudes: `valDistVerLower/Upper` + `uomDistVerUpper` FT + `codeDistVer`
     HEI(AGL)/MSL.
-  Emit GeoJSON `Polygon` features, props `{notam_id, type (reason), facility,
-  state, description, alt_low, alt_high, effective}`. No GeoJSON variant upstream
-  (`exportTfrGeoJson` 404) — we build it. Detail-fetch cached per id (10min).
+    Emit GeoJSON `Polygon` features, props `{notam_id, type (reason), facility,
+state, description, alt_low, alt_high, effective}`. No GeoJSON variant upstream
+    (`exportTfrGeoJson` 404) — we build it. Detail-fetch cached per id (10min).
 - **`maritime.py` — `GET /api/maritime/warnings` (GeoJSON).**
   `https://msi.nga.mil/api/publications/broadcast-warn?status=active&output=json`
   — 503 bare, **200 with headers** `User-Agent`, `Accept: application/json`,
   `Referer: https://msi.nga.mil/home`. Occasional 503 self-clears <30s → RETRY
   (2-3×) + TtlCache 15min. 386 active; fields `msgYear,msgNumber,navArea,
-  subregion,text,status,issueDate,authority`. Positions embedded in free `text`
+subregion,text,status,issueDate,authority`. Positions embedded in free `text`
   as `DD-MM.mmN DDD-MM.mmE` → **coord parser** (multiple coords per warning →
   emit a Point per coord, or MultiPoint). Flag `mine: true` when text matches
   `/\bMINE(S)?\b/i` (2 live hits). Emit Point features, props `{msgNumber,
-  navArea, subregion, text, mine, issueDate}`.
+navArea, subregion, text, mine, issueDate}`.
 - **ASAM: DO NOT BUILD** — endpoint-specific Akamai WAF, 503 even with full
   browser headers while broadcast-warn 200s (control-tested). Note as future
   (sidecar/browser fetch). NOTAMs: skip (FAA API 401, host unreachable).
@@ -175,23 +176,24 @@ deg + CIR tessellation ≥64 pts + alt fields), new `test_maritime_warnings.py`
 Owns: `registry/defaults.ts`, `normal/layerCatalog.ts`, `globe/LayerCompositor.ts`,
 `globe/adapters/PollGeoJsonAdapter.ts`, `globe/adapters/styles.ts`,
 `globe/adapters/labelStyle.ts`. Three new layers via existing `PollGeoJsonAdapter`
-+ bbox/refreshOnMove wiring (`LayerCompositor.ts:369-375`).
 
-- **`airspace.tfr`** — POLYGON layer. `PollGeoJsonAdapter.ts:1384` currently gates
+- bbox/refreshOnMove wiring (`LayerCompositor.ts:369-375`).
+
+* **`airspace.tfr`** — POLYGON layer. `PollGeoJsonAdapter.ts:1384` currently gates
   the polygon path on `styleKind === 'jamming'` — **widen that condition** to also
   accept `'airspace-tfr'`, and add a `tfrPolygonStyle(props)` (semi-transparent
   fill colored by `type`: SECURITY/VIP red, HAZARDS orange, AIR SHOWS/SPORTS blue,
   SPACE ops purple; outline solid). Reuse the `opts.polygon` block (:1389-1396,
   `PolygonHierarchy` + `ClassificationType.TERRAIN`). Endpoint `/api/airspace/tfr`.
-- **`places.bases`** — icon per `branch` (air/naval/army SVG in `styles.ts`,
+* **`places.bases`** — icon per `branch` (air/naval/army SVG in `styles.ts`,
   category icons NOT dots — CLAUDE.md invariant). New `StyleKind 'base'`
   (`:222-231`), dispatch case (near airport `:1478`), `baseStyle(props)` in
   `styles.ts`, label in `labelStyle.ts`. Endpoint `/api/places/bases`, bbox +
   `PLACES_LOD_ALT_M` gating (`LayerCompositor.ts:110-147`).
-- **`maritime.warnings`** — warning icon; `mine:true` → distinct style (e.g. red
+* **`maritime.warnings`** — warning icon; `mine:true` → distinct style (e.g. red
   mine glyph). New `StyleKind 'warning'`, dispatch case, `warningStyle(props)`.
   Endpoint `/api/maritime/warnings`.
-- Registry: add descriptors in `defaults.ts` (copy `places.airports` block
+* Registry: add descriptors in `defaults.ts` (copy `places.airports` block
   `:618-645`, `visibleByDefault:false`, correct endpoint). Catalog toggles in
   `layerCatalog.ts` (copy `:118-119`): "TFR / Airspace", "Military bases",
   "Naval warnings". `LayerCompositor.ts` style dispatch (`:326-333`) map the three
@@ -253,8 +255,8 @@ dependency on backend — may start immediately.
   - OpenTopoMap `https://a.tile.opentopomap.org/{z}/{x}/{y}.png` (2 req/s fair use)
   - USGS Imagery `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}`
   - EOX s2cloudless `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg`
-  (Note Esri/USGS are `{z}/{y}/{x}`; OpenTopo/EOX are `{z}/{x}/{y}`.) Render each
-  provider's attribution string in the existing footer.
+    (Note Esri/USGS are `{z}/{y}/{x}`; OpenTopo/EOX are `{z}/{x}/{y}`.) Render each
+    provider's attribution string in the existing footer.
 - `CommandBar.tsx`: replace binary `ImageryToggle` (`:40-41,76-79`) with a
   dropdown/segmented picker listing the modes.
 
@@ -281,14 +283,14 @@ dependency on backend — may start immediately.
 
 ## §8 · File-ownership matrix (zero overlap)
 
-| Agent | Creates / modifies |
-|---|---|
-| **D** | `scripts/build_places_data.py` (+ per-domain helpers); `app/data/airports.json` (v2), `airports_detail.json`, `ports.json` (v2), `ports_detail.json`, `bases.json`, `satcat.json`; `tests/test_places_data.py`; `tests/fixtures/*` it produces |
+| Agent  | Creates / modifies                                                                                                                                                                                                                                                                                   |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D**  | `scripts/build_places_data.py` (+ per-domain helpers); `app/data/airports.json` (v2), `airports_detail.json`, `ports.json` (v2), `ports_detail.json`, `bases.json`, `satcat.json`; `tests/test_places_data.py`; `tests/fixtures/*` it produces                                                       |
 | **B1** | `app/places.py`, `app/routes/places.py`, `app/routes/entity.py`, `app/routes/weather.py`, `app/main.py` (all new router registration), `app/satcat.py` (if runtime); `tests/test_places.py` (extend), `tests/test_entity_places.py`, `tests/test_weather_metar.py`, `tests/fixtures/metar_kjfk.json` |
-| **B2** | `app/routes/airspace.py`, `app/routes/maritime.py`; `tests/test_airspace.py`, `tests/test_maritime_warnings.py`, `tests/fixtures/tfr_detail_6_4909.xml`, `tests/fixtures/broadcast_warn.json` |
-| **F1** | `registry/defaults.ts`, `normal/layerCatalog.ts`, `globe/LayerCompositor.ts`, `globe/adapters/PollGeoJsonAdapter.ts`, `globe/adapters/styles.ts`, `globe/adapters/labelStyle.ts`; `globe/adapters/newLayers.test.ts` |
-| **F2** | `globe/EntityPanel.tsx`, `globe/entity-panel/*`, `transport/entity.ts`; `globe/entity-panel/placeCards.test.tsx` |
-| **F3** | `state/stores.ts`, `globe/GlobeCanvas.tsx`, `command-bar/CommandBar.tsx`; `command-bar/basemapPicker.test.tsx` |
+| **B2** | `app/routes/airspace.py`, `app/routes/maritime.py`; `tests/test_airspace.py`, `tests/test_maritime_warnings.py`, `tests/fixtures/tfr_detail_6_4909.xml`, `tests/fixtures/broadcast_warn.json`                                                                                                        |
+| **F1** | `registry/defaults.ts`, `normal/layerCatalog.ts`, `globe/LayerCompositor.ts`, `globe/adapters/PollGeoJsonAdapter.ts`, `globe/adapters/styles.ts`, `globe/adapters/labelStyle.ts`; `globe/adapters/newLayers.test.ts`                                                                                 |
+| **F2** | `globe/EntityPanel.tsx`, `globe/entity-panel/*`, `transport/entity.ts`; `globe/entity-panel/placeCards.test.tsx`                                                                                                                                                                                     |
+| **F3** | `state/stores.ts`, `globe/GlobeCanvas.tsx`, `command-bar/CommandBar.tsx`; `command-bar/basemapPicker.test.tsx`                                                                                                                                                                                       |
 
 Shared-file coordination: `main.py` single-owner = B1 (registers B2's routers,
 done last). No two agents touch the same file. F1 owns all shared style files

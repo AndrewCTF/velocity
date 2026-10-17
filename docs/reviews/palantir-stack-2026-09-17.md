@@ -401,16 +401,16 @@ one more place where "clearance reaches every read" is not yet true.
 
 ## Summary
 
-| # | Wave | Sev | File | One-line |
-|---|------|-----|------|----------|
-| W4-1 | clearance | HIGH | routes/situations.py:226, routes/maps.py:226 | write-side clearance gate missing → declassify + erase a hidden row |
-| W3-1 | replay UI | HIGH | apps/web/src/globe/HistoryPlayback.ts:377-397 | `stats.shards` is `[]` on Timescale → upstream replay never runs |
-| W2-1 | heatmap proxy | HIGH | apps/api/app/adsb_heatmap.py:134-157 | truncated cache file → permanent 500 for that chunk (contract says never raise) |
-| W1-2 | timescale | MED | apps/api/app/history_pg.py:406-455 | one malformed fix drops the whole flush batch; executor outside the try |
-| W1-1 | timescale | MED | apps/api/app/history_pg.py:247-297 | failed schema apply leaks a PG connection per call |
-| W6-1 | foundry | MED | apps/api/app/foundry/connections.py:326-338 | cursor tie straddling a batch → rows never pulled, cursor pinned |
-| W6-2 | foundry | MED | apps/api/app/routes/foundry.py:407 | docx/pdf/sha256 extraction blocks the event loop |
-| W5-1 | resolve | LOW | apps/api/app/routes/resolve.py:36-40 | new GET has no principal/session dependency |
-| W3-2/3 | replay UI | LOW | HistoryPlayback.ts:443, :589 | label claims adsb.fi regardless of host; Worker leaks on early-return destroy |
+| #      | Wave          | Sev  | File                                          | One-line                                                                        |
+| ------ | ------------- | ---- | --------------------------------------------- | ------------------------------------------------------------------------------- |
+| W4-1   | clearance     | HIGH | routes/situations.py:226, routes/maps.py:226  | write-side clearance gate missing → declassify + erase a hidden row             |
+| W3-1   | replay UI     | HIGH | apps/web/src/globe/HistoryPlayback.ts:377-397 | `stats.shards` is `[]` on Timescale → upstream replay never runs                |
+| W2-1   | heatmap proxy | HIGH | apps/api/app/adsb_heatmap.py:134-157          | truncated cache file → permanent 500 for that chunk (contract says never raise) |
+| W1-2   | timescale     | MED  | apps/api/app/history_pg.py:406-455            | one malformed fix drops the whole flush batch; executor outside the try         |
+| W1-1   | timescale     | MED  | apps/api/app/history_pg.py:247-297            | failed schema apply leaks a PG connection per call                              |
+| W6-1   | foundry       | MED  | apps/api/app/foundry/connections.py:326-338   | cursor tie straddling a batch → rows never pulled, cursor pinned                |
+| W6-2   | foundry       | MED  | apps/api/app/routes/foundry.py:407            | docx/pdf/sha256 extraction blocks the event loop                                |
+| W5-1   | resolve       | LOW  | apps/api/app/routes/resolve.py:36-40          | new GET has no principal/session dependency                                     |
+| W3-2/3 | replay UI     | LOW  | HistoryPlayback.ts:443, :589                  | label claims adsb.fi regardless of host; Worker leaks on early-return destroy   |
 
 Fix-first: Waves 1, 2, 3, 4, 6. Ship: Waves 5 (after one line) and 7.

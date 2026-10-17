@@ -7,10 +7,10 @@
 // ponytail: two persisted id-sets + derived counts, not a message queue. The
 // "subscriptions" (object watch, geofence AOIs, saved searches) already exist as
 // their own stores; the Inbox is the triage surface over what they emit.
-import { create } from 'zustand';
+import { create } from "zustand";
 
-const LS_READ = 'velocity.inbox.read';
-const LS_ARCH = 'velocity.inbox.archived';
+const LS_READ = "velocity.inbox.read";
+const LS_ARCH = "velocity.inbox.archived";
 
 function readSet(key: string): Set<string> {
   try {

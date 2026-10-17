@@ -17,18 +17,42 @@ Define every data source — base map, raster, vector, entity stream, model outp
 ```ts
 // src/registry/types.ts
 export interface LayerDescriptor {
-  id: string;                           // 'maritime.ais.aisstream'
-  group: 'maritime'|'aviation'|'space'|'rf'|'env'|'cyber'|'seismic'|'infra'|'news'|'imagery'|'reference';
-  title: string;                        // 'AIS — AISStream live'
-  kind: 'tile-raster'|'tile-vector'|'wms'|'wmts'|'geojson'|'czml'|'websocket'|'stac'|'cog'|'3dtiles';
-  auth: 'none'|'apikey'|'bearer'|'oauth2-cc'|'netrc'|'earthdata';
-  endpoint: string;                     // base URL or template
-  refresh: { mode:'pull'|'push'|'static'; ttlSec?: number };
+  id: string; // 'maritime.ais.aisstream'
+  group:
+    | "maritime"
+    | "aviation"
+    | "space"
+    | "rf"
+    | "env"
+    | "cyber"
+    | "seismic"
+    | "infra"
+    | "news"
+    | "imagery"
+    | "reference";
+  title: string; // 'AIS — AISStream live'
+  kind:
+    | "tile-raster"
+    | "tile-vector"
+    | "wms"
+    | "wmts"
+    | "geojson"
+    | "czml"
+    | "websocket"
+    | "stac"
+    | "cog"
+    | "3dtiles";
+  auth: "none" | "apikey" | "bearer" | "oauth2-cc" | "netrc" | "earthdata";
+  endpoint: string; // base URL or template
+  refresh: { mode: "pull" | "push" | "static"; ttlSec?: number };
   time: { temporal: boolean; from?: string; to?: string; step?: string };
-  crs: 'EPSG:4326'|'EPSG:3857'|'CRS:84'|'ECI'|'ECEF';
-  license: string;                      // 'CC0'|'CC-BY-4.0'|...
-  opacity: number; visibleByDefault: boolean;
-  emits?: ('vessel'|'aircraft'|'emitter'|'event'|'outage'|'detection')[];
+  crs: "EPSG:4326" | "EPSG:3857" | "CRS:84" | "ECI" | "ECEF";
+  license: string; // 'CC0'|'CC-BY-4.0'|...
+  opacity: number;
+  visibleByDefault: boolean;
+  emits?: (
+    "vessel" | "aircraft" | "emitter" | "event" | "outage" | "detection"
+  )[];
 }
 ```
 
@@ -41,20 +65,22 @@ Use **CZML** for any entity stream that has a real trajectory (vessels, aircraft
 ### 1.3 Fusion / correlation engine
 
 Normalize every emitting layer into:
+
 ```ts
 type Observation = { id:string; source:string; t:number;
   geom:{type:'Point'|'LineString'|'Polygon', coordinates:any};
   attrs: Record<string,any>; emitsKind:'vessel'|'aircraft'|'emitter'|...; };
 ```
+
 Push these into a sliding-window store (DuckDB-WASM in-browser is sufficient up to ~1M observations; otherwise PostgreSQL+PostGIS server side). Rules then run as periodic SQL or streaming joins. Concrete starter rules:
 
-| Rule name | Inputs | Trigger |
-|---|---|---|
-| `ais_gap_sar` | AIS tracks + Sentinel-1 GFW SAR dark detections | dark vessel within 5 km / 30 min of any vessel that switched off AIS for ≥1 h |
-| `gps_jam_cluster` | ADS-B NACp/NIC drop bucket + GPSJam tiles | ≥3 aircraft with NACp<8 in a 100×100 km / 1 h cell |
-| `rf_emitter_overlap` | KiwiSDR/PSKReporter spots + AIS dark + AIS gap | high-power emitter localization within 25 km of AIS-gap vessel |
-| `cyber_outage_geo` | IODA events + Cloudflare Radar traffic anomalies + RIPE Atlas probe disconnects | concurrent country/AS outage in ≥2 of 3 sources |
-| `quake_infrasound` | USGS/EMSC FDSN + GDACS + Raspberry Shake | M≥4.5 within 60 s of community-station detection in same region |
+| Rule name            | Inputs                                                                          | Trigger                                                                       |
+| -------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `ais_gap_sar`        | AIS tracks + Sentinel-1 GFW SAR dark detections                                 | dark vessel within 5 km / 30 min of any vessel that switched off AIS for ≥1 h |
+| `gps_jam_cluster`    | ADS-B NACp/NIC drop bucket + GPSJam tiles                                       | ≥3 aircraft with NACp<8 in a 100×100 km / 1 h cell                            |
+| `rf_emitter_overlap` | KiwiSDR/PSKReporter spots + AIS dark + AIS gap                                  | high-power emitter localization within 25 km of AIS-gap vessel                |
+| `cyber_outage_geo`   | IODA events + Cloudflare Radar traffic anomalies + RIPE Atlas probe disconnects | concurrent country/AS outage in ≥2 of 3 sources                               |
+| `quake_infrasound`   | USGS/EMSC FDSN + GDACS + Raspberry Shake                                        | M≥4.5 within 60 s of community-station detection in same region               |
 
 ---
 
@@ -125,6 +151,7 @@ Push these into a sliding-window store (DuckDB-WASM in-browser is sufficient up 
 - **Airframes.io:** ACARS/HFDL/VDL collection; HTTP feed at `https://api.airframes.io/`.
 
 **Field findings (2026-06) — global aircraft feed reality:**
+
 - **OpenSky `/states/all` is the only working planet-wide single-shot source** (~13 k aircraft / ~1.7 MB in one ~1.8 s request) and it serves anonymous requests, so the map shows the full sky with zero config. Authed (OAuth2) and anonymous have **separate** credit budgets — when the authed pool is spent (`429`), retry anonymously (separate per-IP ~400 credits/day, 4 credits per global call). A global `/states/all` costs 4 credits; with a bounding box ≤25/100/400 sq° it costs 1/2/3. Anonymous time resolution 10 s, authed 5 s. Pace pulls ≥ the resolution (we use 15 s) and cache between pulls so the count survives budget exhaustion.
 - **The free aggregator "firehoses" do NOT exist / are blocked.** From typical egress IPs: airplanes.live has no global verb (`/v2/all`, `/v2/all-with-pos` → 404 — only `/v2/point`, `/v2/mil`, `/v2/squawk`, `/v2/hex`, `/v2/callsign`, `/v2/reg`, `/v2/type`); adsb.lol `/v2/all-with-pos` → 451 (legal block) and publishes an AAAA record that breaks an IPv4-pinned client; adsb.fi `/v2/snapshot` → 403. Treat these as opportunistic-only.
 - **airplanes.live `/v2/point` is the dense-region workhorse** (≤250 nm radius, ADSBExchange-compatible payload). Critical gotcha: its rate limiter returns **HTTP 200 with a `text/plain` "You have been rate limited" body** as often as a real `429`. A naive `r.json()` raises `ValueError`, and swallowing that as an empty cell silently blanks the map. Measured tolerance: ≤8 concurrent `/v2/point` OK, ~15 concurrent trips the limiter; ~1.4 req/s sequential sustained fine. Keep the upstream burst semaphore ≤8 and a per-cell 30 s cache so steady-state load stays ~4-5 cells/s.
@@ -183,7 +210,7 @@ Push these into a sliding-window store (DuckDB-WASM in-browser is sufficient up 
   - `https://www.submarinecablemap.com/api/v3/cable/cable-geo.json`
   - `https://www.submarinecablemap.com/api/v3/landing-point/landing-point-geo.json`
   - `https://www.submarinecablemap.com/api/v3/cable/all.json`  
-  Public GitHub repo dropped; community mirror exists. License **CC BY-NC-SA 3.0** as per historical README.
+    Public GitHub repo dropped; community mirror exists. License **CC BY-NC-SA 3.0** as per historical README.
 - **PeeringDB:** `https://www.peeringdb.com/api/<obj>` — objects `org`, `fac`, `ix`, `net`, `poc`, `ixlan`, `ixpfx`, `netixlan`, `netfac`. Auth via `Authorization: Api-Key <key>` (user or org key). OAuth2 at `https://auth.peeringdb.com/oauth2/{authorize,token}/`. Strongly recommend canonical hostname `www.peeringdb.com` (clients drop auth headers on redirect). Throttling: unauthenticated users have lower per-IP limits and stricter "identical query repetition" throttles.
 - **OpenInfraMap / OSM Overpass:** raw OSM tags `power=line|tower|substation|generator`, `pipeline=*`, `man_made=pipeline|telescope|antenna`. Overpass endpoint `https://overpass-api.de/api/interpreter` POST `data=[out:json][timeout:60];nwr["power"="line"](bbox);out geom;`.
 - **Infrapedia:** GraphQL endpoint at `https://api.infrapedia.com/api/v2/graphql` (account-restricted).
@@ -220,7 +247,7 @@ Push these into a sliding-window store (DuckDB-WASM in-browser is sufficient up 
 
 - **Copernicus CDS API (new, post-2024 migration):**
   - **Base:** `https://cds.climate.copernicus.eu/api`
-  - **`~/.cdsapirc`:**  
+  - **`~/.cdsapirc`:**
     ```
     url: https://cds.climate.copernicus.eu/api
     key: <PERSONAL-ACCESS-TOKEN>
@@ -246,50 +273,50 @@ Push these into a sliding-window store (DuckDB-WASM in-browser is sufficient up 
 
 ## 3. Mandate B (cont.) — New layers consolidated master table
 
-| # | Domain | Source | Auth | Endpoint base | Free/Freemium | License |
-|---|---|---|---|---|---|---|
-| 1 | Space catalog | Space-Track GP/GP_History | username+pwd cookie | `space-track.org/basicspacedata/query/...` | FREE (acct req) | US Gov |
-| 2 | Space catalog | CelesTrak GP / SupGP | none | `celestrak.org/NORAD/elements/gp.php` | FREE | "Open" |
-| 3 | Ground stations | SatNOGS Network/DB | none (read) | `network.satnogs.org/api/`, `db.satnogs.org/api/` | FREE | CC BY-SA |
-| 4 | Launches | LL2 (TheSpaceDevs) | optional key | `ll.thespacedevs.com/2.3.0/` | Freemium (15/hr free) | Open |
-| 5 | Aviation | OpenSky | OAuth2 CC | `opensky-network.org/api` | FREE (non-comm) | OpenSky ToS |
-| 6 | Airspace | OpenAIP | API key header | `api.core.openaip.net/api/` | FREE w/ acct | CC BY-NC 4.0 |
-| 7 | Radiosondes | SondeHub | none | `api.v2.sondehub.org` + MQTT WSS | FREE non-comm | SondeHub |
-| 8 | RF | KiwiSDR network | none | `kiwisdr.com/public?type=json` | FREE | per-station |
-| 9 | RF | PSKReporter | optional contact | `retrieve.pskreporter.info/query` | FREE | PSKReporter |
-| 10 | RF | APRS.fi | API key | `api.aprs.fi/api/get` | FREE w/ acct | aprs.fi ToS |
-| 11 | Cables | Submarine Cable Map | none (community) | `submarinecablemap.com/api/v3/` | FREE | CC BY-NC-SA 3.0 |
-| 12 | Interconnect | PeeringDB | API key/OAuth | `peeringdb.com/api/` | FREE | CC BY-SA |
-| 13 | Cyber | Cloudflare Radar | API token | `api.cloudflare.com/client/v4/radar/` | FREE | CC BY-NC 4.0 |
-| 14 | Cyber | IODA | none | `api.ioda.caida.org/v2/` | FREE | IODA |
-| 15 | Cyber | RIPE Atlas | API key | `atlas.ripe.net/api/v2/` | Credit-based | RIPE |
-| 16 | Cyber | RIPEstat | none | `stat.ripe.net/data/` | FREE | RIPE |
-| 17 | Seismic | USGS FDSN | none | `earthquake.usgs.gov/fdsnws/event/1/` | FREE | Public domain |
-| 18 | Seismic | EMSC SeismicPortal | none | `seismicportal.eu/fdsnws/event/1/`, WS | FREE | EMSC |
-| 19 | Seismic | Raspberry Shake | none | `data.raspberryshake.org/fdsnws/` | FREE | CC BY |
-| 20 | Disasters | GDACS | none | `gdacs.org/xml/rss.xml`, JSON API | FREE | UN/EC |
-| 21 | Radiation | Safecast | none read | `api.safecast.org/measurements.json` | FREE | CC0 |
-| 22 | Air quality | OpenAQ v3 | API key | `api.openaq.org/v3/` | FREE w/ acct | per-source |
-| 23 | Air quality | PurpleAir | API key | `api.purpleair.com/v1/` | FREE non-comm | PurpleAir |
-| 24 | Weather | Open-Meteo | none | `api.open-meteo.com/v1/forecast` | FREE non-comm 10k/day | CC BY 4.0 |
-| 25 | Space wx | NOAA SWPC | none | `services.swpc.noaa.gov/json/` | FREE | Public |
-| 26 | Events | NASA EONET | none | `eonet.gsfc.nasa.gov/api/v3/events` | FREE | Public |
-| 27 | Imagery | Mapillary v4 | OAuth2 + token | `graph.mapillary.com`, `tiles.mapillary.com` | FREE | CC BY-SA |
-| 28 | News | GDELT DOC 2.0 | none | `api.gdeltproject.org/api/v2/doc/doc` | FREE | GDELT |
-| 29 | News | ReliefWeb v2 | `appname` (pre-approved) | `api.reliefweb.int/v2/` | FREE | per-source |
-| 30 | Conflict | ACLED | key+email | `api.acleddata.com/acled/read` | FREE (academic) | ACLED |
-| 31 | Geocoding | GeoNames | username | `api.geonames.org/searchJSON` | FREE w/ acct | CC BY |
-| 32 | Geocoding | Nominatim | none (UA req) | `nominatim.openstreetmap.org/search` | FREE rate-limited | ODbL |
-| 33 | Buildings | Overture Maps | none | `s3://overturemaps-us-west-2/release/` | FREE | CDLA 2.0 / ODbL |
-| 34 | Climate | Copernicus CDS | personal token | `cds.climate.copernicus.eu/api` | FREE | Copernicus ToU |
-| 35 | Marine | Copernicus CMEMS | account | `stac.marine.copernicus.eu/` | FREE | Copernicus |
-| 36 | Tides | NOAA CO-OPS | none | `api.tidesandcurrents.noaa.gov/api/prod/datagetter` | FREE | Public |
-| 37 | Buoys | NDBC | none | `ndbc.noaa.gov/data/realtime2/` | FREE | Public |
-| 38 | Routing/BGP | RIS Live WS | none | `wss://ris-live.ripe.net/v1/ws/?client=` | FREE | RIPE |
-| 39 | Cyber search | Shodan | API key | `api.shodan.io/` | Freemium (paid for vol) | Shodan |
-| 40 | Cyber search | Censys | API key | `search.censys.io/api/v2/` | Freemium | Censys |
-| 41 | Wildfires | NIFC IRWIN | none | `services3.arcgis.com/.../arcgis/rest/services/` | FREE | Public |
-| 42 | Fires | FIRMS | MAP_KEY | `firms.modaps.eosdis.nasa.gov/api/area/csv/` | FREE w/ key | NASA |
+| #   | Domain          | Source                    | Auth                     | Endpoint base                                       | Free/Freemium           | License         |
+| --- | --------------- | ------------------------- | ------------------------ | --------------------------------------------------- | ----------------------- | --------------- |
+| 1   | Space catalog   | Space-Track GP/GP_History | username+pwd cookie      | `space-track.org/basicspacedata/query/...`          | FREE (acct req)         | US Gov          |
+| 2   | Space catalog   | CelesTrak GP / SupGP      | none                     | `celestrak.org/NORAD/elements/gp.php`               | FREE                    | "Open"          |
+| 3   | Ground stations | SatNOGS Network/DB        | none (read)              | `network.satnogs.org/api/`, `db.satnogs.org/api/`   | FREE                    | CC BY-SA        |
+| 4   | Launches        | LL2 (TheSpaceDevs)        | optional key             | `ll.thespacedevs.com/2.3.0/`                        | Freemium (15/hr free)   | Open            |
+| 5   | Aviation        | OpenSky                   | OAuth2 CC                | `opensky-network.org/api`                           | FREE (non-comm)         | OpenSky ToS     |
+| 6   | Airspace        | OpenAIP                   | API key header           | `api.core.openaip.net/api/`                         | FREE w/ acct            | CC BY-NC 4.0    |
+| 7   | Radiosondes     | SondeHub                  | none                     | `api.v2.sondehub.org` + MQTT WSS                    | FREE non-comm           | SondeHub        |
+| 8   | RF              | KiwiSDR network           | none                     | `kiwisdr.com/public?type=json`                      | FREE                    | per-station     |
+| 9   | RF              | PSKReporter               | optional contact         | `retrieve.pskreporter.info/query`                   | FREE                    | PSKReporter     |
+| 10  | RF              | APRS.fi                   | API key                  | `api.aprs.fi/api/get`                               | FREE w/ acct            | aprs.fi ToS     |
+| 11  | Cables          | Submarine Cable Map       | none (community)         | `submarinecablemap.com/api/v3/`                     | FREE                    | CC BY-NC-SA 3.0 |
+| 12  | Interconnect    | PeeringDB                 | API key/OAuth            | `peeringdb.com/api/`                                | FREE                    | CC BY-SA        |
+| 13  | Cyber           | Cloudflare Radar          | API token                | `api.cloudflare.com/client/v4/radar/`               | FREE                    | CC BY-NC 4.0    |
+| 14  | Cyber           | IODA                      | none                     | `api.ioda.caida.org/v2/`                            | FREE                    | IODA            |
+| 15  | Cyber           | RIPE Atlas                | API key                  | `atlas.ripe.net/api/v2/`                            | Credit-based            | RIPE            |
+| 16  | Cyber           | RIPEstat                  | none                     | `stat.ripe.net/data/`                               | FREE                    | RIPE            |
+| 17  | Seismic         | USGS FDSN                 | none                     | `earthquake.usgs.gov/fdsnws/event/1/`               | FREE                    | Public domain   |
+| 18  | Seismic         | EMSC SeismicPortal        | none                     | `seismicportal.eu/fdsnws/event/1/`, WS              | FREE                    | EMSC            |
+| 19  | Seismic         | Raspberry Shake           | none                     | `data.raspberryshake.org/fdsnws/`                   | FREE                    | CC BY           |
+| 20  | Disasters       | GDACS                     | none                     | `gdacs.org/xml/rss.xml`, JSON API                   | FREE                    | UN/EC           |
+| 21  | Radiation       | Safecast                  | none read                | `api.safecast.org/measurements.json`                | FREE                    | CC0             |
+| 22  | Air quality     | OpenAQ v3                 | API key                  | `api.openaq.org/v3/`                                | FREE w/ acct            | per-source      |
+| 23  | Air quality     | PurpleAir                 | API key                  | `api.purpleair.com/v1/`                             | FREE non-comm           | PurpleAir       |
+| 24  | Weather         | Open-Meteo                | none                     | `api.open-meteo.com/v1/forecast`                    | FREE non-comm 10k/day   | CC BY 4.0       |
+| 25  | Space wx        | NOAA SWPC                 | none                     | `services.swpc.noaa.gov/json/`                      | FREE                    | Public          |
+| 26  | Events          | NASA EONET                | none                     | `eonet.gsfc.nasa.gov/api/v3/events`                 | FREE                    | Public          |
+| 27  | Imagery         | Mapillary v4              | OAuth2 + token           | `graph.mapillary.com`, `tiles.mapillary.com`        | FREE                    | CC BY-SA        |
+| 28  | News            | GDELT DOC 2.0             | none                     | `api.gdeltproject.org/api/v2/doc/doc`               | FREE                    | GDELT           |
+| 29  | News            | ReliefWeb v2              | `appname` (pre-approved) | `api.reliefweb.int/v2/`                             | FREE                    | per-source      |
+| 30  | Conflict        | ACLED                     | key+email                | `api.acleddata.com/acled/read`                      | FREE (academic)         | ACLED           |
+| 31  | Geocoding       | GeoNames                  | username                 | `api.geonames.org/searchJSON`                       | FREE w/ acct            | CC BY           |
+| 32  | Geocoding       | Nominatim                 | none (UA req)            | `nominatim.openstreetmap.org/search`                | FREE rate-limited       | ODbL            |
+| 33  | Buildings       | Overture Maps             | none                     | `s3://overturemaps-us-west-2/release/`              | FREE                    | CDLA 2.0 / ODbL |
+| 34  | Climate         | Copernicus CDS            | personal token           | `cds.climate.copernicus.eu/api`                     | FREE                    | Copernicus ToU  |
+| 35  | Marine          | Copernicus CMEMS          | account                  | `stac.marine.copernicus.eu/`                        | FREE                    | Copernicus      |
+| 36  | Tides           | NOAA CO-OPS               | none                     | `api.tidesandcurrents.noaa.gov/api/prod/datagetter` | FREE                    | Public          |
+| 37  | Buoys           | NDBC                      | none                     | `ndbc.noaa.gov/data/realtime2/`                     | FREE                    | Public          |
+| 38  | Routing/BGP     | RIS Live WS               | none                     | `wss://ris-live.ripe.net/v1/ws/?client=`            | FREE                    | RIPE            |
+| 39  | Cyber search    | Shodan                    | API key                  | `api.shodan.io/`                                    | Freemium (paid for vol) | Shodan          |
+| 40  | Cyber search    | Censys                    | API key                  | `search.censys.io/api/v2/`                          | Freemium                | Censys          |
+| 41  | Wildfires       | NIFC IRWIN                | none                     | `services3.arcgis.com/.../arcgis/rest/services/`    | FREE                    | Public          |
+| 42  | Fires           | FIRMS                     | MAP_KEY                  | `firms.modaps.eosdis.nasa.gov/api/area/csv/`        | FREE w/ key             | NASA            |
 
 ---
 
@@ -308,44 +335,76 @@ CesiumJS performance idioms that matter for an OSINT globe:
 ### 4.2 Satellite layer with satellite.js (current API)
 
 ```ts
-import { twoline2satrec, propagate, gstime, eciToGeodetic,
-         degreesLat, degreesLong } from 'satellite.js';
+import {
+  twoline2satrec,
+  propagate,
+  gstime,
+  eciToGeodetic,
+  degreesLat,
+  degreesLong,
+} from "satellite.js";
 
 function satToCartographic(tle1: string, tle2: string, when: Date) {
   const rec = twoline2satrec(tle1, tle2);
-  const r   = propagate(rec, when);           // returns {position, velocity}
+  const r = propagate(rec, when); // returns {position, velocity}
   if (!r) return null;
   const gmst = gstime(when);
-  const g    = eciToGeodetic(r.position, gmst);
-  return { lat: degreesLat(g.latitude),
-           lon: degreesLong(g.longitude),
-           altKm: g.height };
+  const g = eciToGeodetic(r.position, gmst);
+  return {
+    lat: degreesLat(g.latitude),
+    lon: degreesLong(g.longitude),
+    altKm: g.height,
+  };
 }
 ```
+
 Run propagation in a Web Worker (one worker per ~5,000 sats) and post `Float32Array`s to the main thread; in Cesium feed them to a `PointPrimitiveCollection` with `position = Cesium.Cartesian3.fromDegrees(lon,lat,h*1000)`.
 
 ### 4.3 MapLibre v5 (current ~v5.24) clustering for many points
 
 ```js
 const map = new maplibregl.Map({
-  container: 'map',
-  style: 'https://demotiles.maplibre.org/globe.json',
-  center: [0,0], zoom: 2
+  container: "map",
+  style: "https://demotiles.maplibre.org/globe.json",
+  center: [0, 0],
+  zoom: 2,
 });
-map.on('load', () => {
-  map.addSource('aircraft', {
-    type: 'geojson', data: '/tiles/aircraft.geojson',
-    cluster: true, clusterMaxZoom: 14, clusterRadius: 50
+map.on("load", () => {
+  map.addSource("aircraft", {
+    type: "geojson",
+    data: "/tiles/aircraft.geojson",
+    cluster: true,
+    clusterMaxZoom: 14,
+    clusterRadius: 50,
   });
-  map.addLayer({ id:'ac-clusters', type:'circle', source:'aircraft',
-    filter:['has','point_count'],
-    paint:{ 'circle-color':['step',['get','point_count'],'#51bbd6',100,'#f1f075',750,'#f28cb1'],
-            'circle-radius':['step',['get','point_count'],20,100,30,750,40] }});
-  map.addLayer({ id:'ac-unclustered', type:'circle', source:'aircraft',
-    filter:['!',['has','point_count']],
-    paint:{ 'circle-color':'#11b4da','circle-radius':4 }});
+  map.addLayer({
+    id: "ac-clusters",
+    type: "circle",
+    source: "aircraft",
+    filter: ["has", "point_count"],
+    paint: {
+      "circle-color": [
+        "step",
+        ["get", "point_count"],
+        "#51bbd6",
+        100,
+        "#f1f075",
+        750,
+        "#f28cb1",
+      ],
+      "circle-radius": ["step", ["get", "point_count"], 20, 100, 30, 750, 40],
+    },
+  });
+  map.addLayer({
+    id: "ac-unclustered",
+    type: "circle",
+    source: "aircraft",
+    filter: ["!", ["has", "point_count"]],
+    paint: { "circle-color": "#11b4da", "circle-radius": 4 },
+  });
 });
 ```
+
 **Future-proof for v6:** MapLibre's official GitHub release notes for v6 pre-releases call out two hard breaks verbatim — "⚠️ WebGL (v1) support has been removed; WebGL2 is now required" and "⚠️ Switch to an ESM-only distribution (maplibre-gl.mjs). The UMD bundles (maplibre-gl.js, maplibre-gl-csp.js) are no longer published." The MapLibre April 2026 Newsletter confirms 5.24.0 as "the final releases for version 5," so your build pipeline must already produce ESM and target WebGL2 only.
 
 ### 4.4 Vector / raster tile serving (self-hosted)
@@ -358,6 +417,7 @@ map.on('load', () => {
 ### 4.5 STAC integration
 
 Use **`pystac-client`** v0.8+:
+
 ```python
 from pystac_client import Client
 cat = Client.open("https://planetarycomputer.microsoft.com/api/stac/v1")
@@ -365,6 +425,7 @@ search = cat.search(collections=["sentinel-2-l2a"], bbox=[lon1,lat1,lon2,lat2],
                     datetime="2026-04-01/2026-05-01", query={"eo:cloud_cover":{"lt":20}})
 items = search.item_collection()           # paginates via 'next' links transparently
 ```
+
 For Copernicus Data Space: catalog at `https://catalogue.dataspace.copernicus.eu/stac` (Bearer OAuth2 same as Sentinel Hub).
 
 ### 4.6 Caching, fan-out, offline

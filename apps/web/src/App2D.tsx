@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ConsoleShell } from './shell/ConsoleShell.js';
-import { CommandBar } from './command-bar/CommandBar.js';
-import { LayerRail } from './layer-rail/LayerRail.js';
-import { EntityPanel } from './entity-panel/EntityPanel.js';
-import { Timeline } from './timeline/Timeline.js';
-import { MapLibreCanvas } from './maplibre/MapLibreCanvas.js';
-import { LayerRegistry } from './registry/LayerRegistry.js';
-import { registerDefaults } from './registry/defaults.js';
-import { fetchRuntimeConfig } from './transport/config.js';
-import { AlertSubscriber } from './alerts/AlertSubscriber.js';
-import type { RuntimeConfig } from '@osint/shared';
+import { useEffect, useMemo, useState } from "react";
+import { ConsoleShell } from "./shell/ConsoleShell.js";
+import { CommandBar } from "./command-bar/CommandBar.js";
+import { LayerRail } from "./layer-rail/LayerRail.js";
+import { EntityPanel } from "./entity-panel/EntityPanel.js";
+import { Timeline } from "./timeline/Timeline.js";
+import { MapLibreCanvas } from "./maplibre/MapLibreCanvas.js";
+import { LayerRegistry } from "./registry/LayerRegistry.js";
+import { registerDefaults } from "./registry/defaults.js";
+import { fetchRuntimeConfig } from "./transport/config.js";
+import { AlertSubscriber } from "./alerts/AlertSubscriber.js";
+import type { RuntimeConfig } from "@osint/shared";
 
 // 2D mirror at /2d. Same LayerRegistry, MapLibre instead of Cesium. Used
 // when the operator wants Mercator measurement, dense clustering, or has
@@ -24,14 +24,21 @@ export function App2D(): JSX.Element {
   const [config, setConfig] = useState<RuntimeConfig | null>(null);
 
   useEffect(() => {
-    fetchRuntimeConfig().then(setConfig).catch(() => undefined);
+    fetchRuntimeConfig()
+      .then(setConfig)
+      .catch(() => undefined);
   }, []);
 
   return (
     <>
       <AlertSubscriber />
       <ConsoleShell
-        top={<CommandBar viewer={null} classification={config?.classification ?? 'UNCLAS'} />}
+        top={
+          <CommandBar
+            viewer={null}
+            classification={config?.classification ?? "UNCLAS"}
+          />
+        }
         left={<LayerRail registry={registry} viewer={null} />}
         globe={<MapLibreCanvas registry={registry} />}
         right={<EntityPanel />}

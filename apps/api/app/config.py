@@ -671,6 +671,55 @@ class Settings(BaseSettings):
     ais_shipxplorer_interval_s: float = 45.0
     ais_shipxplorer_zoom: int = 6
 
+    # ── AIS pipeline (app/ais_pipeline) — keyless global ingest + ocean SAR ──
+    # Freshness-wins MMSI store fed by the keyless providers. Open-ocean
+    # coverage is Sentinel-1 SAR (app/ais_pipeline/sar.py), which is keyless
+    # end-to-end: catalogue at earth-search.aws.element84.com + anonymous
+    # s3:// reads on sentinel-s1-l1c (verified HTTP 206, no credentials).
+    # SAR downloads are ~800 MB per IW scene, so scanning is opt-in.
+    ais_pipeline_sar_enabled: bool = True
+
+    # OpenWaters (ais.openwaters.io) — keyless aggregate of AISHub + AISStream +
+    # BarentsWatch + Digitraffic + public relay stations. Measured 2026-10-03:
+    # 16 220 UNIQUE MMSIs from one COMPLETE 133-tile sweep of its accepted
+    # longitude window, richer per-vessel than ShipXplorer (IMO, callsign,
+    # draught, nav_status, per-row `seen`).
+    # Anonymous bbox access is limited to lon [-90, +81] — 171 of 360 degrees
+    # (measured, and NOT a rate limit: sustained requests and a 45 s wait both
+    # succeed on the same box). ShipXplorer covers the rest of the globe, so
+    # the two sources are complementary rather than redundant.
+    # A response caps at ~2000 vessels (`truncated: true`) and the endpoint
+    # rate-limits above concurrency 2 (measured: 13/133 tiles 429'd at
+    # concurrency 4, 0/133 at 2), so window coverage is a tiled sweep — count
+    # UNIQUE MMSI, never summed features.
+    ais_openwaters_enabled: bool = True
+    # A full 342-tile sweep at concurrency 2 takes minutes, so this is
+    # deliberately slower than the ShipXplorer poll.
+    ais_openwaters_interval_s: float = 1800.0
+    ais_openwaters_max_tiles: int = 342
+    # 2 is the measured-safe value. Raising it silently truncates coverage.
+    ais_openwaters_concurrency: int = 2
+    # Retention for a fix to count as a live position. Beyond this a vessel is
+    # a ghost (decommissioned, or a transmitter that stopped) and must not sit
+    # on the map or poison dark-vessel matching.
+    ais_pipeline_max_fix_age_s: float = 86400.0
+    # VesselFinder's public map feeds, read directly (app/ais_pipeline/
+    # vesselfinder.py): identified vessels with a per-row age, plus the
+    # unidentified "Satellite Position" markers that are the only keyless
+    # picture of open ocean. MMSI-keyed, unlike the old SHIP_ID browser feeder
+    # above (ais_vesselfinder_sidecar_*), so it is safe beside the other MMSI
+    # sources. The default sweep is 72 thinned world tiles + 18 satellite tiles,
+    # one request at a time, twice an hour. That volume is what was measured
+    # safe. The per-cell detail pass (a 4-degree tile for each occupied cell,
+    # the full set there) is OFF by default: on 2026-10-04 about four minutes of
+    # it at 2-4 requests a second got every connection from this address
+    # refused. Set a tile count to opt in knowingly; it runs at the same pace.
+    ais_vesselfinder_enabled: bool = True
+    ais_vesselfinder_interval_s: float = 1800.0
+    ais_vesselfinder_pause_s: float = 0.5
+    ais_vesselfinder_detail_tiles: int = 0
+    ais_vesselfinder_satellite_enabled: bool = True
+
     # OSINT deep-recon sidecar (tools/osint-recon) — OPTIONAL, OFF by default.
     # A separate process that shells out to the GPL tools (SpiderFoot / theHarvester
     # / Amass), keeping GPL code OUT of this MIT app. When unset, /api/osint/recon

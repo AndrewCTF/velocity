@@ -1,0 +1,10 @@
+# Control set: the three keyless hosts already measured by hand. Used to check
+# that adsb_candidates.py agrees with the independent adsb_ocean_probe.py /
+# adsb_cadence.py numbers before it is pointed at an untrusted candidate list.
+https://api.adsb.lol/v2/point/0/0/20000
+https://globe.theairtraffic.com/data/aircraft.json
+https://skylink.hpradar.com/data/aircraft.json
+# Expected to be rejected: keyless but blocked from this egress, or metered.
+https://opendata.adsb.fi/api/v2/snapshot
+https://api.airplanes.live/v2/point/0/0/20000
+https://api.adsb.one/v2/point/0/0/20000

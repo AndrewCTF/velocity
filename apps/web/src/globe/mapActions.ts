@@ -3,16 +3,16 @@
 // imagery diff, search-around, watchbox, AI assessment, situation…) scoped to
 // the box instead of a single point. One source of truth: ContextMenu.tsx and
 // the GlobeToolbar area readout both build from here, so they never drift.
-import { useChip } from '../imagery/chipStore.js';
-import { useWatchboxes } from '../watchbox/watchboxStore.js';
-import { useAnnotations } from '../annotations/annotationStore.js';
-import { useSituations } from '../situations/situationStore.js';
-import { useSelection } from '../state/stores.js';
-import { useImageryDiff } from '../imagery/imageryDiffStore.js';
-import { useGround } from '../ground/groundStore.js';
-import { useGeoScope } from '../state/geoScope.js';
-import { useAgent } from '../state/agent.js';
-import type { AreaResult } from './mapTools.js';
+import { useChip } from "../imagery/chipStore.js";
+import { useWatchboxes } from "../watchbox/watchboxStore.js";
+import { useAnnotations } from "../annotations/annotationStore.js";
+import { useSituations } from "../situations/situationStore.js";
+import { useSelection } from "../state/stores.js";
+import { useImageryDiff } from "../imagery/imageryDiffStore.js";
+import { useGround } from "../ground/groundStore.js";
+import { useGeoScope } from "../state/geoScope.js";
+import { useAgent } from "../state/agent.js";
+import type { AreaResult } from "./mapTools.js";
 
 export interface MapAction {
   label: string;
@@ -24,55 +24,85 @@ export interface MapAction {
 export function pointActions(lat: number, lon: number): MapAction[] {
   return [
     {
-      label: 'Collect imagery here',
+      label: "Collect imagery here",
       run: () =>
-        useChip.getState().setFocus({ entityId: `aoi:${lat.toFixed(3)},${lon.toFixed(3)}`, lat, lon, radiusKm: 4 }),
+        useChip.getState().setFocus({
+          entityId: `aoi:${lat.toFixed(3)},${lon.toFixed(3)}`,
+          lat,
+          lon,
+          radiusKm: 4,
+        }),
     },
     {
-      label: 'Ground recon here',
+      label: "Ground recon here",
       run: () => useGround.getState().openAt({ lat, lon, radiusKm: 2 }),
     },
     {
-      label: 'Imagery diff here',
+      label: "Imagery diff here",
       run: () => useImageryDiff.getState().openAt({ lat, lon }),
     },
     {
-      label: 'Search objects nearby (50 km)',
+      label: "Search objects nearby (50 km)",
       run: () =>
-        useGeoScope.getState().setScope({ lat, lon, radiusKm: 50, label: `${lat.toFixed(2)}, ${lon.toFixed(2)}` }),
+        useGeoScope.getState().setScope({
+          lat,
+          lon,
+          radiusKm: 50,
+          label: `${lat.toFixed(2)}, ${lon.toFixed(2)}`,
+        }),
     },
     {
-      label: 'AI assess this location',
+      label: "AI assess this location",
       run: () =>
         useAgent
           .getState()
-          .ask(`Assess the location at ${lat.toFixed(4)}, ${lon.toFixed(4)}: what is here, notable activity, and risks?`),
+          .ask(
+            `Assess the location at ${lat.toFixed(4)}, ${lon.toFixed(4)}: what is here, notable activity, and risks?`,
+          ),
     },
     {
-      label: 'Geosearch',
-      run: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })),
-    },
-    {
-      label: 'Create watchbox',
+      label: "Geosearch",
       run: () =>
-        useWatchboxes
-          .getState()
-          .add({ label: `Watchbox ${lat.toFixed(1)},${lon.toFixed(1)}`, center: { lat, lon }, radiusKm: 25, rule: 'enter' }),
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "k",
+            metaKey: true,
+            bubbles: true,
+          }),
+        ),
     },
     {
-      label: 'Add annotation',
-      run: () => useAnnotations.getState().add({ kind: 'point', threat: 'unknown', label: 'Marker', coords: [[lon, lat]] }),
+      label: "Create watchbox",
+      run: () =>
+        useWatchboxes.getState().add({
+          label: `Watchbox ${lat.toFixed(1)},${lon.toFixed(1)}`,
+          center: { lat, lon },
+          radiusKm: 25,
+          rule: "enter",
+        }),
     },
     {
-      label: 'Copy coordinates',
-      run: () => navigator.clipboard?.writeText(`${lat.toFixed(5)},${lon.toFixed(5)}`),
+      label: "Add annotation",
+      run: () =>
+        useAnnotations.getState().add({
+          kind: "point",
+          threat: "unknown",
+          label: "Marker",
+          coords: [[lon, lat]],
+        }),
     },
     {
-      label: 'Create situation here',
+      label: "Copy coordinates",
+      run: () =>
+        navigator.clipboard?.writeText(`${lat.toFixed(5)},${lon.toFixed(5)}`),
+    },
+    {
+      label: "Create situation here",
       run: async () => {
-        const id = await useSituations
-          .getState()
-          .create({ name: `Situation ${lat.toFixed(1)},${lon.toFixed(1)}`, centroid: { lat, lon } });
+        const id = await useSituations.getState().create({
+          name: `Situation ${lat.toFixed(1)},${lon.toFixed(1)}`,
+          centroid: { lat, lon },
+        });
         useSelection.getState().select(id);
       },
     },
@@ -91,45 +121,64 @@ export function areaActions(a: AreaResult): MapAction[] {
   return [
     {
       label: `Search objects in box (${searchRadius} km)`,
-      run: () => useGeoScope.getState().setScope({ lat, lon, radiusKm: searchRadius, label: 'map area' }),
-    },
-    {
-      label: 'Collect imagery (centre)',
       run: () =>
-        useChip.getState().setFocus({ entityId: `aoi:${lat.toFixed(3)},${lon.toFixed(3)}`, lat, lon, radiusKm: imageryRadius }),
+        useGeoScope
+          .getState()
+          .setScope({ lat, lon, radiusKm: searchRadius, label: "map area" }),
     },
     {
-      label: 'Ground recon (centre)',
+      label: "Collect imagery (centre)",
+      run: () =>
+        useChip.getState().setFocus({
+          entityId: `aoi:${lat.toFixed(3)},${lon.toFixed(3)}`,
+          lat,
+          lon,
+          radiusKm: imageryRadius,
+        }),
+    },
+    {
+      label: "Ground recon (centre)",
       run: () => useGround.getState().openAt({ lat, lon, radiusKm: 2 }),
     },
     {
-      label: 'Imagery diff (centre)',
+      label: "Imagery diff (centre)",
       run: () => useImageryDiff.getState().openAt({ lat, lon }),
     },
     {
-      label: 'AI assess this area',
+      label: "AI assess this area",
       run: () =>
         useAgent
           .getState()
-          .ask(`Assess the map area bounded by ${boundsLabel} (~${Math.round(a.areaKm2).toLocaleString()} km²): what is inside it, notable activity, and risks?`),
+          .ask(
+            `Assess the map area bounded by ${boundsLabel} (~${Math.round(a.areaKm2).toLocaleString()} km²): what is inside it, notable activity, and risks?`,
+          ),
     },
     {
-      label: 'Create watchbox over box',
+      label: "Create watchbox over box",
       run: () =>
-        useWatchboxes
-          .getState()
-          .add({ label: `Watchbox ${lat.toFixed(1)},${lon.toFixed(1)}`, center: { lat, lon }, radiusKm: searchRadius, rule: 'enter' }),
+        useWatchboxes.getState().add({
+          label: `Watchbox ${lat.toFixed(1)},${lon.toFixed(1)}`,
+          center: { lat, lon },
+          radiusKm: searchRadius,
+          rule: "enter",
+        }),
     },
     {
-      label: 'Create situation here',
+      label: "Create situation here",
       run: async () => {
-        const id = await useSituations.getState().create({ name: `AOI ${lat.toFixed(1)},${lon.toFixed(1)}`, centroid: { lat, lon } });
+        const id = await useSituations.getState().create({
+          name: `AOI ${lat.toFixed(1)},${lon.toFixed(1)}`,
+          centroid: { lat, lon },
+        });
         useSelection.getState().select(id);
       },
     },
     {
-      label: 'Copy bounds',
-      run: () => navigator.clipboard?.writeText(`${a.south.toFixed(5)},${a.west.toFixed(5)},${a.north.toFixed(5)},${a.east.toFixed(5)}`),
+      label: "Copy bounds",
+      run: () =>
+        navigator.clipboard?.writeText(
+          `${a.south.toFixed(5)},${a.west.toFixed(5)},${a.north.toFixed(5)},${a.east.toFixed(5)}`,
+        ),
     },
   ];
 }

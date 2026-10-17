@@ -4,22 +4,22 @@
 // This is the visible mount of useCollabDoc; the graph co-editing binding lands
 // on InvestigationCanvas next.
 
-import { useEffect, useRef, useState } from 'react';
-import type * as Y from 'yjs';
+import { useEffect, useRef, useState } from "react";
+import type * as Y from "yjs";
 
-import { useCollabDoc } from './useCollabDoc.js';
+import { useCollabDoc } from "./useCollabDoc.js";
 
-export function CollabPanel({ docId = 'shared-notes' }: { docId?: string }) {
+export function CollabPanel({ docId = "shared-notes" }: { docId?: string }) {
   const { doc, peers, online } = useCollabDoc(docId, {
     // Literal hex, not var(): this colour is serialized into Yjs awareness and
     // shipped to peers as a raw string. Value = --accent (theme/tokens.css).
-    user: { name: 'analyst', color: '#6fb1dd' },
+    user: { name: "analyst", color: "#6fb1dd" },
   });
-  const [text, setText] = useState('');
+  const [text, setText] = useState("");
   const ytextRef = useRef<Y.Text | null>(null);
 
   useEffect(() => {
-    const yt = doc.getText('notes');
+    const yt = doc.getText("notes");
     ytextRef.current = yt;
     const sync = () => setText(yt.toString());
     sync();
@@ -40,34 +40,42 @@ export function CollabPanel({ docId = 'shared-notes' }: { docId?: string }) {
   };
 
   return (
-    <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+    <div
+      style={{
+        padding: 12,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        fontSize: 13,
+      }}
+    >
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <span
           aria-hidden
           style={{
             width: 8,
             height: 8,
             borderRadius: 8,
-            background: online ? 'var(--ok)' : 'var(--alert)',
-            display: 'inline-block',
+            background: online ? "var(--ok)" : "var(--alert)",
+            display: "inline-block",
           }}
         />
         <span>
-          {online ? 'Live' : 'Offline'} · {peers.length} online
+          {online ? "Live" : "Offline"} · {peers.length} online
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
         {peers.map((p) => (
           <span
             key={p.clientId}
             style={{
               fontSize: 11,
-              padding: '1px 6px',
+              padding: "1px 6px",
               borderRadius: 10,
-              background: p.color ?? 'var(--bg-4)',
+              background: p.color ?? "var(--bg-4)",
               // Token text colour so the fallback chip stays readable when the
               // light theme flips --bg-4 to a pale grey.
-              color: 'var(--txt-0)',
+              color: "var(--txt-0)",
             }}
           >
             {p.name ?? `#${p.clientId}`}
@@ -80,13 +88,13 @@ export function CollabPanel({ docId = 'shared-notes' }: { docId?: string }) {
         rows={10}
         placeholder="Shared notes. Edits sync live across analysts."
         style={{
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.15)',
+          background: "rgba(255,255,255,0.05)",
+          border: "1px solid rgba(255,255,255,0.15)",
           borderRadius: 4,
-          color: 'inherit',
+          color: "inherit",
           padding: 8,
-          resize: 'vertical',
-          fontFamily: 'inherit',
+          resize: "vertical",
+          fontFamily: "inherit",
         }}
       />
     </div>

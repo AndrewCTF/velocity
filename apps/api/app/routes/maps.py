@@ -41,7 +41,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel, Field
 
 from app import ws_limits
-from app.auth import _bearer, require_ws_key
+from app.auth import require_ws_key, ws_credential
 from app.config import get_settings
 from app.intel.ontology import Object, get_registry
 from app.keys import UserCtx, multi_user, user_id_for_token
@@ -49,7 +49,7 @@ from app.routes.ontology import (
     _refuse_overwrite_of_hidden_row,
     _refuse_write_above_clearance,
 )
-from app.security import Principal, current_principal_or_local
+from app.security import Principal, current_principal_or_local, principal_for_token
 
 router = APIRouter(tags=["maps"])
 
@@ -356,8 +356,9 @@ async def cop_ws(ws: WebSocket, map: str | None = None) -> None:
     then join the room. Frames are JSON ``{kind, ...}``; a client SENDS its own
     viewport/selection deltas and RECEIVES everyone else's, so opening this on two
     tabs slaves one view to the other. Heartbeats keep the socket alive through
-    proxies. The channel is ephemeral — nothing here reads or writes the DB, so it
-    needs only the key gate, not ``current_user``.
+    proxies. The channel itself is ephemeral — deltas are never persisted — but a
+    multi-user deployment reads the named map once, through the joiner's own
+    clearance-filtered registry, before letting it into the room (below).
     """
     if not await require_ws_key(ws):
         await ws.close(code=1008)
@@ -383,12 +384,29 @@ async def cop_ws(ws: WebSocket, map: str | None = None) -> None:
         # follow-along on a multi-user deployment is between one user's own tabs
         # and devices. A caller with no user (static key) is refused. Single-user:
         # unchanged.
+        #
+        # The read is clearance-filtered, not just user-scoped: a signed-in but
+        # clearance-0 principal must not be able to join the room of a level-4 COP
+        # it cannot load (owner scoping alone would let it, on its own map id).
+        # There is no DI on a WebSocket, so the principal comes from the same
+        # credential the WS gate just validated (``ws_credential`` — Authorization
+        # / x-api-key / the ``key.`` subprotocol / ``?key=``) through
+        # ``security.principal_for_token``, the helper that exists for exactly
+        # this ("Resolve a Principal from a raw bearer token (no Request) — for WS
+        # handlers"). Unresolvable → refuse, the same fail-closed shape as uid.
         room = map
         if multi_user():
-            uid = await user_id_for_token(_bearer(ws.headers) or ws.query_params.get("key"))
+            tok = ws_credential(ws)
+            uid = await user_id_for_token(tok)
             obj = None
-            if uid:
-                obj = await get_registry(UserCtx(user_id=uid, token=""), get_settings()).get(map)
+            if uid and tok:
+                principal = await principal_for_token(tok)
+                if principal is not None:
+                    obj = await get_registry(
+                        UserCtx(user_id=uid, token=""),
+                        get_settings(),
+                        principal=principal,
+                    ).get(map)
             if obj is None or _from_object(obj) is None:
                 await ws.close(code=1008)
                 return

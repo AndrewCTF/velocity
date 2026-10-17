@@ -105,6 +105,69 @@ def test_world_request_serves_the_blob_with_etag_and_304(
     assert r3.status_code == 200
 
 
+def test_capped_world_request_is_served_from_a_per_cycle_blob(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`?limit=N` with no bbox is what the globe sends at world view.
+
+    It used to rebuild and serialise the whole union on the event loop per
+    request (0.5-0.9 s measured) and carried no ETag although the adapter sends
+    If-None-Match there.
+    """
+    import time
+
+    from app.correlate.store import store
+    from app.routes.adsb import viewport_filter
+
+    now = time.time()
+    store.add_many(
+        [_obs(str(300000000 + i), 10.0 + i * 0.01, 20.0 + i * 0.01, now) for i in range(40)]
+    )
+    monkeypatch.setattr(maritime_routes, "_LIMIT_BLOBS", {})
+    monkeypatch.setattr(maritime_routes, "_VESSEL_BUILT_AT", 1234.5)  # blob loop "live"
+    builds = []
+    real = maritime_routes._build_limit_blob
+    monkeypatch.setattr(
+        maritime_routes, "_build_limit_blob", lambda *a: builds.append(a) or real(*a)
+    )
+
+    r = client.get("/api/maritime/snapshot?limit=10", headers={"accept-encoding": "gzip"})
+    assert r.status_code == 200 and r.headers.get("content-encoding") == "gzip"
+    etag = r.headers.get("etag")
+    assert etag
+    want = viewport_filter(maritime_routes.vessel_snapshot(), None, None, None, None, 10)
+    assert len(r.json()["features"]) == 10
+    assert {f["id"] for f in r.json()["features"]} == {f["id"] for f in want["features"]}
+
+    # Same cycle: no second build, and a matching validator costs nothing.
+    r2 = client.get(
+        "/api/maritime/snapshot?limit=10",
+        headers={"accept-encoding": "gzip", "if-none-match": etag},
+    )
+    assert r2.status_code == 304 and r2.content == b""
+    assert len(builds) == 1
+
+    # Next blob cycle: rebuilt once, not served stale.
+    monkeypatch.setattr(maritime_routes, "_VESSEL_BUILT_AT", 1240.0)
+    client.get("/api/maritime/snapshot?limit=10", headers={"accept-encoding": "gzip"})
+    assert len(builds) == 2
+
+
+def test_capped_world_request_falls_back_inline_without_the_blob_loop(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import time
+
+    from app.correlate.store import store
+
+    store.add_many([_obs(str(310000000 + i), 5.0, 5.0 + i * 0.01, time.time()) for i in range(5)])
+    monkeypatch.setattr(maritime_routes, "_LIMIT_BLOBS", {})
+    monkeypatch.setattr(maritime_routes, "_VESSEL_BUILT_AT", 0.0)
+    r = client.get("/api/maritime/snapshot?limit=3", headers={"accept-encoding": "gzip"})
+    assert r.status_code == 200 and r.headers.get("etag") is None
+    assert len(r.json()["features"]) == 3
+
+
 def test_no_gzip_client_still_gets_json(client: TestClient, seeded_store: None) -> None:
     maritime_routes._VESSEL_BLOB, maritime_routes._VESSEL_ETAG = (
         maritime_routes._build_vessel_blob(False)

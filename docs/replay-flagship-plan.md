@@ -12,7 +12,7 @@ frontend already has a replay bar with play/pause, speed, rolling-window
 presets, and a day picker (`apps/web/src/timeline/Timeline.tsx`). W1 is not
 "build replay" — it is (a) an operator profile that turns the bounded
 internal buffer into an intentionally-sized archive, (b) making that archive
-*visible* (coverage stats, heat-strip, an ownership chip), and (c) a motion
+_visible_ (coverage stats, heat-strip, an ownership chip), and (c) a motion
 question the substrate read surfaced that the roadmap did not anticipate —
 resolved in §5 as "no change needed," not as a fix.
 
@@ -34,7 +34,7 @@ correcting from what the code actually does:
    rolling-window presets (`REPLAY_WINDOWS`, lines 15-21), a speed control
    (`SPEEDS`, line 14, rows 347-369), and a retained-buffer label
    (`retentionDays(retentionHours)`, lines 442-447). What is missing is
-   specifically: a coverage/density heat-strip fed by the *history* store
+   specifically: a coverage/density heat-strip fed by the _history_ store
    (the existing density strip at lines 508-579 is fed by
    `/api/timeline/density`, which is **detection/alert density, not fix
    density** — a different signal), and the "recording since / N GB / M
@@ -43,7 +43,7 @@ correcting from what the code actually does:
    overlaid from the incident store" only holds for ≤6h.**
    `app/intel/incident_store.py:22` caps history at `_MAX_SNAPSHOTS = 360`
    per scope, explicitly commented `# ~6h at a 60s cadence`. The existing
-   `/api/timeline/events` route (`routes/timeline.py:64`) *accepts*
+   `/api/timeline/events` route (`routes/timeline.py:64`) _accepts_
    `window_sec` up to `72 * 3600` (72h) and calls
    `incident_store.history(scope, window_sec)` (`routes/timeline.py:78`), but
    the store structurally cannot hold more than ~6h of snapshots — a 72h
@@ -58,6 +58,7 @@ correcting from what the code actually does:
 ## 1. A. Disk-first archive profile
 
 ### 1.1 New settings (`apps/api/app/config.py`, appended near the existing
+
 `history_max_bytes` block at line 408)
 
 ```python
@@ -113,7 +114,7 @@ size_cap = memtier.cache_budget_bytes(
 `memtier.cache_budget_bytes` (`apps/api/app/memtier.py:73-84`) scales to
 **5% of currently-available RAM** (`_CACHE_FRACTION["history"] = 0.05`,
 `memtier.py:33`), clamped to `[64 MiB, history_max_bytes]` — so on a 32 GB
-box with ~16 GB available, the *actual* runtime cap is ~800 MB, not the 2 GB
+box with ~16 GB available, the _actual_ runtime cap is ~800 MB, not the 2 GB
 `history_max_bytes` default suggests. That's correct behavior for the
 default bounded-buffer profile (don't let history crowd out RAM on a small
 box) but wrong for an archive, where the operator has deliberately allocated
@@ -293,7 +294,7 @@ tokens are added.
   and satisfies the W1 contract as written (`docs/roadmap-users-2026-07.md`
   §3 asks for a "date picker," not hour granularity). No change in this
   slice. **Stretch, not in slice scope**: an hour-granularity `<input
-  type="time">` next to it (defaulting to `00:00`) so `replayDay` scrub could
+type="time">` next to it (defaulting to `00:00`) so `replayDay` scrub could
   start mid-day instead of only at UTC midnight — `dayStartSec` (lines 34-36)
   would get the time-of-day added to its offset. Small diff to an existing
   control if picked up later; not in Slice 2's file list (§8) and not
@@ -323,7 +324,7 @@ tokens are added.
   either is fine, kept as an implementation-time call, not a file-ownership
   question since it's still inside `CoverageStrip.tsx`). Formatting: `date`
   from `recording_since` (epoch seconds) via the same `isoStamp`/`isoDay`
-  helpers already in `Timeline.tsx` (lines 30-33, 597-599); `N GB` = 
+  helpers already in `Timeline.tsx` (lines 30-33, 597-599); `N GB` =
   `total_bytes / 1024**3` to 1 decimal; `M fixes` = `row_count.toLocaleString()`
   (matching the existing `totalDet.toLocaleString()` pattern, line 566).
 
@@ -368,7 +369,7 @@ independent reasons converged on the same answer:
    `docs/decisions.md`'s motion entries say so twice, explicitly: "NEVER
    synthesize/predict aircraft motion BY DEFAULT" is qualified as "ON THE
    DEFAULT PATH." Replay is not that path — it draws only RECORDED REAL
-   fixes and interpolates *between* them for smoothness, which is a
+   fixes and interpolates _between_ them for smoothness, which is a
    different thing from inventing a fix that was never observed.
 2. **This exact behavior was already stress-tested and praised, not flagged.**
    `docs/velocity-stress-test-warsim-2026-06-20.md:248` records a 24h replay
@@ -521,7 +522,7 @@ slice boundary.
 - **Any live-path cadence, polling, or motion code**: `PollGeoJsonAdapter.ts`,
   `GlobeCanvas.tsx`'s viewer construction, `styles.ts`, `labelStyle.ts`,
   world-view decimation in `routes/adsb.py` — all guarded, all untouched.
-  `HistoryPlayback.ts` only *imports* `aircraftStyle`/`vesselStyle`/`labelFor`
+  `HistoryPlayback.ts` only _imports_ `aircraftStyle`/`vesselStyle`/`labelFor`
   as pure functions; it does not modify those files.
 - **Replay motion code.** `HistoryPlayback.ts`'s `SampledPositionProperty` +
   `LinearApproximation` interpolation for both aircraft and vessels is
@@ -548,6 +549,7 @@ disjoint per slice so two implementers never touch the same file at once
 (the one-file-one-owner rule in `CLAUDE.md` §Subagents).
 
 ### Slice 1 — Backend disk-first archive profile (~3-4 days)
+
 **Owner: backend.** Files: `apps/api/app/config.py` (new settings, §1.1),
 `apps/api/app/history.py` (ceiling override §1.2, cap-source switch §1.3,
 archive-mode vacuum-skip gate §1.4, new `coverage()`/`_coverage_sync()` §2),
@@ -561,6 +563,7 @@ prerequisite fact for Slice 2's chip wording and for W2's README rebuild, but
 the chip itself needs no hardcoded number since it reads the live endpoint.
 
 ### Slice 2 — Frontend scrubber dressing (~3 days)
+
 **Owner: frontend A.** Files: `apps/web/src/timeline/Timeline.tsx` (chip
 wiring only, §3 — small diff, most logic lives in the new file below), new
 `apps/web/src/timeline/CoverageStrip.tsx` (heat-strip + fetch, §3). The
@@ -573,6 +576,7 @@ bar, confirm the heat-strip renders real per-hour bars and the chip shows a
 real `recording since / GB / fixes` line (screenshot).
 
 ### Slice 3 — Multi-domain replay verification + perf gate (~1-2 days)
+
 **Owner: frontend B** (different file from Slice 2 — no conflict). §5 cut
 the motion change this slice was originally built around; `HistoryPlayback.ts`
 is now READ-only for verification in this slice, not edited — its existing
@@ -601,6 +605,7 @@ aircraft-only and still lead with it, per the roadmap's own kill clause,
 rather than block the whole workstream on vessel-scale perf.
 
 ### Slice 4 (optional/stretch, only if 1-3 land clean) — nothing to build
+
 Per §4/§7, incident overlay is deferred outright for archive-scale replay —
 there is no small, honest version of it worth shipping in W1 given the ~6h
 structural ceiling in `incident_store.py`. If time remains after Slices 1-3,

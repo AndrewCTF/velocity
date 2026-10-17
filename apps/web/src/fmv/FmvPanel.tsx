@@ -14,16 +14,30 @@
 //
 // When no sim drone is selected, it shows an empty-state message.
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Check, X, Download } from 'lucide-react';
-import * as Cesium from 'cesium';
-import { Widget, KV, KVRow, Caveat, Btn, MicroLabel, SectionLabel, Toggle } from '../shell/instruments.js';
-import { useSelection } from '../state/stores.js';
-import { useSpotlight } from '../globe/SpotlightLayer.js';
-import { followEntity, stopFollow, isFollowing } from '../globe/camera.js';
-import { projectDetections, classCounts } from './detections.js';
-import type { FocalDrone, DetectionCandidate, Detection, DetectionClass } from './detections.js';
-import { useDetectionTriage, SOAK_GRID } from './detectionTriage.js';
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { Check, X, Download } from "lucide-react";
+import * as Cesium from "cesium";
+import {
+  Widget,
+  KV,
+  KVRow,
+  Caveat,
+  Btn,
+  MicroLabel,
+  SectionLabel,
+  Toggle,
+} from "../shell/instruments.js";
+import { useSelection } from "../state/stores.js";
+import { useSpotlight } from "../globe/SpotlightLayer.js";
+import { followEntity, stopFollow, isFollowing } from "../globe/camera.js";
+import { projectDetections, classCounts } from "./detections.js";
+import type {
+  FocalDrone,
+  DetectionCandidate,
+  Detection,
+  DetectionClass,
+} from "./detections.js";
+import { useDetectionTriage, SOAK_GRID } from "./detectionTriage.js";
 
 // ── types pulled from SimController internals via duck-typing ─────────────────
 // SimController stores RtAgent state privately; we read back from the Cesium
@@ -46,10 +60,10 @@ interface DroneSnapshot {
 // ── class badge colours ───────────────────────────────────────────────────────
 
 const CLS_COLOR: Record<string, string> = {
-  drone: '#ef4444',
-  aircraft: '#facc15',
-  vehicle: '#14b8a6',
-  structure: '#93c5fd',
+  drone: "#ef4444",
+  aircraft: "#facc15",
+  vehicle: "#14b8a6",
+  structure: "#93c5fd",
 };
 
 // ── Bbox overlay ──────────────────────────────────────────────────────────────
@@ -60,42 +74,43 @@ function BboxOverlay({ dets }: { dets: Detection[] }): JSX.Element {
     <>
       {dets.map((d) => {
         const st = statusOf(d.id);
-        if (st === 'dismissed') return null; // dismissed detections leave the frame
-        const color = st === 'confirmed' ? '#36d399' : CLS_COLOR[d.cls] ?? '#ffffff';
+        if (st === "dismissed") return null; // dismissed detections leave the frame
+        const color =
+          st === "confirmed" ? "#36d399" : (CLS_COLOR[d.cls] ?? "#ffffff");
         return (
-        <div
-          key={d.id}
-          style={{
-            position: 'absolute',
-            left: `${d.bbox.x * 100}%`,
-            top: `${d.bbox.y * 100}%`,
-            width: `${d.bbox.w * 100}%`,
-            height: `${d.bbox.h * 100}%`,
-            border: `${st === 'confirmed' ? 2 : 1}px solid ${color}`,
-            boxShadow: `0 0 0 1px rgba(0,0,0,0.5)`,
-            pointerEvents: 'none',
-          }}
-        >
-          {/* corner label */}
-          <span
+          <div
+            key={d.id}
             style={{
-              position: 'absolute',
-              bottom: '100%',
-              left: 0,
-              fontSize: '8px',
-              fontFamily: '"IBM Plex Mono", monospace',
-              color: CLS_COLOR[d.cls] ?? '#ffffff',
-              background: 'rgba(0,0,0,0.6)',
-              padding: '1px 3px',
-              whiteSpace: 'nowrap',
-              lineHeight: 1.4,
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
+              position: "absolute",
+              left: `${d.bbox.x * 100}%`,
+              top: `${d.bbox.y * 100}%`,
+              width: `${d.bbox.w * 100}%`,
+              height: `${d.bbox.h * 100}%`,
+              border: `${st === "confirmed" ? 2 : 1}px solid ${color}`,
+              boxShadow: `0 0 0 1px rgba(0,0,0,0.5)`,
+              pointerEvents: "none",
             }}
           >
-            {d.cls} {Math.round(d.conf * 100)}%
-          </span>
-        </div>
+            {/* corner label */}
+            <span
+              style={{
+                position: "absolute",
+                bottom: "100%",
+                left: 0,
+                fontSize: "8px",
+                fontFamily: '"IBM Plex Mono", monospace',
+                color: CLS_COLOR[d.cls] ?? "#ffffff",
+                background: "rgba(0,0,0,0.6)",
+                padding: "1px 3px",
+                whiteSpace: "nowrap",
+                lineHeight: 1.4,
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+              }}
+            >
+              {d.cls} {Math.round(d.conf * 100)}%
+            </span>
+          </div>
         );
       })}
     </>
@@ -112,7 +127,7 @@ function SoakOverlay(): JSX.Element | null {
   const cells = useMemo(
     () =>
       [...soak.entries()].map(([k, n]) => {
-        const [cx, cy] = k.split(',').map(Number);
+        const [cx, cy] = k.split(",").map(Number);
         return { cx: cx ?? 0, cy: cy ?? 0, n };
       }),
     [soak],
@@ -125,13 +140,13 @@ function SoakOverlay(): JSX.Element | null {
         <div
           key={`${c.cx},${c.cy}`}
           style={{
-            position: 'absolute',
+            position: "absolute",
             left: `${(c.cx / SOAK_GRID) * 100}%`,
             top: `${(c.cy / SOAK_GRID) * 100}%`,
             width: `${100 / SOAK_GRID}%`,
             height: `${100 / SOAK_GRID}%`,
             background: `rgba(245,165,36,${0.15 + 0.55 * (c.n / max)})`,
-            pointerEvents: 'none',
+            pointerEvents: "none",
           }}
         />
       ))}
@@ -157,7 +172,15 @@ function latToTileY(lat: number, z: number): number {
   return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** z;
 }
 
-function FrameArea({ dets, snap, soak }: { dets: Detection[]; snap: DroneSnapshot | null; soak: boolean }): JSX.Element {
+function FrameArea({
+  dets,
+  snap,
+  soak,
+}: {
+  dets: Detection[];
+  snap: DroneSnapshot | null;
+  soak: boolean;
+}): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const [loadTick, setLoadTick] = useState(0);
@@ -170,12 +193,12 @@ function FrameArea({ dets, snap, soak }: { dets: Detection[]; snap: DroneSnapsho
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const W = canvas.width;
     const H = canvas.height;
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#05070b';
+    ctx.fillStyle = "#05070b";
     ctx.fillRect(0, 0, W, H);
 
     if (lat != null && lon != null) {
@@ -216,38 +239,48 @@ function FrameArea({ dets, snap, soak }: { dets: Detection[]; snap: DroneSnapsho
 
       const ringR = (radiusKm * 1000) / screenMpp;
       // Footprint ring + half-range ring
-      ctx.strokeStyle = 'rgba(125,211,252,0.9)';
+      ctx.strokeStyle = "rgba(125,211,252,0.9)";
       ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(W / 2, H / 2, ringR, 0, Math.PI * 2); ctx.stroke();
-      ctx.strokeStyle = 'rgba(125,211,252,0.3)';
+      ctx.beginPath();
+      ctx.arc(W / 2, H / 2, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(125,211,252,0.3)";
       ctx.lineWidth = 0.75;
-      ctx.beginPath(); ctx.arc(W / 2, H / 2, ringR * 0.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(W / 2, H / 2, ringR * 0.5, 0, Math.PI * 2);
+      ctx.stroke();
 
       // Heading arrow (0° = north = up)
       const hr = (heading * Math.PI) / 180;
-      ctx.strokeStyle = 'rgba(245,200,100,0.95)';
+      ctx.strokeStyle = "rgba(245,200,100,0.95)";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(W / 2, H / 2);
       ctx.lineTo(W / 2 + Math.sin(hr) * ringR, H / 2 - Math.cos(hr) * ringR);
       ctx.stroke();
       // North tick
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
       ctx.font = '9px "IBM Plex Mono", monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('N', W / 2, 11);
+      ctx.textAlign = "center";
+      ctx.fillText("N", W / 2, 11);
     } else {
-      ctx.fillStyle = 'rgba(125,150,180,0.55)';
+      ctx.fillStyle = "rgba(125,150,180,0.55)";
       ctx.font = '11px "IBM Plex Mono", monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('acquiring drone telemetry…', W / 2, H / 2);
+      ctx.textAlign = "center";
+      ctx.fillText("acquiring drone telemetry…", W / 2, H / 2);
     }
 
     // Crosshair (always)
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(W / 2 - 9, H / 2); ctx.lineTo(W / 2 + 9, H / 2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(W / 2, H / 2 - 9); ctx.lineTo(W / 2, H / 2 + 9); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - 9, H / 2);
+    ctx.lineTo(W / 2 + 9, H / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(W / 2, H / 2 - 9);
+    ctx.lineTo(W / 2, H / 2 + 9);
+    ctx.stroke();
   }, [lat, lon, heading, radiusKm, loadTick]);
 
   const statusOf = useDetectionTriage((s) => s.status);
@@ -257,10 +290,10 @@ function FrameArea({ dets, snap, soak }: { dets: Detection[]; snap: DroneSnapsho
   const exportBurned = (): void => {
     const src = canvasRef.current;
     if (!src) return;
-    const out = document.createElement('canvas');
+    const out = document.createElement("canvas");
     out.width = src.width;
     out.height = src.height;
-    const c = out.getContext('2d');
+    const c = out.getContext("2d");
     if (!c) return;
     c.drawImage(src, 0, 0);
     const soakCells = useDetectionTriage.getState().soakCells();
@@ -268,28 +301,38 @@ function FrameArea({ dets, snap, soak }: { dets: Detection[]; snap: DroneSnapsho
       const max = Math.max(1, ...soakCells.map((x) => x.n));
       for (const cell of soakCells) {
         c.fillStyle = `rgba(245,165,36,${0.15 + 0.55 * (cell.n / max)})`;
-        c.fillRect((cell.cx / SOAK_GRID) * out.width, (cell.cy / SOAK_GRID) * out.height, out.width / SOAK_GRID, out.height / SOAK_GRID);
+        c.fillRect(
+          (cell.cx / SOAK_GRID) * out.width,
+          (cell.cy / SOAK_GRID) * out.height,
+          out.width / SOAK_GRID,
+          out.height / SOAK_GRID,
+        );
       }
     }
     c.font = '9px "IBM Plex Mono", monospace';
     for (const d of dets) {
       const st = statusOf(d.id);
-      if (st === 'dismissed') continue;
-      const color = st === 'confirmed' ? '#36d399' : CLS_COLOR[d.cls] ?? '#ffffff';
+      if (st === "dismissed") continue;
+      const color =
+        st === "confirmed" ? "#36d399" : (CLS_COLOR[d.cls] ?? "#ffffff");
       c.strokeStyle = color;
-      c.lineWidth = st === 'confirmed' ? 2 : 1;
+      c.lineWidth = st === "confirmed" ? 2 : 1;
       const x = d.bbox.x * out.width;
       const y = d.bbox.y * out.height;
       c.strokeRect(x, y, d.bbox.w * out.width, d.bbox.h * out.height);
       c.fillStyle = color;
-      c.fillText(`${d.cls} ${Math.round(d.conf * 100)}%`, x, Math.max(9, y - 2));
+      c.fillText(
+        `${d.cls} ${Math.round(d.conf * 100)}%`,
+        x,
+        Math.max(9, y - 2),
+      );
     }
-    c.fillStyle = 'rgba(255,200,100,0.8)';
-    c.fillText('ARCHIVE EO · NOT LIVE', out.width - 118, 12);
+    c.fillStyle = "rgba(255,200,100,0.8)";
+    c.fillText("ARCHIVE EO · NOT LIVE", out.width - 118, 12);
     try {
-      const a = document.createElement('a');
-      a.href = out.toDataURL('image/png');
-      a.download = `fmv-frame-${snap ? `${snap.lat.toFixed(2)}_${snap.lon.toFixed(2)}` : 'frame'}.png`;
+      const a = document.createElement("a");
+      a.href = out.toDataURL("image/png");
+      a.download = `fmv-frame-${snap ? `${snap.lat.toFixed(2)}_${snap.lon.toFixed(2)}` : "frame"}.png`;
       a.click();
     } catch {
       /* tainted canvas (shouldn't happen with same-origin tiles) */
@@ -316,32 +359,42 @@ function FrameArea({ dets, snap, soak }: { dets: Detection[]; snap: DroneSnapsho
       </button>
       {/* Soak heatmap (confirmed-detection density) beneath the boxes */}
       {soak && (
-        <div style={{ position: 'absolute', inset: 0 }}>
+        <div style={{ position: "absolute", inset: 0 }}>
           <SoakOverlay />
         </div>
       )}
       {/* Bbox overlay — absolute divs over the imagery */}
-      <div style={{ position: 'absolute', inset: 0 }}>
+      <div style={{ position: "absolute", inset: 0 }}>
         <BboxOverlay dets={dets} />
       </div>
       {/* Honest provenance stamps — archival EO, not a live sensor */}
       <span
         style={{
-          position: 'absolute', top: 4, right: 4, fontSize: '7px',
-          fontFamily: '"IBM Plex Mono", monospace', color: 'rgba(255,200,100,0.6)',
-          letterSpacing: '0.6px', textTransform: 'uppercase',
+          position: "absolute",
+          top: 4,
+          right: 4,
+          fontSize: "7px",
+          fontFamily: '"IBM Plex Mono", monospace',
+          color: "rgba(255,200,100,0.6)",
+          letterSpacing: "0.6px",
+          textTransform: "uppercase",
         }}
       >
         ARCHIVE EO · NOT LIVE
       </span>
       <span
         style={{
-          position: 'absolute', bottom: 4, left: 4, fontSize: '7px',
-          fontFamily: '"IBM Plex Mono", monospace', color: 'rgba(150,170,200,0.65)',
-          letterSpacing: '0.4px',
+          position: "absolute",
+          bottom: 4,
+          left: 4,
+          fontSize: "7px",
+          fontFamily: '"IBM Plex Mono", monospace',
+          color: "rgba(150,170,200,0.65)",
+          letterSpacing: "0.4px",
         }}
       >
-        EOX/Esri · {snap ? `${snap.lat.toFixed(2)}, ${snap.lon.toFixed(2)}` : '—'}
+        EOX/Esri ·{" "}
+        {snap ? `${snap.lat.toFixed(2)}, ${snap.lon.toFixed(2)}` : "—"}
       </span>
     </div>
   );
@@ -366,23 +419,35 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Only care about sim drone selections.
-  const isSim = selId != null && selId.startsWith('sim:');
+  const isSim = selId != null && selId.startsWith("sim:");
 
   // Read telemetry from the Cesium entity on a regular interval.
   useEffect(() => {
     if (!isSim || !selId || !viewer) return;
 
-    const v = viewer as { isDestroyed?: () => boolean; dataSources?: { length: number; get: (i: number) => { entities: { getById: (id: string) => unknown } } }; clock?: { currentTime: unknown }; entities?: { getById: (id: string) => unknown } };
+    const v = viewer as {
+      isDestroyed?: () => boolean;
+      dataSources?: {
+        length: number;
+        get: (i: number) => { entities: { getById: (id: string) => unknown } };
+      };
+      clock?: { currentTime: unknown };
+      entities?: { getById: (id: string) => unknown };
+    };
 
     type RawEntity = {
-      position?: { getValue: (t: unknown) => { x: number; y: number; z: number } | undefined };
+      position?: {
+        getValue: (
+          t: unknown,
+        ) => { x: number; y: number; z: number } | undefined;
+      };
       properties?: { kind?: { getValue?: () => string }; sim?: unknown };
       billboard?: { rotation?: { getValue: (t: unknown) => number } };
       name?: string;
     };
 
     const readSnap = (): void => {
-      if (typeof v.isDestroyed === 'function' && v.isDestroyed()) return;
+      if (typeof v.isDestroyed === "function" && v.isDestroyed()) return;
       // Skip the entity read + state churn while the FMV tab is hidden.
       if (rootRef.current && rootRef.current.offsetParent === null) return;
 
@@ -391,7 +456,10 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
       if (v.dataSources) {
         for (let i = 0; i < v.dataSources.length; i++) {
           const e = v.dataSources.get(i).entities.getById(selId);
-          if (e != null) { entity = e as unknown as RawEntity; break; }
+          if (e != null) {
+            entity = e as unknown as RawEntity;
+            break;
+          }
         }
       }
       if (entity == null && v.entities) {
@@ -402,7 +470,7 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
 
       // Only handle sim drone entities.
       const kind = entity.properties?.kind?.getValue?.() as string | undefined;
-      if (kind !== 'sim-uav' && kind !== 'sim-drone') return;
+      if (kind !== "sim-uav" && kind !== "sim-drone") return;
 
       const t = v.clock?.currentTime;
       const pos = entity.position?.getValue(t);
@@ -412,7 +480,9 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
       // directly. The old `globalThis.Cesium` lookup silently returned undefined
       // (vite-plugin-cesium does not attach Cesium to window), so the panel was
       // stuck at "—" for every reading — the "FMV doesn't show much" report.
-      const cart = Cesium.Cartographic.fromCartesian(pos as unknown as Cesium.Cartesian3);
+      const cart = Cesium.Cartographic.fromCartesian(
+        pos as unknown as Cesium.Cartesian3,
+      );
       const lat = Cesium.Math.toDegrees(cart.latitude);
       const lon = Cesium.Math.toDegrees(cart.longitude);
       const altM = Math.max(0, cart.height);
@@ -426,7 +496,8 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
         let speedMps = 0;
         if (prev) {
           const dLat = (lat - prev.lat) * 111320;
-          const dLon = (lon - prev.lon) * 111320 * Math.cos((lat * Math.PI) / 180);
+          const dLon =
+            (lon - prev.lon) * 111320 * Math.cos((lat * Math.PI) / 180);
           speedMps = Math.sqrt(dLat * dLat + dLon * dLon) / 0.5; // assuming ~0.5 s interval
         }
         return {
@@ -436,8 +507,8 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
           altM,
           heading,
           speedMps: Math.min(speedMps, 500), // cap runaway outliers at first read
-          linkState: 'nominal',
-          mode: 'cruise',
+          linkState: "nominal",
+          mode: "cruise",
         };
       });
 
@@ -451,7 +522,10 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
 
   // Recompute detections whenever the snapshot changes.
   useEffect(() => {
-    if (!snapshot) { setDets([]); return; }
+    if (!snapshot) {
+      setDets([]);
+      return;
+    }
     const focal: FocalDrone = {
       lat: snapshot.lat,
       lon: snapshot.lon,
@@ -460,7 +534,10 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
     };
     // For the demo, generate synthetic candidate positions around the drone —
     // stable per id+tick so they don't jump on every poll.
-    const candidates: DetectionCandidate[] = buildSyntheticCandidates(focal, tick);
+    const candidates: DetectionCandidate[] = buildSyntheticCandidates(
+      focal,
+      tick,
+    );
     setDets(projectDetections(focal, candidates, tick));
   }, [snapshot, tick]);
 
@@ -468,8 +545,10 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
   useEffect(() => {
     if (!viewer || !selId) return;
     const v = viewer as { isDestroyed?: () => boolean };
-    if (typeof v.isDestroyed === 'function' && v.isDestroyed()) return;
-    setFollowing(isFollowing(viewer as Parameters<typeof isFollowing>[0], selId));
+    if (typeof v.isDestroyed === "function" && v.isDestroyed()) return;
+    setFollowing(
+      isFollowing(viewer as Parameters<typeof isFollowing>[0], selId),
+    );
   }, [viewer, selId, tick]);
 
   const handleFollow = useCallback(() => {
@@ -524,17 +603,21 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
               <span
                 key={cls}
                 className="mono text-[10px] tracking-[0.6px] uppercase px-[7px] py-[3px] rounded-sm whitespace-nowrap border border-line text-txt-3"
-                style={{ color: CLS_COLOR[cls] ?? 'var(--txt-3)' }}
+                style={{ color: CLS_COLOR[cls] ?? "var(--txt-3)" }}
               >
                 {n} {cls}
               </span>
             ))}
-          {dets.length === 0 && <MicroLabel>no contacts in footprint</MicroLabel>}
+          {dets.length === 0 && (
+            <MicroLabel>no contacts in footprint</MicroLabel>
+          )}
           <button
             type="button"
             onClick={() => setSoak((v) => !v)}
             className={`ml-auto mono text-[10px] uppercase tracking-[0.5px] px-[7px] py-[3px] rounded-sm border ${
-              soak ? 'border-warn text-warn' : 'border-line text-txt-3 hover:text-txt-1'
+              soak
+                ? "border-warn text-warn"
+                : "border-line text-txt-3 hover:text-txt-1"
             }`}
           >
             Soak
@@ -547,18 +630,24 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
       <DetectionTriageWidget dets={dets} />
 
       {/* Telemetry */}
-      <Widget title="Telemetry" count={snap ? `${Math.round(snap.altM)} m` : '—'}>
+      <Widget
+        title="Telemetry"
+        count={snap ? `${Math.round(snap.altM)} m` : "—"}
+      >
         <KV>
-          <KVRow k="Alt" v={snap ? `${Math.round(snap.altM)} m` : '—'} />
-          <KVRow k="Heading" v={snap ? `${Math.round(snap.heading)}°` : '—'} />
-          <KVRow k="Speed" v={snap ? `${Math.round(snap.speedMps)} m/s` : '—'} />
-          <KVRow k="Link" v={snap?.linkState ?? '—'} />
-          <KVRow k="Mode" v={snap?.mode ?? '—'} />
+          <KVRow k="Alt" v={snap ? `${Math.round(snap.altM)} m` : "—"} />
+          <KVRow k="Heading" v={snap ? `${Math.round(snap.heading)}°` : "—"} />
+          <KVRow
+            k="Speed"
+            v={snap ? `${Math.round(snap.speedMps)} m/s` : "—"}
+          />
+          <KVRow k="Link" v={snap?.linkState ?? "—"} />
+          <KVRow k="Mode" v={snap?.mode ?? "—"} />
         </KV>
         <SectionLabel title="IMU (derived)" className="mt-2" />
         <KV className="mt-1">
-          <KVRow k="Pitch" v={`${pitch > 0 ? '+' : ''}${pitch.toFixed(1)}°`} />
-          <KVRow k="Roll" v={`${roll > 0 ? '+' : ''}${roll.toFixed(1)}°`} />
+          <KVRow k="Pitch" v={`${pitch > 0 ? "+" : ""}${pitch.toFixed(1)}°`} />
+          <KVRow k="Roll" v={`${roll > 0 ? "+" : ""}${roll.toFixed(1)}°`} />
         </KV>
         <SectionLabel title="Sensor" className="mt-2" />
         <KV className="mt-1">
@@ -568,24 +657,39 @@ export function FmvPanel({ viewer }: { viewer: unknown }): JSX.Element | null {
 
         <SectionLabel title="Footprint (notional)" className="mt-2" />
         <KV className="mt-1">
-          <KVRow k="Center" v={snap ? `${snap.lat.toFixed(3)}, ${snap.lon.toFixed(3)}` : '—'} />
+          <KVRow
+            k="Center"
+            v={snap ? `${snap.lat.toFixed(3)}, ${snap.lon.toFixed(3)}` : "—"}
+          />
           <KVRow k="Radius" v={`${radiusKm.toFixed(1)} km`} />
         </KV>
         <div className="mt-2 flex items-center justify-between gap-2">
           <Toggle on={sensorOn} onChange={setSensor} label="Sensor spotlight" />
           <div className="flex gap-1">
-            <Btn size="sm" title="Shrink footprint" onClick={() => setRadiusKm(radiusKm - 0.5)}>
+            <Btn
+              size="sm"
+              title="Shrink footprint"
+              onClick={() => setRadiusKm(radiusKm - 0.5)}
+            >
               −
             </Btn>
-            <Btn size="sm" title="Grow footprint" onClick={() => setRadiusKm(radiusKm + 0.5)}>
+            <Btn
+              size="sm"
+              title="Grow footprint"
+              onClick={() => setRadiusKm(radiusKm + 0.5)}
+            >
               +
             </Btn>
           </div>
         </div>
 
         <div className="mt-2.5 flex gap-1.5">
-          <Btn size="sm" tone={following ? 'accent' : 'neutral'} onClick={handleFollow}>
-            {following ? 'Unfollow' : 'Follow'}
+          <Btn
+            size="sm"
+            tone={following ? "accent" : "neutral"}
+            onClick={handleFollow}
+          >
+            {following ? "Unfollow" : "Follow"}
           </Btn>
         </div>
       </Widget>
@@ -616,17 +720,20 @@ function deriveRoll(heading: number, tick: number): number {
 // candidates are passed in.  These are deterministically keyed on the drone's
 // lat/lon grid cell so they don't drift between renders.
 
-function buildSyntheticCandidates(focal: FocalDrone, tick: number): DetectionCandidate[] {
+function buildSyntheticCandidates(
+  focal: FocalDrone,
+  tick: number,
+): DetectionCandidate[] {
   // Seed positions: 6 candidates in a fixed pattern relative to the focal point.
   // Using grid offsets (not Math.random) so they are stable across ticks.
   const DEG_PER_100M = 1 / 1111.32;
   const offsets: Array<[number, number, DetectionClass]> = [
-    [1, 0, 'vehicle'],
-    [-1, 1, 'vehicle'],
-    [2, -1, 'structure'],
-    [-2, -2, 'drone'],
-    [0.5, 2, 'vehicle'],
-    [-0.5, -0.5, 'drone'],
+    [1, 0, "vehicle"],
+    [-1, 1, "vehicle"],
+    [2, -1, "structure"],
+    [-2, -2, "drone"],
+    [0.5, 2, "vehicle"],
+    [-0.5, -0.5, "drone"],
   ];
   // Suppress unused 'tick' lint; the tick is intended for future shimmer use.
   void tick;
@@ -646,7 +753,7 @@ function DetectionTriageWidget({ dets }: { dets: Detection[] }): JSX.Element {
   const dismiss = useDetectionTriage((s) => s.dismiss);
   const soakCount = useDetectionTriage((s) => s.soak.size);
   const clearSoak = useDetectionTriage((s) => s.clearSoak);
-  const pending = dets.filter((d) => statusOf(d.id) === 'pending');
+  const pending = dets.filter((d) => statusOf(d.id) === "pending");
   return (
     <Widget title="Detection triage" count={`${pending.length} pending`}>
       {dets.length === 0 ? (
@@ -657,17 +764,38 @@ function DetectionTriageWidget({ dets }: { dets: Detection[] }): JSX.Element {
             const st = statusOf(d.id);
             return (
               <li key={d.id} className="flex items-center gap-2 py-1.5">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CLS_COLOR[d.cls] ?? '#fff' }} aria-hidden />
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ background: CLS_COLOR[d.cls] ?? "#fff" }}
+                  aria-hidden
+                />
                 <span className="mono text-[11px] text-txt-1 flex-1 uppercase tracking-[0.4px]">
-                  {d.cls} <span className="text-txt-3">{Math.round(d.conf * 100)}%</span>
+                  {d.cls}{" "}
+                  <span className="text-txt-3">
+                    {Math.round(d.conf * 100)}%
+                  </span>
                 </span>
-                {st === 'confirmed' && <span className="mono text-[10px] text-ok uppercase">confirmed</span>}
-                {st === 'dismissed' && <span className="mono text-[10px] text-txt-4 uppercase">dismissed</span>}
-                {st === 'pending' && (
+                {st === "confirmed" && (
+                  <span className="mono text-[10px] text-ok uppercase">
+                    confirmed
+                  </span>
+                )}
+                {st === "dismissed" && (
+                  <span className="mono text-[10px] text-txt-4 uppercase">
+                    dismissed
+                  </span>
+                )}
+                {st === "pending" && (
                   <>
                     <button
                       type="button"
-                      onClick={() => confirm(d.id, d.bbox.x + d.bbox.w / 2, d.bbox.y + d.bbox.h / 2)}
+                      onClick={() =>
+                        confirm(
+                          d.id,
+                          d.bbox.x + d.bbox.w / 2,
+                          d.bbox.y + d.bbox.h / 2,
+                        )
+                      }
                       className="mono text-[10px] uppercase px-1.5 py-0.5 rounded-sm border border-line text-ok hover:border-ok"
                       aria-label={`Confirm ${d.cls} detection`}
                       title="Confirm detection"

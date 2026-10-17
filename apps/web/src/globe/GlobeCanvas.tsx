@@ -1,37 +1,50 @@
-import { useEffect, useRef, useState } from 'react';
-import * as Cesium from 'cesium';
-import { MapboxTerrainProvider } from '@macrostrat/cesium-martini';
-import { isMobileDevice } from '../shell/device.js';
-import { useSettings } from '../state/settings.js';
-import type { LayerRegistry } from '../registry/LayerRegistry.js';
-import { useTime, useSelection, useSearchTarget, useImagery, useSim } from '../state/stores.js';
-import type { ImageryMode } from '../state/stores.js';
-import { imageryOverlayUrl } from '../imagery/gibsUrl.js';
-import { loadLod1, loadLod1Bbox, clearLod1 } from '../lod1/lod1Layer.js';
-import { LayerCompositor } from './LayerCompositor.js';
-import { installSelectionReticle } from './selectionReticle.js';
-import { installSearchTargetMarker } from './searchTargetMarker.js';
-import { installSelectionTrack } from './selectionTrack.js';
-import { installSpotlight } from './SpotlightLayer.js';
-import { installFov } from './FovLayer.js';
-import { installProjection } from './ProjectionLayer.js';
-import { createDrawController, setDrawController, getDrawController } from './draw.js';
-import { useContextMenu } from './contextMenuStore.js';
-import { installAnnotations } from './AnnotationLayer.js';
-import { installControl } from './ControlLayer.js';
-import { installWatchboxes } from './WatchboxLayer.js';
-import { installCaptures } from './CaptureLayer.js';
-import { installDetections } from './DetectLayer.js';
-import { useInvestigation } from '../graph/investigationStore.js';
-import { prewarmIcons } from './icons.js';
-import { perfOnPreRender, perfOnRender } from './perf.js';
-import { presetKnobs } from './qualityPresets.js';
-import { setCameraMoving } from './cameraMotion.js';
-import { hasRenderNeed } from './renderNeeds.js';
-import { startAdaptiveGovernor, stopAdaptiveGovernor } from './adaptiveGovernor.js';
-import { ChipLayer } from '../imagery/ChipLayer.js';
-import { apiFetch, backendUrl } from '../transport/http.js';
-import { globalAltitude } from './camera.js';
+import { useEffect, useRef, useState } from "react";
+import * as Cesium from "cesium";
+import { MapboxTerrainProvider } from "@macrostrat/cesium-martini";
+import { isMobileDevice } from "../shell/device.js";
+import { useSettings } from "../state/settings.js";
+import type { LayerRegistry } from "../registry/LayerRegistry.js";
+import {
+  useTime,
+  useSelection,
+  useSearchTarget,
+  useImagery,
+  useSim,
+} from "../state/stores.js";
+import type { ImageryMode } from "../state/stores.js";
+import { imageryOverlayUrl } from "../imagery/gibsUrl.js";
+import { loadLod1, loadLod1Bbox, clearLod1 } from "../lod1/lod1Layer.js";
+import { LayerCompositor } from "./LayerCompositor.js";
+import { installSelectionReticle } from "./selectionReticle.js";
+import { installSearchTargetMarker } from "./searchTargetMarker.js";
+import { installSelectionTrack } from "./selectionTrack.js";
+import { installSpotlight } from "./SpotlightLayer.js";
+import { installFov } from "./FovLayer.js";
+import { installProjection } from "./ProjectionLayer.js";
+import {
+  createDrawController,
+  setDrawController,
+  getDrawController,
+} from "./draw.js";
+import { useContextMenu } from "./contextMenuStore.js";
+import { installAnnotations } from "./AnnotationLayer.js";
+import { installControl } from "./ControlLayer.js";
+import { installWatchboxes } from "./WatchboxLayer.js";
+import { installCaptures } from "./CaptureLayer.js";
+import { installDetections } from "./DetectLayer.js";
+import { useInvestigation } from "../graph/investigationStore.js";
+import { prewarmIcons } from "./icons.js";
+import { perfOnPreRender, perfOnRender } from "./perf.js";
+import { presetKnobs } from "./qualityPresets.js";
+import { setCameraMoving } from "./cameraMotion.js";
+import { hasRenderNeed } from "./renderNeeds.js";
+import {
+  startAdaptiveGovernor,
+  stopAdaptiveGovernor,
+} from "./adaptiveGovernor.js";
+import { ChipLayer } from "../imagery/ChipLayer.js";
+import { apiFetch, backendUrl } from "../transport/http.js";
+import { globalAltitude } from "./camera.js";
 
 interface Props {
   ionToken: string;
@@ -107,7 +120,48 @@ const MESH_BACKDROP_GLOBE_SSE = 16;
 // (measured 2026-10-06). Smaller canvases keep one texel per pixel.
 const MESH_PIXEL_BUDGET = 2_500_000;
 function meshScreenSpaceError(canvas: HTMLCanvasElement): number {
-  return 24 * Math.max(1, Math.sqrt((canvas.width * canvas.height) / MESH_PIXEL_BUDGET));
+  return (
+    24 *
+    Math.max(1, Math.sqrt((canvas.width * canvas.height) / MESH_PIXEL_BUDGET))
+  );
+}
+
+// Cesium starts requests once a frame and the backend answers a mesh tile in a
+// few ms, so every limit on how many it may start in one frame is a limit on
+// tiles per frame. There are three: 18 per server, 50 in all, and a priority
+// heap that holds 20 between frames, which is the one that binds. At 18/50/20
+// a parked Manhattan view (616 tiles) took 2.4 to 2.7 s; with all three at 128
+// it took 1.9 to 2.2 s, at 300 1.6 to 1.9 s. Fewer, longer frames also do the
+// same tiles in a third of the main-thread time: the per-frame work is paid
+// fewer times (measured 2026-10-11). 100, not more: the production proxy
+// allows one address 128 requests at once and the websockets need some. With
+// nothing between the page and the tile process there is no such limit, and
+// 300 took another tenth off (1.72 s against 1.88 s, seven runs each way).
+const MESH_REQUESTS_PER_FRAME = 100;
+const MESH_REQUESTS_PER_FRAME_DIRECT = 300;
+
+// Where the mesh comes from. With a tile process on this machine (start.sh
+// sets the port) and the page open on this machine, straight from it. A browser
+// keeps six connections to an origin, and through the dev proxy the mesh
+// shared the page's six with the backdrop and every API call: panning into a
+// place nobody had visited, mesh requests waited 0.3 to 1.1 s behind terrain
+// tiles that take a second each from their upstream, and behind API polls that
+// take one to fifteen (measured 2026-10-11). Anywhere else (another machine, a
+// container, the desktop shell) the backend serves it as before.
+function meshTileProcessPort(): string | null {
+  const port: unknown = import.meta.env["VITE_TILES_PORT"];
+  const host = window.location.hostname;
+  return typeof port === "string" &&
+    port &&
+    (host === "localhost" || host === "127.0.0.1")
+    ? port
+    : null;
+}
+function meshRootUrl(): string {
+  const port = meshTileProcessPort();
+  return port
+    ? `http://127.0.0.1:${port}/tiles/g3d/root.json`
+    : backendUrl("/tiles/g3d/root.json");
 }
 
 export function applyGoogleGate(
@@ -125,7 +179,9 @@ export function applyGoogleGate(
   // VRAM note where msaaSamples is first set.
   const scene = viewer.scene;
   const sharp =
-    visible && !isMobileDevice() && useSettings.getState().mapQuality === 'high';
+    visible &&
+    !isMobileDevice() &&
+    useSettings.getState().mapQuality === "high";
   if (scene.msaaSamples !== (sharp ? 4 : 1)) {
     scene.msaaSamples = sharp ? 4 : 1;
     const fxaa = scene.postProcessStages?.fxaa;
@@ -158,7 +214,7 @@ export function applyGoogleGate(
     // render. The keyless mesh has no such strip: showing it there put the
     // Cesium ion logo half under the time dock.
     const credit = viewer.cesiumWidget.creditContainer as HTMLElement;
-    credit.style.display = visible && !keyless ? '' : 'none';
+    credit.style.display = visible && !keyless ? "" : "none";
     viewer.scene.requestRender();
   }
 }
@@ -168,7 +224,7 @@ export function applyGoogleGate(
 // source until it started watermarking keyless tiles "API KEY REQUIRED".
 function buildDarkBasemap(): Cesium.ImageryLayer {
   const provider = new Cesium.UrlTemplateImageryProvider({
-    url: backendUrl('/tiles/basemap/{z}/{x}/{y}.png'),
+    url: backendUrl("/tiles/basemap/{z}/{x}/{y}.png"),
     maximumLevel: 16, // Esri's canvas stops at 16; Cesium upsamples past it
   });
   // When the proxy is unreachable (backend down, booting, or a static frontend
@@ -177,9 +233,9 @@ function buildDarkBasemap(): Cesium.ImageryLayer {
   // labels: those need the server-side composite). A 503 is the commercial tier
   // refusing this source on purpose: never bypass that.
   const direct = new Cesium.UrlTemplateImageryProvider({
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     maximumLevel: 16,
-    credit: 'Esri, HERE, Garmin, (c) OpenStreetMap contributors',
+    credit: "Esri, HERE, Garmin, (c) OpenStreetMap contributors",
   });
   const viaProxy = provider.requestImage.bind(provider);
   provider.requestImage = (x, y, level, request) =>
@@ -194,7 +250,7 @@ function buildDarkBasemap(): Cesium.ImageryLayer {
 // (z≥14), proxied + disk-cached by the backend. No ion token involved.
 function buildSatImagery(): Cesium.ImageryLayer {
   const provider = new Cesium.UrlTemplateImageryProvider({
-    url: backendUrl('/tiles/sat/{z}/{x}/{y}.jpg'),
+    url: backendUrl("/tiles/sat/{z}/{x}/{y}.jpg"),
     maximumLevel: 19,
   });
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
@@ -205,9 +261,9 @@ function buildSatImagery(): Cesium.ImageryLayer {
 // the browser never talks to Apple and never carries a token.
 function buildAppleImagery(): Cesium.ImageryLayer {
   const provider = new Cesium.UrlTemplateImageryProvider({
-    url: backendUrl('/tiles/apple/{z}/{x}/{y}.jpg'),
+    url: backendUrl("/tiles/apple/{z}/{x}/{y}.jpg"),
     maximumLevel: 19,
-    credit: 'Imagery (c) Apple Maps',
+    credit: "Imagery (c) Apple Maps",
   });
   return Cesium.ImageryLayer.fromProviderAsync(Promise.resolve(provider), {});
 }
@@ -221,7 +277,7 @@ function buildAppleImagery(): Cesium.ImageryLayer {
 // serve {z}/{x}/{y} — verified live 2026-07-11 (curl -4 -sI each z3 tile, 200).
 export type ThirdPartyImageryMode = Exclude<
   ImageryMode,
-  '2d-dark' | '3d-sat' | 'google-3d' | 'apple-sat'
+  "2d-dark" | "3d-sat" | "google-3d" | "apple-sat"
 >;
 
 interface ThirdPartyBasemapDef {
@@ -232,40 +288,47 @@ interface ThirdPartyBasemapDef {
   credit: string;
 }
 
-export const THIRD_PARTY_BASEMAPS: Record<ThirdPartyImageryMode, ThirdPartyBasemapDef> = {
-  'esri-imagery': {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+export const THIRD_PARTY_BASEMAPS: Record<
+  ThirdPartyImageryMode,
+  ThirdPartyBasemapDef
+> = {
+  "esri-imagery": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     maximumLevel: 19,
-    credit: 'Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+    credit: "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
   },
-  'esri-topo': {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+  "esri-topo": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
     maximumLevel: 19,
-    credit: 'Esri, HERE, Garmin, FAO, NOAA, USGS',
+    credit: "Esri, HERE, Garmin, FAO, NOAA, USGS",
   },
-  'esri-dark': {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+  "esri-dark": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     maximumLevel: 19,
-    credit: 'Esri',
+    credit: "Esri",
   },
   opentopo: {
-    url: 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
+    url: "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
     maximumLevel: 17,
-    credit: 'Map data: (c) OpenStreetMap contributors, SRTM | Map style: (c) OpenTopoMap (CC-BY-SA)',
+    credit:
+      "Map data: (c) OpenStreetMap contributors, SRTM | Map style: (c) OpenTopoMap (CC-BY-SA)",
   },
-  'usgs-imagery': {
-    url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
+  "usgs-imagery": {
+    url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
     maximumLevel: 16,
-    credit: 'USGS The National Map: Imagery (public domain)',
+    credit: "USGS The National Map: Imagery (public domain)",
   },
-  'eox-s2': {
-    url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg',
+  "eox-s2": {
+    url: "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg",
     maximumLevel: 14,
-    credit: 'Sentinel-2 cloudless by EOX IT Services GmbH (Contains modified Copernicus Sentinel data)',
+    credit:
+      "Sentinel-2 cloudless by EOX IT Services GmbH (Contains modified Copernicus Sentinel data)",
   },
 };
 
-function buildThirdPartyBasemap(def: ThirdPartyBasemapDef): Cesium.ImageryLayer {
+function buildThirdPartyBasemap(
+  def: ThirdPartyBasemapDef,
+): Cesium.ImageryLayer {
   const provider = new Cesium.UrlTemplateImageryProvider({
     url: def.url,
     maximumLevel: def.maximumLevel,
@@ -302,7 +365,7 @@ function buildImageryOverlay(
 // encoding it decodes.
 function buildFreeTerrain(): Cesium.TerrainProvider {
   return new MapboxTerrainProvider({
-    urlTemplate: backendUrl('/tiles/terrain/{z}/{x}/{y}.png'),
+    urlTemplate: backendUrl("/tiles/terrain/{z}/{x}/{y}.png"),
     maxZoom: 15,
     tileSize: 256,
   }) as unknown as Cesium.TerrainProvider;
@@ -312,9 +375,9 @@ export function GlobeCanvas({
   ionToken,
   registry,
   onViewerReady,
-  imageryMode = '2d-dark',
+  imageryMode = "2d-dark",
   enableGoogle3D = false,
-  googleApiKey = '',
+  googleApiKey = "",
 }: Props): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
@@ -359,7 +422,9 @@ export function GlobeCanvas({
       clearLod1(viewer);
       return;
     }
-    loadLod1(viewer, lod1Aoi).catch((e) => console.warn('lod1 load failed:', e));
+    loadLod1(viewer, lod1Aoi).catch((e) =>
+      console.warn("lod1 load failed:", e),
+    );
   }, [lod1Aoi]);
 
   // On-demand 3D buildings anywhere: resolve the current camera view to a bbox
@@ -387,7 +452,9 @@ export function GlobeCanvas({
       }
     }
     if (bbox) {
-      loadLod1Bbox(viewer, bbox).catch((e) => console.warn('lod1 (here) load failed:', e));
+      loadLod1Bbox(viewer, bbox).catch((e) =>
+        console.warn("lod1 (here) load failed:", e),
+      );
     }
     clearLod1Here();
   }, [lod1Here, clearLod1Here]);
@@ -424,7 +491,10 @@ export function GlobeCanvas({
         const lat = Cesium.Math.toDegrees(c.latitude);
         bbox = [lon - 0.04, lat - 0.04, lon + 0.04, lat + 0.04];
       }
-      const center = { lon: (bbox[0] + bbox[2]) / 2, lat: (bbox[1] + bbox[3]) / 2 };
+      const center = {
+        lon: (bbox[0] + bbox[2]) / 2,
+        lat: (bbox[1] + bbox[3]) / 2,
+      };
       // Skip a refetch until the view has moved ~half a clamped tile — otherwise
       // every tiny settle re-hits Overpass for essentially the same district.
       if (lastCenter) {
@@ -436,7 +506,7 @@ export function GlobeCanvas({
       lastCenter = center;
       inFlight = true;
       loadLod1Bbox(viewer, bbox)
-        .catch((e) => console.warn('lod1 auto-fill failed:', e))
+        .catch((e) => console.warn("lod1 auto-fill failed:", e))
         .finally(() => {
           inFlight = false;
         });
@@ -557,7 +627,7 @@ export function GlobeCanvas({
       // rather than throwing on locked-down boxes.
       contextOptions: {
         webgl: {
-          powerPreference: 'high-performance',
+          powerPreference: "high-performance",
           failIfMajorPerformanceCaveat: false,
         },
       },
@@ -585,7 +655,9 @@ export function GlobeCanvas({
     const CesiumAny = Cesium as unknown as {
       DataSourceDisplay: {
         defaultVisualizersCallback: (
-          scene: Cesium.Scene, cluster: Cesium.EntityCluster, ds: Cesium.DataSource,
+          scene: Cesium.Scene,
+          cluster: Cesium.EntityCluster,
+          ds: Cesium.DataSource,
         ) => unknown[];
       };
       BillboardVisualizer: new (...a: unknown[]) => unknown;
@@ -609,22 +681,33 @@ export function GlobeCanvas({
       };
       return [
         new CesiumAny.BillboardVisualizer(entityCluster, entities),
-        new CesiumAny.GeometryVisualizer(scene, entities, ds._primitives, ds._groundPrimitives),
+        new CesiumAny.GeometryVisualizer(
+          scene,
+          entities,
+          ds._primitives,
+          ds._groundPrimitives,
+        ),
         new CesiumAny.LabelVisualizer(entityCluster, entities),
         new CesiumAny.PointVisualizer(entityCluster, entities),
-        new CesiumAny.PolylineVisualizer(scene, entities, ds._primitives, ds._groundPrimitives),
+        new CesiumAny.PolylineVisualizer(
+          scene,
+          entities,
+          ds._primitives,
+          ds._groundPrimitives,
+        ),
       ];
     };
 
     const viewer = new Cesium.Viewer(containerRef.current, viewerOpts);
     // DEV-only handle for debugging/introspection (mirrors __useSelection).
-    if (import.meta.env?.DEV) (window as unknown as { __viewer: Cesium.Viewer }).__viewer = viewer;
+    if (import.meta.env?.DEV)
+      (window as unknown as { __viewer: Cesium.Viewer }).__viewer = viewer;
     const scene = viewer.scene;
 
     // Dark space + globe undertone — globe.baseColor is what shows through
     // before imagery loads and between tiles at high tilt.
-    scene.globe.baseColor = Cesium.Color.fromCssColorString('#0b0e14');
-    scene.backgroundColor = Cesium.Color.fromCssColorString('#070a10');
+    scene.globe.baseColor = Cesium.Color.fromCssColorString("#0b0e14");
+    scene.backgroundColor = Cesium.Color.fromCssColorString("#070a10");
     if (scene.skyAtmosphere) {
       scene.skyAtmosphere.show = true;
       scene.skyAtmosphere.hueShift = -0.08;
@@ -683,9 +766,11 @@ export function GlobeCanvas({
       viewer.resolutionScale = next;
       viewer.scene.requestRender();
     };
-    const idleCap = (): number => (isMobileDevice() ? 1.0 : useSettings.getState().renderPixelCap);
+    const idleCap = (): number =>
+      isMobileDevice() ? 1.0 : useSettings.getState().renderPixelCap;
     const toIdle = (): void => setScale(idleCap());
-    const toMotion = (): void => setScale(Math.min(idleCap(), MOTION_PIXEL_CAP));
+    const toMotion = (): void =>
+      setScale(Math.min(idleCap(), MOTION_PIXEL_CAP));
     toIdle();
     // §5.2.4 during-motion degrade: coarsen terrain/imagery + drop FXAA while the
     // camera moves (invisible mid-pan), restore at settle. Cheap fill-rate win on
@@ -696,7 +781,8 @@ export function GlobeCanvas({
     const setMotionQuality = (motion: boolean): void => {
       if (viewer.isDestroyed()) return;
       const k = presetKnobs(useSettings.getState().mapQuality);
-      const meshUp = googleKeylessRef.current && googleTilesetRef.current?.show === true;
+      const meshUp =
+        googleKeylessRef.current && googleTilesetRef.current?.show === true;
       scene.globe.maximumScreenSpaceError = meshUp
         ? MESH_BACKDROP_GLOBE_SSE
         : motion
@@ -725,22 +811,49 @@ export function GlobeCanvas({
         evalGovernor(); // re-decide continuous vs idle after a zoom settles
         // Predictive prefetch: when on Apple Maps, pre-warm the NEXT zoom
         // level's tiles so zooming in hits cached tiles instead of cold fetches.
-        if (useImagery.getState().mode === 'apple-sat') {
+        if (useImagery.getState().mode === "apple-sat") {
           const rect = viewer.camera.computeViewRectangle();
           if (rect) {
-            const z = Math.min(19, Math.round(Math.log2(Math.PI * 2 / rect.width)));
+            const z = Math.min(
+              19,
+              Math.round(Math.log2((Math.PI * 2) / rect.width)),
+            );
             const nz = Math.min(19, z + 1);
             const n = 1 << nz;
-            const xMin = Math.max(0, Math.floor(((Cesium.Math.toDegrees(rect.west) + 180) / 360) * n));
-            const xMax = Math.min(n - 1, Math.floor(((Cesium.Math.toDegrees(rect.east) + 180) / 360) * n));
-            const yMin = Math.max(0, Math.floor((1 - Math.log(Math.tan(rect.north) + 1 / Math.cos(rect.north)) / Math.PI) / 2 * n));
-            const yMax = Math.min(n - 1, Math.floor((1 - Math.log(Math.tan(rect.south) + 1 / Math.cos(rect.south)) / Math.PI) / 2 * n));
+            const xMin = Math.max(
+              0,
+              Math.floor(((Cesium.Math.toDegrees(rect.west) + 180) / 360) * n),
+            );
+            const xMax = Math.min(
+              n - 1,
+              Math.floor(((Cesium.Math.toDegrees(rect.east) + 180) / 360) * n),
+            );
+            const yMin = Math.max(
+              0,
+              Math.floor(
+                ((1 -
+                  Math.log(Math.tan(rect.north) + 1 / Math.cos(rect.north)) /
+                    Math.PI) /
+                  2) *
+                  n,
+              ),
+            );
+            const yMax = Math.min(
+              n - 1,
+              Math.floor(
+                ((1 -
+                  Math.log(Math.tan(rect.south) + 1 / Math.cos(rect.south)) /
+                    Math.PI) /
+                  2) *
+                  n,
+              ),
+            );
             if ((xMax - xMin + 1) * (yMax - yMin + 1) <= 64) {
               // apiFetch, not raw fetch: the prefetch is a same-origin backend
               // POST and has to carry the auth header like every other one.
               void apiFetch(
                 `/tiles/apple/prefetch?z=${nz}&x_min=${xMin}&y_min=${yMin}&x_max=${xMax}&y_max=${yMax}`,
-                { method: 'POST' },
+                { method: "POST" },
               ).catch(() => {});
             }
           }
@@ -759,8 +872,10 @@ export function GlobeCanvas({
       setMotionQuality(false);
     };
     const unsubRenderScale = useSettings.subscribe(applyQualitySettings);
-    window.addEventListener('resize', toIdle);
-    scene.globe.maximumScreenSpaceError = presetKnobs(useSettings.getState().mapQuality).idleSSE;
+    window.addEventListener("resize", toIdle);
+    scene.globe.maximumScreenSpaceError = presetKnobs(
+      useSettings.getState().mapQuality,
+    ).idleSSE;
     scene.globe.preloadSiblings = true;
     // Terrain+imagery tile cache. Kept at the Cesium default (100): an earlier
     // bump to 1000 pushed VRAM the wrong way (these tiles are GPU textures, not
@@ -782,7 +897,7 @@ export function GlobeCanvas({
     if (fxaa) fxaa.enabled = true;
 
     // Strip the default credit logo so the dark chrome is clean.
-    (viewer.cesiumWidget.creditContainer as HTMLElement).style.display = 'none';
+    (viewer.cesiumWidget.creditContainer as HTMLElement).style.display = "none";
 
     // Perf instrument (design §5.7): count REAL renders (not rAF frames) so the
     // render-governor work can be measured. postRender fires once per painted
@@ -810,14 +925,17 @@ export function GlobeCanvas({
     const evalGovernor = (): void => {
       if (viewer.isDestroyed()) return;
       if (!useSettings.getState().continuousRenderGovernor) {
-        if (scene.maximumRenderTimeChange !== 0) scene.maximumRenderTimeChange = 0;
+        if (scene.maximumRenderTimeChange !== 0)
+          scene.maximumRenderTimeChange = 0;
         return;
       }
-      const worldView = viewer.camera.positionCartographic.height > WORLD_VIEW_ALT_M;
+      const worldView =
+        viewer.camera.positionCartographic.height > WORLD_VIEW_ALT_M;
       const deadReckon = useSettings.getState().aircraftDeadReckon;
       const simActive = useSim.getState().active;
       const hasSel = !!useSelection.getState().selectedEntityId;
-      const idle = worldView && !deadReckon && !simActive && !hasSel && !hasRenderNeed();
+      const idle =
+        worldView && !deadReckon && !simActive && !hasSel && !hasRenderNeed();
       const next = idle ? Infinity : 0;
       if (scene.maximumRenderTimeChange !== next) {
         scene.maximumRenderTimeChange = next;
@@ -829,7 +947,12 @@ export function GlobeCanvas({
     evalGovernor();
 
     if (import.meta.env.DEV) {
-      (window as unknown as { __viewer: Cesium.Viewer; __Cesium: typeof Cesium }).__viewer = viewer;
+      (
+        window as unknown as {
+          __viewer: Cesium.Viewer;
+          __Cesium: typeof Cesium;
+        }
+      ).__viewer = viewer;
       (window as unknown as { __Cesium: typeof Cesium }).__Cesium = Cesium;
     }
 
@@ -837,7 +960,11 @@ export function GlobeCanvas({
     // frustum (globalAltitude), not hardcoded — a fixed 20 Mm left 44% of the
     // map black on a 16:9 window.
     viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(15, 30, globalAltitude(viewer)),
+      destination: Cesium.Cartesian3.fromDegrees(
+        15,
+        30,
+        globalAltitude(viewer),
+      ),
       orientation: {
         heading: 0,
         pitch: Cesium.Math.toRadians(-85),
@@ -865,7 +992,7 @@ export function GlobeCanvas({
       const id = (pickedId as { id?: string } | undefined)?.id;
       // The search pin / reticle are non-selectable helper overlays — a click on
       // one is a no-op, never a selection change.
-      if (id === '__searchtarget__' || id === '__reticle__') return;
+      if (id === "__searchtarget__" || id === "__reticle__") return;
       useSelection.getState().select(id ?? null);
       // Clicking empty globe is the "clear everything" gesture — retire the
       // search pin too so it doesn't linger after the operator moves on.
@@ -890,7 +1017,10 @@ export function GlobeCanvas({
       // picked lat/lon. The draw toolbox's own right-click only matters while a
       // draw op is armed, so it still wins then.
       if (getDrawController()?.active) return;
-      const cart = viewer.camera.pickEllipsoid(click.position, scene.globe.ellipsoid);
+      const cart = viewer.camera.pickEllipsoid(
+        click.position,
+        scene.globe.ellipsoid,
+      );
       if (!cart) return;
       const c = Cesium.Cartographic.fromCartesian(cart);
       const rect = viewer.canvas.getBoundingClientRect();
@@ -935,11 +1065,45 @@ export function GlobeCanvas({
     // nothing changed, so this listener stays requestRenderMode-friendly.
     const onCameraChanged = (): void => {
       const ts = googleTilesetRef.current;
-      if (ts) applyGoogleGate(viewer, ts, googleWantedRef.current, googleKeylessRef.current);
+      if (ts)
+        applyGoogleGate(
+          viewer,
+          ts,
+          googleWantedRef.current,
+          googleKeylessRef.current,
+        );
       const bld = osmBuildingsRef.current;
       if (bld) applyBuildingsGate(viewer, bld, ts);
     };
     viewer.camera.changed.addEventListener(onCameraChanged);
+    // A flight to a place under the gate loads that place from take-off, not
+    // from landing. Cesium preloads a flight's destination only for a tileset
+    // that is shown, and ours is hidden above 30 km, so the three seconds in
+    // the air were three seconds of nothing. Only flights that land under the
+    // gate: left on, the hidden mesh would load every view panned across from
+    // orbit. Both reads are Cesium internals; if they go, this turns itself off.
+    const onFlightStart = (): void => {
+      const ts = googleTilesetRef.current;
+      const flying =
+        (
+          viewer.camera as unknown as { canPreloadFlight?: () => boolean }
+        ).canPreloadFlight?.() === true;
+      const lands = (
+        viewer.scene as unknown as { preloadFlightCamera?: Cesium.Camera }
+      ).preloadFlightCamera?.positionCartographic.height;
+      if (ts && googleKeylessRef.current)
+        ts.preloadWhenHidden =
+          googleWantedRef.current &&
+          flying &&
+          lands !== undefined &&
+          lands < GOOGLE_3D_MAX_CAMERA_HEIGHT_M;
+    };
+    const onFlightEnd = (): void => {
+      const ts = googleTilesetRef.current;
+      if (ts) ts.preloadWhenHidden = false;
+    };
+    viewer.camera.moveStart.addEventListener(onFlightStart);
+    viewer.camera.moveEnd.addEventListener(onFlightEnd);
 
     viewerRef.current = viewer;
     const compositor = new LayerCompositor(registry, viewer);
@@ -956,8 +1120,10 @@ export function GlobeCanvas({
       scene.postRender.removeEventListener(onPostRender);
       window.clearInterval(govTimer);
       viewer.camera.changed.removeEventListener(onCameraChanged);
+      viewer.camera.moveStart.removeEventListener(onFlightStart);
+      viewer.camera.moveEnd.removeEventListener(onFlightEnd);
       unsubRenderScale();
-      window.removeEventListener('resize', toIdle);
+      window.removeEventListener("resize", toIdle);
       viewer.camera.moveStart.removeEventListener(onMoveStart);
       viewer.camera.moveEnd.removeEventListener(onMoveEnd);
       if (restoreTimer != null) window.clearTimeout(restoreTimer);
@@ -1011,16 +1177,17 @@ export function GlobeCanvas({
     const hasIon = Boolean(ionToken);
     // 3d-sat no longer requires ion: imagery + terrain come from our own
     // keyless proxies. ion remains an optional bonus (OSM Buildings).
-    const wantKeyless3d = imageryMode === 'google-3d';
-    const wantSat = imageryMode === '3d-sat' || wantKeyless3d;
-    const wantApple = imageryMode === 'apple-sat';
+    const wantKeyless3d = imageryMode === "google-3d";
+    const wantSat = imageryMode === "3d-sat" || wantKeyless3d;
+    const wantApple = imageryMode === "apple-sat";
     const thirdPartyDef =
-      imageryMode === '2d-dark' || wantSat || imageryMode === 'apple-sat'
+      imageryMode === "2d-dark" || wantSat || imageryMode === "apple-sat"
         ? undefined
         : THIRD_PARTY_BASEMAPS[imageryMode];
 
     const gen = ++stackGenRef.current;
-    const stale = (): boolean => gen !== stackGenRef.current || !viewerRef.current;
+    const stale = (): boolean =>
+      gen !== stackGenRef.current || !viewerRef.current;
 
     // Tear down any previous ion-stack primitives. Always safe to call —
     // both refs are null when we're already on the dark basemap.
@@ -1034,7 +1201,12 @@ export function GlobeCanvas({
       // at unmount via scene.primitives.
       googleWantedRef.current = false;
       if (googleTilesetRef.current) {
-        applyGoogleGate(viewer, googleTilesetRef.current, false, googleKeylessRef.current);
+        applyGoogleGate(
+          viewer,
+          googleTilesetRef.current,
+          false,
+          googleKeylessRef.current,
+        );
       }
       // Reset terrain to the cheap ellipsoid. Setting viewer.terrainProvider
       // here also resets viewer.scene.terrainProvider.
@@ -1065,7 +1237,7 @@ export function GlobeCanvas({
       try {
         viewer.terrainProvider = buildFreeTerrain();
       } catch (e) {
-        console.warn('martini terrain failed, staying on ellipsoid:', e);
+        console.warn("martini terrain failed, staying on ellipsoid:", e);
       }
       scene.requestRender();
 
@@ -1098,7 +1270,7 @@ export function GlobeCanvas({
             applyBuildingsGate(viewer, tileset, googleTilesetRef.current);
             scene.requestRender();
           })
-          .catch((e: unknown) => console.warn('OSM buildings failed:', e));
+          .catch((e: unknown) => console.warn("OSM buildings failed:", e));
       }
 
       // Optional: Google Photorealistic 3D Tiles. Created once per session
@@ -1109,7 +1281,11 @@ export function GlobeCanvas({
       googleWantKeylessRef.current = wantKeyless3d;
       // One tileset is kept per session. If it came from the other source
       // (a box with both switched on), drop it and build the right one.
-      if (googleTilesetRef.current && googleKeylessRef.current !== wantKeyless3d && wantGoogle) {
+      if (
+        googleTilesetRef.current &&
+        googleKeylessRef.current !== wantKeyless3d &&
+        wantGoogle
+      ) {
         scene.primitives.remove(googleTilesetRef.current); // also destroys
         googleTilesetRef.current = null;
         // Undo what the dropped tileset's gate left behind; the new one's gate
@@ -1118,7 +1294,8 @@ export function GlobeCanvas({
         scene.globe.maximumScreenSpaceError = presetKnobs(
           useSettings.getState().mapQuality,
         ).idleSSE;
-        (viewer.cesiumWidget.creditContainer as HTMLElement).style.display = 'none';
+        (viewer.cesiumWidget.creditContainer as HTMLElement).style.display =
+          "none";
       }
       // The OSM boxes follow the Google mesh's visibility; they load on their
       // own promise, so either may arrive first.
@@ -1135,7 +1312,7 @@ export function GlobeCanvas({
         // soft (measured 2026-10-05). The high preset gets room for 4K;
         // the lighter presets and phones keep the old budget.
         const roomy =
-          !isMobileDevice() && useSettings.getState().mapQuality === 'high';
+          !isMobileDevice() && useSettings.getState().mapQuality === "high";
         const GIB = 1024 * 1024 * 1024;
         const googleOptions = {
           // 24 (vs default 16) ≈ half the tile fetches for slightly softer
@@ -1144,17 +1321,42 @@ export function GlobeCanvas({
           cacheBytes: roomy ? 2 * GIB : GIB / 2,
           maximumCacheOverflowBytes: roomy ? 2 * GIB : GIB,
         };
+        if (keyless) {
+          const u = new URL(meshRootUrl(), window.location.href);
+          const port = u.port || (u.protocol === "https:" ? "443" : "80");
+          const rs =
+            Cesium.RequestScheduler as typeof Cesium.RequestScheduler & {
+              priorityHeapLength: number; // not in the typings
+            };
+          const perFrame = meshTileProcessPort()
+            ? MESH_REQUESTS_PER_FRAME_DIRECT
+            : MESH_REQUESTS_PER_FRAME;
+          rs.requestsByServer[`${u.hostname}:${port}`] = perFrame;
+          rs.maximumRequests = Math.max(rs.maximumRequests, perFrame);
+          rs.priorityHeapLength = Math.max(
+            rs.priorityHeapLength ?? 0,
+            perFrame,
+          );
+        }
         // 'google-3d': Google Earth's own mesh as 3D Tiles from the backend
         // (app/rocktree.py), no key of any kind. Otherwise the licensed
         // stream, which needs the Google key or the ion token.
         (keyless
-          ? Cesium.Cesium3DTileset.fromUrl(backendUrl('/tiles/g3d/root.json'), {
+          ? Cesium.Cesium3DTileset.fromUrl(meshRootUrl(), {
               ...googleOptions,
               // Load the tiles the view needs and skip the chain of coarser
               // ones above them: half the requests for the same picture
               // (151 against 355 for one view). What has not arrived yet shows
               // the satellite backdrop, never a hole.
               skipLevelOfDetail: true,
+              // And none of the levels on the way down: straight to the tiles
+              // the view ends on, 898 requests against 1 025.
+              immediatelyLoadDesiredLevelOfDetail: true,
+              // Cesium holds back everything off the centre of the screen
+              // until the camera has been still for 0.2 s. Half a screen of
+              // pan is all off-centre: 0.1 to 0.2 s of every pan (four pans
+              // each way, 2026-10-11).
+              foveatedTimeDelay: 0,
             })
           : Cesium.createGooglePhotorealistic3DTileset(undefined, googleOptions)
         )
@@ -1168,7 +1370,10 @@ export function GlobeCanvas({
             // sees a tileset that does not exist yet. One from the source
             // that is no longer wanted must never be shown under the other
             // basemap's name: drop it and build the right one.
-            if (googleWantedRef.current && googleWantKeylessRef.current !== keyless) {
+            if (
+              googleWantedRef.current &&
+              googleWantKeylessRef.current !== keyless
+            ) {
               tileset.destroy();
               startGoogle(googleWantKeylessRef.current);
               return;
@@ -1187,18 +1392,28 @@ export function GlobeCanvas({
           })
           .catch((e: unknown) => {
             googleCreatingRef.current = false;
-            console.warn('Google Photorealistic 3D failed:', e);
+            console.warn("Google Photorealistic 3D failed:", e);
           });
       };
       if (wantGoogle) {
         if (googleTilesetRef.current) {
-          applyGoogleGate(viewer, googleTilesetRef.current, true, googleKeylessRef.current);
+          applyGoogleGate(
+            viewer,
+            googleTilesetRef.current,
+            true,
+            googleKeylessRef.current,
+          );
           yieldBuildings();
         } else if (!googleCreatingRef.current) {
           startGoogle(wantKeyless3d);
         }
       } else if (googleTilesetRef.current) {
-        applyGoogleGate(viewer, googleTilesetRef.current, false, googleKeylessRef.current);
+        applyGoogleGate(
+          viewer,
+          googleTilesetRef.current,
+          false,
+          googleKeylessRef.current,
+        );
         yieldBuildings();
       } else {
         scene.globe.show = true;
@@ -1233,20 +1448,25 @@ export function GlobeCanvas({
     const v = viewerRef.current;
     if (!v) return;
     const target =
-      sceneMode === '3D'
+      sceneMode === "3D"
         ? Cesium.SceneMode.SCENE3D
-        : sceneMode === '2D'
+        : sceneMode === "2D"
           ? Cesium.SceneMode.SCENE2D
           : Cesium.SceneMode.COLUMBUS_VIEW;
     if (v.scene.mode === target) return;
     if (target === Cesium.SceneMode.SCENE2D) v.scene.morphTo2D(0.8);
-    else if (target === Cesium.SceneMode.COLUMBUS_VIEW) v.scene.morphToColumbusView(0.8);
+    else if (target === Cesium.SceneMode.COLUMBUS_VIEW)
+      v.scene.morphToColumbusView(0.8);
     else v.scene.morphTo3D(0.8);
   }, [sceneMode]);
 
   return (
     <>
-      <div ref={containerRef} className="h-full w-full" data-testid="globe-container" />
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        data-testid="globe-container"
+      />
       {/* Focused satellite-imagery chip draped around the selected entity/swarm.
           Driven by the shared useChip focus the EntityPanel sets; renders its own
           control card. Mounts only once the Cesium viewer exists. */}

@@ -20,11 +20,11 @@
 // Deliberately NOT a modal. Everything it reports is optional - the console
 // runs keyless - so this is "here is what would widen coverage", not "something
 // is broken". A modal would be lying about the severity.
-import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { apiFetch } from '../transport/http.js';
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { apiFetch } from "../transport/http.js";
 
-const DISMISS_KEY = 'velocity.degradedDismissed';
+const DISMISS_KEY = "velocity.degradedDismissed";
 
 interface Problem {
   capability: string;
@@ -35,7 +35,7 @@ interface Problem {
 
 function alreadyDismissed(): boolean {
   try {
-    return localStorage.getItem(DISMISS_KEY) === '1';
+    return localStorage.getItem(DISMISS_KEY) === "1";
   } catch {
     return false;
   }
@@ -48,7 +48,10 @@ export function degradedText(problems: readonly Problem[]): string | null {
   const names = problems.map((p) => p.capability);
   // Name them when there are few; count them when the list would run off the
   // line. Either way it says what is affected, never just "something is wrong".
-  const what = names.length <= 2 ? names.join(' and ') : `${names.length} optional sources`;
+  const what =
+    names.length <= 2
+      ? names.join(" and ")
+      : `${names.length} optional sources`;
   return `${what} not configured. The console runs without them; keys only widen coverage.`;
 }
 
@@ -61,7 +64,7 @@ export function DegradedBanner(): JSX.Element | null {
     let cancelled = false;
     void (async () => {
       try {
-        const r = await apiFetch('/api/status/doctor');
+        const r = await apiFetch("/api/status/doctor");
         if (!r.ok) return;
         const body = (await r.json()) as { problems?: Problem[] };
         if (!cancelled) setProblems(body.problems ?? []);
@@ -75,14 +78,14 @@ export function DegradedBanner(): JSX.Element | null {
     };
   }, []);
 
-  if (loc.pathname !== '/') return null;
+  if (loc.pathname !== "/") return null;
   if (dismissed || problems == null) return null;
   const text = degradedText(problems);
   if (!text) return null;
 
   const dismiss = (): void => {
     try {
-      localStorage.setItem(DISMISS_KEY, '1');
+      localStorage.setItem(DISMISS_KEY, "1");
     } catch {
       /* private mode: dismissed for this session only */
     }
@@ -98,7 +101,11 @@ export function DegradedBanner(): JSX.Element | null {
       <Link to="/?panel=ops" className="text-accent hover:underline">
         details
       </Link>
-      <button type="button" onClick={dismiss} className="text-txt-3 hover:text-txt-1">
+      <button
+        type="button"
+        onClick={dismiss}
+        className="text-txt-3 hover:text-txt-1"
+      >
         dismiss
       </button>
     </div>

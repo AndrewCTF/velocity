@@ -2,7 +2,7 @@
 // so adapters can feed them and panels can read from them without prop
 // drilling.
 
-import { DarkVesselTracker } from './darkVessel.js';
+import { DarkVesselTracker } from "./darkVessel.js";
 
 export const intel = {
   darkVessels: new DarkVesselTracker(),
@@ -32,11 +32,11 @@ export const aircraftDedup = {
   // Higher number wins. Layers not listed here get priority 0 (still
   // participates in dedup — first claim wins until a listed layer arrives).
   priority: {
-    'aviation.adsb.live.emergencies': 30,
-    'aviation.adsb.live.mil': 20,
-    'aviation.adsb.global': 10,
-    'aviation.adsb.fi.global': 5,
-    'aviation.opensky.states': 5,
+    "aviation.adsb.live.emergencies": 30,
+    "aviation.adsb.live.mil": 20,
+    "aviation.adsb.global": 10,
+    "aviation.adsb.fi.global": 5,
+    "aviation.opensky.states": 5,
   } as Record<string, number>,
 
   // Return the priority for a layer id (0 for unlisted layers).

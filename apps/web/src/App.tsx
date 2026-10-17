@@ -1,14 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { X } from 'lucide-react';
-import * as Cesium from 'cesium';
-import { useUiMode, type UiMode } from './state/uiMode.js';
-import type { RuntimeConfig } from '@osint/shared';
-import type { RailItem } from './shell/LeftIconRail.js';
-import { AppSurface } from './shell/AppSurface.js';
-import { useAppView, APP_META } from './state/appView.js';
-import { useGeoScope } from './state/geoScope.js';
-import { useDashboardMode } from './state/dashboardMode.js';
-import { useTheme } from './state/theme.js';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { X } from "lucide-react";
+import * as Cesium from "cesium";
+import { useUiMode, type UiMode } from "./state/uiMode.js";
+import type { RuntimeConfig } from "@osint/shared";
+import type { RailItem } from "./shell/LeftIconRail.js";
+import { AppSurface } from "./shell/AppSurface.js";
+import { useAppView, APP_META } from "./state/appView.js";
+import { useGeoScope } from "./state/geoScope.js";
+import { useDashboardMode } from "./state/dashboardMode.js";
+import { useTheme } from "./state/theme.js";
 import {
   useImagery,
   useFeeds,
@@ -16,52 +23,61 @@ import {
   useFilters,
   useAlerts,
   type FilterClause,
-} from './state/stores.js';
-import { useInbox } from './state/inbox.js';
-import { InboxPanel } from './inbox/InboxPanel.js';
-import { Modal } from './shell/Modal.js';
-import { SettingsModal } from './settings/SettingsModal.js';
-import { startSavedSearchPoller } from './state/savedSearches.js';
-import { ChokepointsList } from './layer-rail/ChokepointsList.js';
-import { AcarsPanel } from './acars/AcarsPanel.js';
-import { IntelPanel } from './entity-panel/IntelPanel.js';
-import { useInvestigation } from './graph/investigationStore.js';
-import { TaskingPanel } from './tasking/TaskingPanel.js';
-import { TargetKanbanPanel } from './target-kanban/TargetKanbanPanel.js';
-import { FmvPanel } from './fmv/FmvPanel.js';
-import { GlobeCanvas } from './globe/GlobeCanvas.js';
-import { GlobeOverlays } from './globe/GlobeOverlays.js';
-import { GlobeToolbar } from './globe/GlobeToolbar.js';
-import { GlobeTheater } from './globe/GlobeTheater.js';
-import { AgentConsole } from './command-bar/AgentConsole.js';
-import { LayerRegistry } from './registry/LayerRegistry.js';
-import { registerDefaults } from './registry/defaults.js';
-import { CopEditor } from './cop/CopEditor.js';
-import { Omnibar } from './command-bar/Omnibar.js';
-import { ContextMenu } from './globe/ContextMenu.js';
-import { ImageryDiffPopup } from './imagery/ImageryDiff.js';
-import { useGround } from './ground/groundStore.js';
-import { fetchRuntimeConfig } from './transport/config.js';
-import { AlertSubscriber } from './alerts/AlertSubscriber.js';
-import { AlertsPanel } from './alerts/AlertsPanel.js';
-import { SimulationOverlay } from './sim/SimulationOverlay.js';
-import { ErrorBoundary } from './shell/ErrorBoundary.js';
-import { Link } from 'react-router-dom';
-import { useAuth } from './auth/AuthContext.js';
-import { isSupabaseConfigured } from './transport/supabase.js';
-import { apiFetch, backendRejectedAuth, backendWsUrl, openAuthedWebSocket } from './transport/http.js';
-import { Console } from './shell/Console.js';
-import { ActionBar } from './shell/ActionBar.js';
-import { REHOMED, type LeftPanelId, type RightPanelId } from './shell/panels.js';
-import { LayersPanel } from './shell/panels/LayersPanel.js';
-import { TimeDock } from './shell/TimeDock.js';
-import { TitleBar } from './shell/TitleBar.js';
-import { HistogramPanel as FacetsPanel } from './shell/panels/HistogramPanel.js';
-import { InfoPanel } from './shell/panels/InfoPanel.js';
-import { FindPanel } from './shell/panels/FindPanel.js';
-import { SelectionPanel } from './shell/panels/SelectionPanel.js';
-import { SeriesPanel } from './shell/panels/SeriesPanel.js';
-import { MapToolPanels } from './shell/panels/MapToolPanels.js';
+} from "./state/stores.js";
+import { useInbox } from "./state/inbox.js";
+import { InboxPanel } from "./inbox/InboxPanel.js";
+import { Modal } from "./shell/Modal.js";
+import { SettingsModal } from "./settings/SettingsModal.js";
+import { startSavedSearchPoller } from "./state/savedSearches.js";
+import { ChokepointsList } from "./layer-rail/ChokepointsList.js";
+import { AcarsPanel } from "./acars/AcarsPanel.js";
+import { IntelPanel } from "./entity-panel/IntelPanel.js";
+import { useInvestigation } from "./graph/investigationStore.js";
+import { TaskingPanel } from "./tasking/TaskingPanel.js";
+import { TargetKanbanPanel } from "./target-kanban/TargetKanbanPanel.js";
+import { FmvPanel } from "./fmv/FmvPanel.js";
+import { GlobeCanvas } from "./globe/GlobeCanvas.js";
+import { GlobeOverlays } from "./globe/GlobeOverlays.js";
+import { GlobeToolbar } from "./globe/GlobeToolbar.js";
+import { GlobeTheater } from "./globe/GlobeTheater.js";
+import { AgentConsole } from "./command-bar/AgentConsole.js";
+import { LayerRegistry } from "./registry/LayerRegistry.js";
+import { registerDefaults } from "./registry/defaults.js";
+import { CopEditor } from "./cop/CopEditor.js";
+import { Omnibar } from "./command-bar/Omnibar.js";
+import { ContextMenu } from "./globe/ContextMenu.js";
+import { ImageryDiffPopup } from "./imagery/ImageryDiff.js";
+import { useGround } from "./ground/groundStore.js";
+import { fetchRuntimeConfig } from "./transport/config.js";
+import { AlertSubscriber } from "./alerts/AlertSubscriber.js";
+import { AlertsPanel } from "./alerts/AlertsPanel.js";
+import { SimulationOverlay } from "./sim/SimulationOverlay.js";
+import { ErrorBoundary } from "./shell/ErrorBoundary.js";
+import { Link } from "react-router-dom";
+import { useAuth } from "./auth/AuthContext.js";
+import { isSupabaseConfigured } from "./transport/supabase.js";
+import {
+  apiFetch,
+  backendRejectedAuth,
+  backendWsUrl,
+  openAuthedWebSocket,
+} from "./transport/http.js";
+import { Console } from "./shell/Console.js";
+import { ActionBar } from "./shell/ActionBar.js";
+import {
+  REHOMED,
+  type LeftPanelId,
+  type RightPanelId,
+} from "./shell/panels.js";
+import { LayersPanel } from "./shell/panels/LayersPanel.js";
+import { TimeDock } from "./shell/TimeDock.js";
+import { TitleBar } from "./shell/TitleBar.js";
+import { HistogramPanel as FacetsPanel } from "./shell/panels/HistogramPanel.js";
+import { InfoPanel } from "./shell/panels/InfoPanel.js";
+import { FindPanel } from "./shell/panels/FindPanel.js";
+import { SelectionPanel } from "./shell/panels/SelectionPanel.js";
+import { SeriesPanel } from "./shell/panels/SeriesPanel.js";
+import { MapToolPanels } from "./shell/panels/MapToolPanels.js";
 
 export function App(): JSX.Element {
   const registry = useMemo(() => {
@@ -107,7 +123,8 @@ export function App(): JSX.Element {
         setConfig(c);
       })
       .catch((e: unknown) => {
-        if (live && !haveConfig.current) setError(e instanceof Error ? e.message : String(e));
+        if (live && !haveConfig.current)
+          setError(e instanceof Error ? e.message : String(e));
       });
     return () => {
       live = false;
@@ -132,31 +149,36 @@ export function App(): JSX.Element {
         (t instanceof HTMLElement && t.isContentEditable)
       )
         return;
-      if (e.shiftKey && (e.key === 'T' || e.key === 't')) {
+      if (e.shiftKey && (e.key === "T" || e.key === "t")) {
         e.preventDefault();
         useTheme.getState().toggle();
         return;
       }
       if (e.shiftKey) return;
-      if (e.key === 'a' || e.key === 'A') setAlertsOpen((v) => !v);
+      if (e.key === "a" || e.key === "A") setAlertsOpen((v) => !v);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const onViewerReady = useCallback((v: Cesium.Viewer | null) => setViewer(v), []);
+  const onViewerReady = useCallback(
+    (v: Cesium.Viewer | null) => setViewer(v),
+    [],
+  );
 
   // View preset (design §6.0/§7): the single console shell renders for every mode;
   // 'professional' = Command (dense, layers open), 'normal' = Field (a lighter
   // landing — map foregrounded, flyout closed). Same components, different defaults.
-  const fieldPreset = useDashboardMode((s) => s.mode) === 'normal';
+  const fieldPreset = useDashboardMode((s) => s.mode) === "normal";
 
   // Inbox unread badge (design §6.5) — non-archived, unread alerts.
   const alerts = useAlerts((s) => s.alerts);
   const inboxRead = useInbox((s) => s.read);
   const inboxArchived = useInbox((s) => s.archived);
   const inboxUnread = useMemo(
-    () => alerts.filter((a) => !inboxArchived.has(a.id) && !inboxRead.has(a.id)).length,
+    () =>
+      alerts.filter((a) => !inboxArchived.has(a.id) && !inboxRead.has(a.id))
+        .length,
     [alerts, inboxArchived, inboxRead],
   );
 
@@ -169,24 +191,25 @@ export function App(): JSX.Element {
   // full-bleed app has to bring the map back with it (see Console's
   // `onPanelWhileBleed`). Stable identity so Console's key binding is not
   // rebound on every render.
-  const goToMap = useCallback(() => setApp('map'), [setApp]);
+  const goToMap = useCallback(() => setApp("map"), [setApp]);
   useEffect(() => {
-    if (investigationOpenSeq > 0) setApp('graph');
+    if (investigationOpenSeq > 0) setApp("graph");
   }, [investigationOpenSeq, setApp]);
   useEffect(() => {
-    if (groundOpenSeq > 0) setApp('video');
+    if (groundOpenSeq > 0) setApp("video");
   }, [groundOpenSeq, setApp]);
   // Geo search-around (§6.4): scoping objects near a map point brings Explorer up.
   const geoSeq = useGeoScope((s) => s.seq);
   useEffect(() => {
-    if (geoSeq > 0) setApp('explorer');
+    if (geoSeq > 0) setApp("explorer");
   }, [geoSeq, setApp]);
 
   // DEV-only registry handle for debugging/introspection (mirrors __useSelection).
   useEffect(() => {
-    if (import.meta.env?.DEV) (window as unknown as { __registry: LayerRegistry }).__registry = registry;
+    if (import.meta.env?.DEV)
+      (window as unknown as { __registry: LayerRegistry }).__registry =
+        registry;
   }, [registry]);
-
 
   // The surfaces that live INSIDE one of the four named left panels. `byHome`
   // sorts them by the destination `panels.ts` records.
@@ -202,17 +225,56 @@ export function App(): JSX.Element {
   // again.
   const railItems: RailItem[] = useMemo(
     () => [
-      { id: 'layers', icon: 'layers', label: 'Layers', content: <LayersPanel registry={registry} viewer={viewer} /> },
-      { id: 'search-objects', icon: 'search', label: 'Search Objects', content: <FindPanel viewer={viewer} /> },
-      { id: 'feeds', icon: 'feed', label: 'Feeds', content: <InfoPanel viewer={viewer} /> },
-      { id: 'chokepoints', icon: 'route', label: 'Chokepoints', content: <ChokepointsList viewer={viewer} />, group: 'more' },
-      { id: 'acars', icon: 'signal', label: 'ACARS', content: <AcarsPanel />, group: 'more' },
-      { id: 'filters', icon: 'filter', label: 'Filters', content: <FacetsPanel viewer={viewer} />, group: 'more' },
+      {
+        id: "layers",
+        icon: "layers",
+        label: "Layers",
+        content: <LayersPanel registry={registry} viewer={viewer} />,
+      },
+      {
+        id: "search-objects",
+        icon: "search",
+        label: "Search Objects",
+        content: <FindPanel viewer={viewer} />,
+      },
+      {
+        id: "feeds",
+        icon: "feed",
+        label: "Feeds",
+        content: <InfoPanel viewer={viewer} />,
+      },
+      {
+        id: "chokepoints",
+        icon: "route",
+        label: "Chokepoints",
+        content: <ChokepointsList viewer={viewer} />,
+        group: "more",
+      },
+      {
+        id: "acars",
+        icon: "signal",
+        label: "ACARS",
+        content: <AcarsPanel />,
+        group: "more",
+      },
+      {
+        id: "filters",
+        icon: "filter",
+        label: "Filters",
+        content: <FacetsPanel viewer={viewer} />,
+        group: "more",
+      },
       // Intel sits in Info with the other "what is happening" surfaces. It was
       // recorded as a dossier section, which it cannot be — it takes no
       // selection — so it fell through byHome into the More parking lot and
       // stayed there. See panels.ts.
-      { id: 'intel', icon: 'crosshair', label: 'Intel', content: <IntelPanel viewer={viewer} />, group: 'more' },
+      {
+        id: "intel",
+        icon: "crosshair",
+        label: "Intel",
+        content: <IntelPanel viewer={viewer} />,
+        group: "more",
+      },
     ],
     [registry, viewer],
   );
@@ -221,9 +283,11 @@ export function App(): JSX.Element {
   // and FMV are full WORKSPACES opened from the command bar (see ModeSurface),
   // not crammed peer tabs — fixes the 7-tab overflow + the cramped board.
 
-  const byHome = <T extends { id: string; content: React.ReactNode; label: string }>(
+  const byHome = <
+    T extends { id: string; content: React.ReactNode; label: string },
+  >(
     items: readonly T[],
-    kind: 'panel',
+    kind: "panel",
   ): { homed: Map<string, React.ReactNode[]>; rest: T[] } => {
     const homed = new Map<string, React.ReactNode[]>();
     const rest: T[] = [];
@@ -244,15 +308,15 @@ export function App(): JSX.Element {
     }
     return { homed, rest };
   };
-  const leftHomed = byHome(railItems, 'panel');
+  const leftHomed = byHome(railItems, "panel");
   // fieldPreset used to decide whether a flyout auto-opened. The four panels
   // are permanently visible now, so it picks WHICH one starts active.
-  const initialPanel: LeftPanelId = fieldPreset ? 'info' : 'layers';
+  const initialPanel: LeftPanelId = fieldPreset ? "info" : "layers";
   const leftPanels: Partial<Record<LeftPanelId, React.ReactNode>> = {
-    layers: leftHomed.homed.get('layers'),
-    find: leftHomed.homed.get('find'),
-    histogram: leftHomed.homed.get('histogram'),
-    info: leftHomed.homed.get('info'),
+    layers: leftHomed.homed.get("layers"),
+    find: leftHomed.homed.get("find"),
+    histogram: leftHomed.homed.get("histogram"),
+    info: leftHomed.homed.get("info"),
   };
   // The More parking lot is gone. It held six surfaces, five of which were a
   // SECOND copy of something already at its recorded address — Investigation in
@@ -266,7 +330,7 @@ export function App(): JSX.Element {
   // and fails if any address goes empty, which is the check the parking lot was
   // standing in for.
   const leftBadges: Partial<Record<LeftPanelId, string>> = {
-    info: String(leftHomed.homed.get('info')?.length ?? 0),
+    info: String(leftHomed.homed.get("info")?.length ?? 0),
   };
   const rightPanels: Partial<Record<RightPanelId, React.ReactNode>> = {
     selection: <SelectionPanel registry={registry} viewer={viewer} />,
@@ -280,14 +344,14 @@ export function App(): JSX.Element {
         systemState={
           <TitleBar
             viewer={viewer}
-            classification={config?.classification ?? 'UNCLAS'}
+            classification={config?.classification ?? "UNCLAS"}
             onOpenAlerts={() => setAlertsOpen(true)}
             inbox={inboxUnread}
             onOpenInbox={() => setInboxOpen(true)}
             onOpenSettings={() => setSettingsOpen(true)}
           />
         }
-        bleed={APP_META[activeApp].chrome === 'full'}
+        bleed={APP_META[activeApp].chrome === "full"}
         // A full-bleed app owns the whole body, so the panel column it would
         // open into is not mounted. Asking for a panel returns to the map.
         onPanelWhileBleed={goToMap}
@@ -318,12 +382,12 @@ export function App(): JSX.Element {
               <div className="csl2-globe">
                 <ErrorBoundary label="globe">
                   <GlobeCanvas
-                    ionToken={config?.cesiumIonToken ?? ''}
+                    ionToken={config?.cesiumIonToken ?? ""}
                     registry={registry}
                     onViewerReady={onViewerReady}
                     imageryMode={imageryMode}
                     enableGoogle3D={config?.features.enableGoogle3D ?? false}
-                    googleApiKey={config?.googleApiKey ?? ''}
+                    googleApiKey={config?.googleApiKey ?? ""}
                   />
                 </ErrorBoundary>
               </div>
@@ -357,12 +421,21 @@ export function App(): JSX.Element {
           </ErrorBoundary>
         }
       />
-      <AlertsPanel open={alertsOpen} onClose={() => setAlertsOpen(false)} viewer={viewer} />
+      <AlertsPanel
+        open={alertsOpen}
+        onClose={() => setAlertsOpen(false)}
+        viewer={viewer}
+      />
       {/* The inbox's recorded home is the title bar (REHOMED `inbox`), and this
           is the surface behind that slot. Without it the panel was constructed
           in `railItems` and thrown away by `byHome`, so triage had no home at
           all in the rebuilt console. */}
-      <Modal open={inboxOpen} onClose={() => setInboxOpen(false)} title="Inbox" width={560}>
+      <Modal
+        open={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        title="Inbox"
+        width={560}
+      >
         <InboxPanel viewer={viewer} />
       </Modal>
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
@@ -429,7 +502,11 @@ function readViewport(viewer: Cesium.Viewer): CopViewport | null {
 
 // Apply a viewport to the camera. `instant` (the follow path) sets the view with
 // no slew so a follower tracks the lead frame-to-frame; a load uses a short fly.
-function applyViewport(viewer: Cesium.Viewer, vp: CopViewport, instant: boolean): void {
+function applyViewport(
+  viewer: Cesium.Viewer,
+  vp: CopViewport,
+  instant: boolean,
+): void {
   const destination = Cesium.Cartesian3.fromDegrees(vp.lon, vp.lat, vp.height);
   const orientation = { heading: vp.heading, pitch: vp.pitch, roll: vp.roll };
   if (instant) {
@@ -461,16 +538,22 @@ export function CopControl({
 
   const refreshList = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/maps');
+      const r = await apiFetch("/api/maps");
       if (!r.ok) {
-        setStatus(r.status === 401 ? 'sign in to save maps' : r.status === 503 ? 'maps need Supabase' : `Could not load your maps (HTTP ${r.status}).`);
+        setStatus(
+          r.status === 401
+            ? "sign in to save maps"
+            : r.status === 503
+              ? "maps need Supabase"
+              : `Could not load your maps (HTTP ${r.status}).`,
+        );
         setMaps([]);
         return;
       }
       setMaps((await r.json()) as SavedMap[]);
       setStatus(null);
     } catch {
-      setStatus('Could not load your maps.');
+      setStatus("Could not load your maps.");
     }
   }, []);
 
@@ -486,9 +569,18 @@ export function CopControl({
     const overlayOpacity = useImagery.getState().overlayOpacity;
     return {
       viewport: viewer ? readViewport(viewer) : null,
-      layers: registry.list().filter((l) => registry.isEnabled(l.id)).map((l) => l.id),
+      layers: registry
+        .list()
+        .filter((l) => registry.isEnabled(l.id))
+        .map((l) => l.id),
       imagery: overlay
-        ? { provider: overlay.provider, layer: overlay.layer, date: overlay.date, maxZ: overlay.maxZ, opacity: overlayOpacity }
+        ? {
+            provider: overlay.provider,
+            layer: overlay.layer,
+            date: overlay.date,
+            maxZ: overlay.maxZ,
+            opacity: overlayOpacity,
+          }
         : null,
       selection: useSelection.getState().selectedEntityId,
       filters: [...useFilters.getState().clauses],
@@ -506,13 +598,23 @@ export function CopControl({
         else if (!want.has(l.id) && on) registry.disable(l.id);
       }
       // Imagery overlay.
-      setOverlay(st.imagery ? { provider: st.imagery.provider, layer: st.imagery.layer, date: st.imagery.date, maxZ: st.imagery.maxZ } : null);
+      setOverlay(
+        st.imagery
+          ? {
+              provider: st.imagery.provider,
+              layer: st.imagery.layer,
+              date: st.imagery.date,
+              maxZ: st.imagery.maxZ,
+            }
+          : null,
+      );
       if (st.imagery) setOverlayOpacity(st.imagery.opacity);
       // Filters: clear then re-apply each saved clause (no bulk setter exists;
       // toggleClause is idempotent from an empty base).
       const filters = useFilters.getState();
       filters.clear();
-      for (const c of st.filters) filters.toggleClause(c.facet, c.value, c.mode);
+      for (const c of st.filters)
+        filters.toggleClause(c.facet, c.value, c.mode);
       // Selection.
       useSelection.getState().select(st.selection ?? null);
       // Camera last, so the view lands on the restored picture.
@@ -522,22 +624,28 @@ export function CopControl({
   );
 
   const onSave = useCallback(async () => {
-    const name = window.prompt('Save current view as map. Name:');
+    const name = window.prompt("Save current view as map. Name:");
     if (!name) return;
     try {
-      const r = await apiFetch('/api/maps', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const r = await apiFetch("/api/maps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, state: serializeState() }),
       });
       if (!r.ok) {
-        setStatus(r.status === 401 ? 'sign in to save' : r.status === 503 ? 'maps need Supabase' : `Could not save the map (HTTP ${r.status}).`);
+        setStatus(
+          r.status === 401
+            ? "sign in to save"
+            : r.status === 503
+              ? "maps need Supabase"
+              : `Could not save the map (HTTP ${r.status}).`,
+        );
         return;
       }
-      setStatus('saved');
+      setStatus("saved");
       await refreshList();
     } catch {
-      setStatus('Could not save the map.');
+      setStatus("Could not save the map.");
     }
   }, [serializeState, refreshList]);
 
@@ -550,9 +658,9 @@ export function CopControl({
           return;
         }
         restoreState(((await r.json()) as SavedMap).state);
-        setStatus('loaded');
+        setStatus("loaded");
       } catch {
-        setStatus('Could not load the map.');
+        setStatus("Could not load the map.");
       }
     },
     [restoreState],
@@ -568,11 +676,13 @@ export function CopControl({
   const onDelete = useCallback(
     async (id: string) => {
       try {
-        await apiFetch(`/api/maps/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        await apiFetch(`/api/maps/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+        });
         if (followingId === id) stopFollow();
         await refreshList();
       } catch {
-        setStatus('Could not delete the map.');
+        setStatus("Could not delete the map.");
       }
     },
     [followingId, refreshList, stopFollow],
@@ -582,7 +692,9 @@ export function CopControl({
     (id: string) => {
       if (!viewer) return;
       stopFollow();
-      const ws = openAuthedWebSocket(`${wsBase()}/ws/cop?map=${encodeURIComponent(id)}`);
+      const ws = openAuthedWebSocket(
+        `${wsBase()}/ws/cop?map=${encodeURIComponent(id)}`,
+      );
       wsRef.current = ws;
       setFollowingId(id);
       // Lead: broadcast this camera on move (debounced via Cesium's own change
@@ -590,14 +702,14 @@ export function CopControl({
       const onCamChanged = () => {
         if (applyingRef.current || ws.readyState !== WebSocket.OPEN) return;
         const vp = readViewport(viewer);
-        if (vp) ws.send(JSON.stringify({ kind: 'viewport', ...vp }));
+        if (vp) ws.send(JSON.stringify({ kind: "viewport", ...vp }));
       };
       viewer.camera.changed.addEventListener(onCamChanged);
       // Follower: apply incoming viewport deltas instantly (no slew).
       ws.onmessage = (ev) => {
         try {
-          const msg = JSON.parse(typeof ev.data === 'string' ? ev.data : '');
-          if (msg?.kind === 'viewport' && viewer && !viewer.isDestroyed()) {
+          const msg = JSON.parse(typeof ev.data === "string" ? ev.data : "");
+          if (msg?.kind === "viewport" && viewer && !viewer.isDestroyed()) {
             applyingRef.current = true;
             applyViewport(viewer, msg as CopViewport, true);
             // Release the echo guard after the change settles.
@@ -608,7 +720,8 @@ export function CopControl({
         }
       };
       ws.onclose = () => {
-        if (!viewer.isDestroyed()) viewer.camera.changed.removeEventListener(onCamChanged);
+        if (!viewer.isDestroyed())
+          viewer.camera.changed.removeEventListener(onCamChanged);
         if (wsRef.current === ws) {
           wsRef.current = null;
           setFollowingId(null);
@@ -625,14 +738,23 @@ export function CopControl({
       {open && (
         <div className="mono text-[10px] w-[212px] max-w-[92vw] border border-line rounded-sm bg-bg-1/95 text-txt-1 shadow-xl p-2 flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <span className="font-label uppercase tracking-[0.7px] text-txt-0 text-[10px]">Shared COP</span>
-            <button type="button" className="text-txt-2 hover:text-txt-0 px-1" onClick={onSave} title="Save current view as a named map">
+            <span className="font-label uppercase tracking-[0.7px] text-txt-0 text-[10px]">
+              Shared COP
+            </span>
+            <button
+              type="button"
+              className="text-txt-2 hover:text-txt-0 px-1"
+              onClick={onSave}
+              title="Save current view as a named map"
+            >
               + Save
             </button>
           </div>
           {status && <div className="text-txt-2 text-[10px]">{status}</div>}
           <div className="flex flex-col gap-0.5 max-h-[180px] overflow-auto">
-            {maps.length === 0 && <div className="text-txt-2 text-[10px] py-1">no saved maps</div>}
+            {maps.length === 0 && (
+              <div className="text-txt-2 text-[10px] py-1">no saved maps</div>
+            )}
             {maps.map((m) => (
               <div key={m.id} className="flex items-center gap-1 group">
                 <button
@@ -645,11 +767,17 @@ export function CopControl({
                 </button>
                 <button
                   type="button"
-                  className={`px-1 py-0.5 rounded-sm border ${followingId === m.id ? 'border-accent-line text-accent' : 'border-line-2 text-txt-2 hover:text-txt-0'}`}
-                  onClick={() => (followingId === m.id ? stopFollow() : startFollow(m.id))}
-                  title={followingId === m.id ? 'Stop following this map' : 'Follow this map live (your view tracks the lead)'}
+                  className={`px-1 py-0.5 rounded-sm border ${followingId === m.id ? "border-accent-line text-accent" : "border-line-2 text-txt-2 hover:text-txt-0"}`}
+                  onClick={() =>
+                    followingId === m.id ? stopFollow() : startFollow(m.id)
+                  }
+                  title={
+                    followingId === m.id
+                      ? "Stop following this map"
+                      : "Follow this map live (your view tracks the lead)"
+                  }
                 >
-                  {followingId === m.id ? '◉ live' : 'follow'}
+                  {followingId === m.id ? "◉ live" : "follow"}
                 </button>
                 <button
                   type="button"
@@ -669,9 +797,9 @@ export function CopControl({
         type="button"
         title="Shared common operational picture (save, load, or follow a named map)"
         onClick={() => setOpen((v) => !v)}
-        className={`mono text-[10px] px-2 py-1 border rounded-sm bg-bg-1/90 ${followingId ? 'border-accent-line text-accent' : 'border-line text-txt-1 hover:border-accent-line hover:text-accent'}`}
+        className={`mono text-[10px] px-2 py-1 border rounded-sm bg-bg-1/90 ${followingId ? "border-accent-line text-accent" : "border-line text-txt-1 hover:border-accent-line hover:text-accent"}`}
       >
-        {followingId ? '◉ COP' : '⊞ COP'}
+        {followingId ? "◉ COP" : "⊞ COP"}
       </button>
     </div>
   );
@@ -680,7 +808,7 @@ export function CopControl({
 // WS origin for the same host the page is served from (the API is reverse-proxied
 // onto the same origin in every deployment), choosing ws/wss off the page scheme.
 function wsBase(): string {
-  return backendWsUrl('/').replace(/\/$/, '');
+  return backendWsUrl("/").replace(/\/$/, "");
 }
 
 // "You're not signed in" affordance. On the hosted backend every data endpoint
@@ -698,12 +826,16 @@ const FEED_FRESH_MS = 60_000;
 // is on (the single-box docker default), so the compute/LLM endpoints are served
 // to anyone. Dismissible per-browser — the point is a one-time "you're running
 // open" heads-up, not a nag. An operator who wanted auth sets API_KEY/Supabase.
-const OPEN_MODE_DISMISS_KEY = 'velocity.openModeDismissed';
+const OPEN_MODE_DISMISS_KEY = "velocity.openModeDismissed";
 
-export function OpenModeBanner({ open }: { open: boolean }): JSX.Element | null {
+export function OpenModeBanner({
+  open,
+}: {
+  open: boolean;
+}): JSX.Element | null {
   const [dismissed, setDismissed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(OPEN_MODE_DISMISS_KEY) === '1';
+      return localStorage.getItem(OPEN_MODE_DISMISS_KEY) === "1";
     } catch {
       return false;
     }
@@ -712,7 +844,7 @@ export function OpenModeBanner({ open }: { open: boolean }): JSX.Element | null 
   const close = (): void => {
     setDismissed(true);
     try {
-      localStorage.setItem(OPEN_MODE_DISMISS_KEY, '1');
+      localStorage.setItem(OPEN_MODE_DISMISS_KEY, "1");
     } catch {
       /* storage disabled — banner just reappears next load */
     }
@@ -720,11 +852,13 @@ export function OpenModeBanner({ open }: { open: boolean }): JSX.Element | null 
   return (
     <div className="map-banner flex justify-center px-3 pointer-events-none">
       <div className="pointer-events-auto flex items-center gap-2 bg-bg-1/95 border border-warn rounded-sm px-3 py-1.5 shadow-lg max-w-xl">
-        <span className="mono text-[10px] uppercase tracking-[0.6px] text-warn">Open mode</span>
+        <span className="mono text-[10px] uppercase tracking-[0.6px] text-warn">
+          Open mode
+        </span>
         <span className="text-[11px] text-txt-2 leading-snug">
           Compute/LLM endpoints are served without authentication (keyless +
-          ALLOW_UNAUTHENTICATED). Fine for a trusted local box; set API_KEY or Supabase
-          before exposing it.
+          ALLOW_UNAUTHENTICATED). Fine for a trusted local box; set API_KEY or
+          Supabase before exposing it.
         </span>
         <button
           type="button"
@@ -742,12 +876,16 @@ export function OpenModeBanner({ open }: { open: boolean }): JSX.Element | null 
 export function AuthNotice(): JSX.Element | null {
   const { user, loading } = useAuth();
   const feeds = useFeeds((s) => s.feeds);
-  if (loading || user || !isSupabaseConfigured || !backendRejectedAuth()) return null;
+  if (loading || user || !isSupabaseConfigured || !backendRejectedAuth())
+    return null;
 
   // Live data IS present when at least one feed has reported a recent fix.
   const now = Date.now();
   const hasLiveData = Object.values(feeds).some(
-    (f) => f.status === 'green' && f.lastSeen !== undefined && now - f.lastSeen < FEED_FRESH_MS,
+    (f) =>
+      f.status === "green" &&
+      f.lastSeen !== undefined &&
+      now - f.lastSeen < FEED_FRESH_MS,
   );
 
   // Data is flowing — don't claim the globe is blank, and don't put an account
@@ -762,15 +900,17 @@ export function AuthNotice(): JSX.Element | null {
   return (
     <div className="absolute inset-x-0 top-10 z-(--z-dock) flex justify-center px-3 pointer-events-none">
       <div className="pointer-events-auto bg-bg-1/95 border border-accent-line rounded-md px-4 py-3 shadow-xl max-w-sm text-center">
-        <p className="text-txt-0 text-[13px] font-semibold">Sign in to load live data</p>
+        <p className="text-txt-0 text-[13px] font-semibold">
+          Sign in to load live data
+        </p>
         <p className="text-txt-2 text-[11px] mt-1 leading-snug">
-          Live aircraft, vessels &amp; intel need an account. The globe stays blank until you sign
-          in.
+          Live aircraft, vessels &amp; intel need an account. The globe stays
+          blank until you sign in.
         </p>
         <Link
           to="/login"
           className="inline-block mt-2.5 px-3 py-1 rounded-sm text-[12px] font-medium"
-          style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
+          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
         >
           Sign in →
         </Link>
@@ -783,7 +923,13 @@ export function AuthNotice(): JSX.Element | null {
 // over the globe (not a cramped rail tab). Targeting = full-width bottom dock
 // (the F2T2EA board finally gets real width); Tasking = a tall left instrument
 // dock; FMV = a centered sensor window. Closing returns to the live globe.
-export function ModeSurface({ viewer, registry }: { viewer: Cesium.Viewer | null; registry: LayerRegistry }): JSX.Element | null {
+export function ModeSurface({
+  viewer,
+  registry,
+}: {
+  viewer: Cesium.Viewer | null;
+  registry: LayerRegistry;
+}): JSX.Element | null {
   const mode = useUiMode((s) => s.mode);
   const setMode = useUiMode((s) => s.setMode);
   if (!mode) return null;
@@ -791,32 +937,32 @@ export function ModeSurface({ viewer, registry }: { viewer: Cesium.Viewer | null
   // live --rail-left-w var (published by ConsoleShell) + a 10px gap, so dragging
   // the rail no longer under-/over-laps the workspace (design §4 grammar #1). fmv
   // is centered and rail-independent.
-  const railLeft = 'calc(var(--rail-left-w, 296px) + 10px)';
+  const railLeft = "calc(var(--rail-left-w, 296px) + 10px)";
   const cfg: Record<
     NonNullable<UiMode>,
     { box: string; title: string; node: ReactNode; railDocked: boolean }
   > = {
     targeting: {
-      box: 'right-3 top-12 bottom-0',
-      title: 'Targeting · F2T2EA kill chain',
+      box: "right-3 top-12 bottom-0",
+      title: "Targeting · F2T2EA kill chain",
       node: <TargetKanbanPanel viewer={viewer} />,
       railDocked: true,
     },
     tasking: {
-      box: 'top-12 bottom-3 w-[380px] max-w-[92vw]',
-      title: 'Satellite Tasking',
+      box: "top-12 bottom-3 w-[380px] max-w-[92vw]",
+      title: "Satellite Tasking",
       node: <TaskingPanel viewer={viewer} />,
       railDocked: true,
     },
     fmv: {
-      box: 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] max-w-[94vw] h-[470px] max-h-[88vh]',
-      title: 'FMV · Notional sensor',
+      box: "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] max-w-[94vw] h-[470px] max-h-[88vh]",
+      title: "FMV · Notional sensor",
       node: <FmvPanel viewer={viewer} />,
       railDocked: false,
     },
     cop: {
-      box: 'top-12 bottom-3 w-[380px] max-w-[92vw]',
-      title: 'COP Editor · MIL-STD-2525',
+      box: "top-12 bottom-3 w-[380px] max-w-[92vw]",
+      title: "COP Editor · MIL-STD-2525",
       node: <CopEditor registry={registry} />,
       railDocked: true,
     },
@@ -825,10 +971,15 @@ export function ModeSurface({ viewer, registry }: { viewer: Cesium.Viewer | null
   return (
     <div
       className={`on-dark absolute z-(--z-overlay) flex flex-col border border-line-2 rounded-md shadow-2xl overflow-hidden ${c.box}`}
-      style={{ background: 'rgba(9,12,18,0.97)', ...(c.railDocked && { left: railLeft }) }}
+      style={{
+        background: "rgba(9,12,18,0.97)",
+        ...(c.railDocked && { left: railLeft }),
+      }}
     >
       <div className="flex items-center justify-between px-3 h-9 flex-none border-b border-line-2 bg-bg-1">
-        <span className="font-label text-[12px] tracking-[0.9px] uppercase text-txt-0">{c.title}</span>
+        <span className="font-label text-[12px] tracking-[0.9px] uppercase text-txt-0">
+          {c.title}
+        </span>
         <button
           type="button"
           onClick={() => setMode(null)}

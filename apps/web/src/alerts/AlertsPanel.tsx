@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useRef, useState, memo } from 'react';
-import type * as Cesium from 'cesium';
-import { useAlerts } from '../state/stores.js';
-import { slewToEntity } from '../globe/camera.js';
-import { SectionLabel, Badge, Btn, type BadgeTone } from '../shell/instruments.js';
-import type { Alert } from '@osint/shared';
-import { Icon } from '../normal/Icon.js';
-import { dict } from '../shell/safeKeys.js';
+import { useEffect, useMemo, useRef, useState, memo } from "react";
+import type * as Cesium from "cesium";
+import { useAlerts } from "../state/stores.js";
+import { slewToEntity } from "../globe/camera.js";
+import {
+  SectionLabel,
+  Badge,
+  Btn,
+  type BadgeTone,
+} from "../shell/instruments.js";
+import type { Alert } from "@osint/shared";
+import { Icon } from "../normal/Icon.js";
+import { dict } from "../shell/safeKeys.js";
 
 interface Props {
   open: boolean;
@@ -16,43 +21,47 @@ interface Props {
 // Severity → <Badge> tone. critical/high read as alert, medium as warn, low and
 // info stay neutral so they don't collide with the teal selection accent.
 const SEV_BADGE: Record<string, BadgeTone> = {
-  critical: 'alert',
-  high: 'alert',
-  medium: 'warn',
-  low: 'neutral',
-  info: 'neutral',
+  critical: "alert",
+  high: "alert",
+  medium: "warn",
+  low: "neutral",
+  info: "neutral",
 };
 
 // Severity → left accent bar colour (the 2px rail on each row).
 const SEV_BAR: Record<string, string> = {
-  critical: 'var(--alert)',
-  high: 'var(--alert)',
-  medium: 'var(--warn)',
-  low: 'var(--sev-low)',
-  info: 'var(--txt-2)',
+  critical: "var(--alert)",
+  high: "var(--alert)",
+  medium: "var(--warn)",
+  low: "var(--sev-low)",
+  info: "var(--txt-2)",
 };
 
 // Severity → header-summary count colour.
 const SEV_LABEL: Record<string, string> = {
-  critical: 'text-alert',
-  high: 'text-alert',
-  medium: 'text-warn',
-  low: 'text-(--sev-low)',
-  info: 'text-txt-2',
+  critical: "text-alert",
+  high: "text-alert",
+  medium: "text-warn",
+  low: "text-(--sev-low)",
+  info: "text-txt-2",
 };
 
 const RULE_LABEL: Record<string, string> = {
-  emergency_squawk: 'EMERGENCY SQUAWK',
-  proximity_mil_vessel: 'MIL ↔ VESSEL',
-  major_quake: 'MAJOR QUAKE',
-  ais_gap_in_aoi: 'AIS GAP IN AOI',
-  mil_in_aoi: 'MIL IN AOI',
+  emergency_squawk: "EMERGENCY SQUAWK",
+  proximity_mil_vessel: "MIL ↔ VESSEL",
+  major_quake: "MAJOR QUAKE",
+  ais_gap_in_aoi: "AIS GAP IN AOI",
+  mil_in_aoi: "MIL IN AOI",
 };
 
 // Full alerts panel — slide-in from the right, sits above the EntityPanel
 // rail. Lists every alert in the live buffer with severity, rule, message,
 // confidence, slew-to. Operator can scroll the full history (≤500 buffered).
-export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | null {
+export function AlertsPanel({
+  open,
+  onClose,
+  viewer,
+}: Props): JSX.Element | null {
   const alerts = useAlerts((s) => s.alerts);
   const clear = useAlerts((s) => s.clear);
   const [filterSev, setFilterSev] = useState<string | null>(null);
@@ -65,11 +74,11 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         onClose();
         return;
       }
-      if (e.key !== 'Tab') return;
+      if (e.key !== "Tab") return;
       const dialog = dialogRef.current;
       if (!dialog) return;
       // Standard focusable-elements selector — must be in the DOM, not
@@ -78,7 +87,7 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
         'a[href], area[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), iframe, object, embed, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
       const focusables = Array.from(
         dialog.querySelectorAll<HTMLElement>(selector),
-      ).filter((el) => !el.hasAttribute('disabled') && el.tabIndex !== -1);
+      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1);
       if (focusables.length === 0) return;
       const first = focusables[0]!;
       const last = focusables[focusables.length - 1]!;
@@ -95,8 +104,8 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
         }
       }
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   // Focus trap: focus close button on open, restore focus on close.
@@ -111,7 +120,7 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
     return () => {
       cancelAnimationFrame(id);
       const prev = previouslyFocusedRef.current;
-      if (prev && typeof prev.focus === 'function') {
+      if (prev && typeof prev.focus === "function") {
         prev.focus();
       }
       previouslyFocusedRef.current = null;
@@ -129,7 +138,10 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
       }),
     [alerts, filterSev, filterRule],
   );
-  const ruleKeys = useMemo(() => Array.from(new Set(alerts.map((a) => a.ruleId))), [alerts]);
+  const ruleKeys = useMemo(
+    () => Array.from(new Set(alerts.map((a) => a.ruleId))),
+    [alerts],
+  );
   const sevCounts = useMemo(() => {
     const c = dict<number>();
     for (const a of alerts) c[a.severity] = (c[a.severity] ?? 0) + 1;
@@ -157,12 +169,14 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
         aria-label="Alerts"
         style={{
           boxShadow:
-            'inset 1px 0 0 rgba(0,0,0,0.5), inset -1px 0 0 rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)',
+            "inset 1px 0 0 rgba(0,0,0,0.5), inset -1px 0 0 rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)",
         }}
       >
         <header className="px-4 py-3 border-b border-line-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="mono text-[11px] tracking-[1px] uppercase text-txt-0">Alerts</div>
+            <div className="mono text-[11px] tracking-[1px] uppercase text-txt-0">
+              Alerts
+            </div>
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5">
               <span className="mono text-[10px] tracking-[0.4px] uppercase text-txt-3 tabular-nums">
                 {alerts.length} TOTAL
@@ -170,7 +184,7 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
               {Object.entries(sevCounts).map(([sev, n]) => (
                 <span
                   key={sev}
-                  className={`mono text-[10px] tracking-[0.4px] uppercase tabular-nums ${SEV_LABEL[sev] ?? 'text-txt-3'}`}
+                  className={`mono text-[10px] tracking-[0.4px] uppercase tabular-nums ${SEV_LABEL[sev] ?? "text-txt-3"}`}
                 >
                   {sev} {n}
                 </span>
@@ -187,29 +201,38 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
               onClick={onClose}
               className="mono text-[11px] px-2 py-1 border border-line-2 bg-bg-2 rounded-sm text-txt-1 hover:border-accent-line hover:text-accent transition-colors"
               aria-label="Close"
-            ><Icon name="x" className="w-3 h-3" /></button>
+            >
+              <Icon name="x" className="w-3 h-3" />
+            </button>
           </div>
         </header>
 
         <div className="px-4 py-2.5 border-b border-line-2 flex flex-wrap items-center gap-1">
-          <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mr-1">sev</span>
-          {['critical', 'high', 'medium', 'low'].map((s) => (
+          <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 mr-1">
+            sev
+          </span>
+          {["critical", "high", "medium", "low"].map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setFilterSev((cur) => (cur === s ? null : s))}
               className={`mono text-[10px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
                 filterSev === s
-                  ? 'border-accent-line bg-accent-dim text-accent'
-                  : 'border-line text-txt-3 hover:border-accent-line hover:text-txt-1'
+                  ? "border-accent-line bg-accent-dim text-accent"
+                  : "border-line text-txt-3 hover:border-accent-line hover:text-txt-1"
               }`}
               aria-pressed={filterSev === s}
             >
-              {s} <span className="tabular-nums text-txt-2">{sevCounts[s] ?? 0}</span>
+              {s}{" "}
+              <span className="tabular-nums text-txt-2">
+                {sevCounts[s] ?? 0}
+              </span>
             </button>
           ))}
           {ruleKeys.length > 0 && (
-            <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 ml-2 mr-1">rule</span>
+            <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-3 ml-2 mr-1">
+              rule
+            </span>
           )}
           {ruleKeys.map((r) => (
             <button
@@ -218,8 +241,8 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
               onClick={() => setFilterRule((cur) => (cur === r ? null : r))}
               className={`mono text-[10px] tracking-[0.4px] uppercase px-1.5 py-0.5 border rounded-sm transition-colors ${
                 filterRule === r
-                  ? 'border-accent-line bg-accent-dim text-accent'
-                  : 'border-line text-txt-3 hover:border-accent-line hover:text-txt-1'
+                  ? "border-accent-line bg-accent-dim text-accent"
+                  : "border-line text-txt-3 hover:border-accent-line hover:text-txt-1"
               }`}
               aria-pressed={filterRule === r}
             >
@@ -232,8 +255,8 @@ export function AlertsPanel({ open, onClose, viewer }: Props): JSX.Element | nul
           {filtered.length === 0 ? (
             <p className="text-[10.5px] leading-snug text-txt-3 px-1 py-3 text-center">
               {alerts.length === 0
-                ? 'No alerts in buffer. Correlation rules fire when criteria match.'
-                : 'No alerts match the current filters.'}
+                ? "No alerts in buffer. Correlation rules fire when criteria match."
+                : "No alerts match the current filters."}
             </p>
           ) : (
             <>
@@ -276,10 +299,10 @@ const AlertCard = memo(function AlertCard({
     <article className="relative pl-3 pr-1 py-2.5">
       <span
         className="absolute left-0 top-0 bottom-0 w-[2px]"
-        style={{ background: SEV_BAR[a.severity] ?? 'var(--txt-2)' }}
+        style={{ background: SEV_BAR[a.severity] ?? "var(--txt-2)" }}
       />
       <div className="flex items-center justify-between gap-2">
-        <Badge tone={SEV_BADGE[a.severity] ?? 'neutral'}>{a.severity}</Badge>
+        <Badge tone={SEV_BADGE[a.severity] ?? "neutral"}>{a.severity}</Badge>
         <span className="mono text-[10px] tracking-[0.4px] uppercase tabular-nums text-txt-3">
           {RULE_LABEL[a.ruleId] ?? a.ruleId}
         </span>
@@ -289,9 +312,16 @@ const AlertCard = memo(function AlertCard({
         <Btn
           size="sm"
           onClick={() => {
-            if (viewer && a.geom?.type === 'Point') {
+            if (viewer && a.geom?.type === "Point") {
               const [lon, lat] = a.geom.coordinates as [number, number];
-              slewToEntity(viewer, a.contributingObservations?.[0], lon, lat, 300_000, 1.0);
+              slewToEntity(
+                viewer,
+                a.contributingObservations?.[0],
+                lon,
+                lat,
+                300_000,
+                1.0,
+              );
             }
           }}
         >

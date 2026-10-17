@@ -5,8 +5,8 @@
 // returned directly to the caller so the view can render them without a
 // second round trip.
 
-import { create } from 'zustand';
-import { apiFetch } from '../transport/http.js';
+import { create } from "zustand";
+import { apiFetch } from "../transport/http.js";
 
 export interface SchemaField {
   name: string;
@@ -17,7 +17,7 @@ export interface Dataset {
   id: string;
   name: string;
   description: string;
-  kind: 'raw' | 'derived';
+  kind: "raw" | "derived";
   schema: SchemaField[];
   created_at: string;
   updated_at: string;
@@ -55,19 +55,19 @@ export interface RowsPage {
 }
 
 export type StepType =
-  | 'select'
-  | 'rename'
-  | 'filter'
-  | 'derive'
-  | 'join'
-  | 'aggregate'
-  | 'union'
-  | 'sort'
-  | 'limit'
-  | 'dedup'
-  | 'cast'
-  | 'window'
-  | 'pivot';
+  | "select"
+  | "rename"
+  | "filter"
+  | "derive"
+  | "join"
+  | "aggregate"
+  | "union"
+  | "sort"
+  | "limit"
+  | "dedup"
+  | "cast"
+  | "window"
+  | "pivot";
 
 export interface TransformStep {
   type: StepType;
@@ -88,8 +88,8 @@ export interface Transform {
 export interface Build {
   id: string;
   transform_id: string | null;
-  scope: 'transform' | 'pipeline';
-  status: 'running' | 'succeeded' | 'failed';
+  scope: "transform" | "pipeline";
+  status: "running" | "succeeded" | "failed";
   started_at: string;
   finished_at: string | null;
   rows_out: number | null;
@@ -114,7 +114,7 @@ export interface Summary {
 
 export interface LineageNode {
   id: string;
-  type: 'dataset' | 'transform';
+  type: "dataset" | "transform";
   name: string;
   row_count?: number;
   kind?: string;
@@ -169,14 +169,14 @@ export interface Schedule {
 }
 
 export type CheckType =
-  | 'row_count_min'
-  | 'row_count_max'
-  | 'not_null'
-  | 'unique'
-  | 'column_exists'
-  | 'freshness'
-  | 'schema_contract';
-export type CheckSeverity = 'warn' | 'fail';
+  | "row_count_min"
+  | "row_count_max"
+  | "not_null"
+  | "unique"
+  | "column_exists"
+  | "freshness"
+  | "schema_contract";
+export type CheckSeverity = "warn" | "fail";
 
 export interface Check {
   id: string;
@@ -240,7 +240,8 @@ export interface DatasetDocs {
 
 // Discriminated result for mutations whose validation error the editor renders
 // inline (cycle/step 422s) instead of into the shared global `error` string.
-export type MutResult<T> = { ok: true; value: T } | { ok: false; error: string };
+export type MutResult<T> =
+  { ok: true; value: T } | { ok: false; error: string };
 
 export interface PreviewData {
   schema: SchemaField[];
@@ -255,30 +256,43 @@ export interface PreviewData {
 // (app/foundry/geo.py::to_feature_collection), kept so a plotted point still
 // traces back to its underlying row even after the 5000-feature cap.
 export interface GeoFeature {
-  type: 'Feature';
-  geometry: { type: 'Point'; coordinates: [number, number] };
+  type: "Feature";
+  geometry: { type: "Point"; coordinates: [number, number] };
   properties: Record<string, unknown> & { _idx: number };
 }
 
 export interface GeoFeatureCollection {
-  type: 'FeatureCollection';
+  type: "FeatureCollection";
   features: GeoFeature[];
 }
 
 export type GeoResult =
-  | { ok: true; lat_col: string; lon_col: string; count: number; features: GeoFeatureCollection }
+  | {
+      ok: true;
+      lat_col: string;
+      lon_col: string;
+      count: number;
+      features: GeoFeatureCollection;
+    }
   | { ok: false; reason: string };
 
 // ── SQL console ──────────────────────────────────────────────────────────────
 export type SqlResult =
-  | { ok: true; columns: string[]; rows: Array<Record<string, unknown>>; row_count: number; tables: Record<string, string> }
+  | {
+      ok: true;
+      columns: string[];
+      rows: Array<Record<string, unknown>>;
+      row_count: number;
+      tables: Record<string, string>;
+    }
   | { ok: false; error: string };
 
 // ── monitors ─────────────────────────────────────────────────────────────────
-export type MonitorTrigger = 'new_version' | 'row_condition' | 'check_failed' | 'build_failed';
-export type MonitorAction = 'alert' | 'llm' | 'both';
-export type MonitorLlmTier = 'fast' | 'reason';
-export type MonitorSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
+export type MonitorTrigger =
+  "new_version" | "row_condition" | "check_failed" | "build_failed";
+export type MonitorAction = "alert" | "llm" | "both";
+export type MonitorLlmTier = "fast" | "reason";
+export type MonitorSeverity = "info" | "low" | "medium" | "high" | "critical";
 
 export interface Monitor {
   id: string;
@@ -318,7 +332,7 @@ export interface MonitorEvent {
   detail: Record<string, unknown>;
 }
 
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
+const JSON_HEADERS = { "Content-Type": "application/json" };
 
 async function readJson<T>(r: Response): Promise<T> {
   return (await r.json()) as T;
@@ -351,7 +365,10 @@ interface FoundryState {
   loadSummary: () => Promise<void>;
   loadDatasets: () => Promise<void>;
   getDataset: (id: string) => Promise<Dataset | null>;
-  createDataset: (name: string, description?: string) => Promise<Dataset | null>;
+  createDataset: (
+    name: string,
+    description?: string,
+  ) => Promise<Dataset | null>;
   deleteDataset: (id: string) => Promise<boolean>;
   uploadDataset: (
     file: File,
@@ -362,11 +379,16 @@ interface FoundryState {
   uploadVersion: (
     id: string,
     file: File,
-    mode?: 'snapshot' | 'append',
+    mode?: "snapshot" | "append",
     opts?: { types?: Record<string, string>; cascade?: boolean },
   ) => Promise<(Dataset & { cascade_build?: Build }) | null>;
   rollbackDataset: (id: string, version: number) => Promise<Dataset | null>;
-  getDatasetRows: (id: string, version?: number, limit?: number, offset?: number) => Promise<RowsPage | null>;
+  getDatasetRows: (
+    id: string,
+    version?: number,
+    limit?: number,
+    offset?: number,
+  ) => Promise<RowsPage | null>;
   getDatasetVersions: (id: string) => Promise<DatasetVersion[]>;
   getDatasetStats: (id: string, version?: number) => Promise<ColumnStat[]>;
   getDeadLetter: (id: string, limit?: number) => Promise<DeadLetterEntry[]>;
@@ -386,7 +408,13 @@ interface FoundryState {
   }) => Promise<MutResult<Transform>>;
   updateTransform: (
     id: string,
-    body: { name: string; description?: string; inputs: string[]; output_name: string; steps: TransformStep[] },
+    body: {
+      name: string;
+      description?: string;
+      inputs: string[];
+      output_name: string;
+      steps: TransformStep[];
+    },
   ) => Promise<MutResult<Transform>>;
   deleteTransform: (id: string) => Promise<boolean>;
   // Preview an UNSAVED spec (editor form state) — POST /transforms/preview.
@@ -430,8 +458,15 @@ interface FoundryState {
   syncBinding: (id: string) => Promise<SyncResult | null>;
 
   loadSchedules: () => Promise<void>;
-  createSchedule: (body: { transform_id: string; interval_s: number; enabled?: boolean }) => Promise<Schedule | null>;
-  updateSchedule: (id: string, body: Partial<{ interval_s: number; enabled: boolean }>) => Promise<Schedule | null>;
+  createSchedule: (body: {
+    transform_id: string;
+    interval_s: number;
+    enabled?: boolean;
+  }) => Promise<Schedule | null>;
+  updateSchedule: (
+    id: string,
+    body: Partial<{ interval_s: number; enabled: boolean }>,
+  ) => Promise<Schedule | null>;
   deleteSchedule: (id: string) => Promise<boolean>;
 
   checks: Check[];
@@ -446,22 +481,38 @@ interface FoundryState {
   }) => Promise<Check | null>;
   updateCheck: (
     id: string,
-    body: Partial<{ name: string; type: CheckType; params: Record<string, unknown>; severity: CheckSeverity; enabled: boolean }>,
+    body: Partial<{
+      name: string;
+      type: CheckType;
+      params: Record<string, unknown>;
+      severity: CheckSeverity;
+      enabled: boolean;
+    }>,
   ) => Promise<Check | null>;
   deleteCheck: (id: string) => Promise<boolean>;
-  getCheckResults: (datasetId: string, version?: number) => Promise<CheckResult[]>;
+  getCheckResults: (
+    datasetId: string,
+    version?: number,
+  ) => Promise<CheckResult[]>;
 
   // POST /api/foundry/sql — read-only console over one or more datasets'
   // latest rows. Same HTTP-200-with-ok:false-on-authoring-error shape as geo;
   // null only on a transport failure.
-  runSql: (datasetIds: string[], query: string, maxRows?: number) => Promise<SqlResult | null>;
+  runSql: (
+    datasetIds: string[],
+    query: string,
+    maxRows?: number,
+  ) => Promise<SqlResult | null>;
 
   monitors: Monitor[];
   loadMonitors: (datasetId?: string) => Promise<void>;
   createMonitor: (body: MonitorInput) => Promise<Monitor | null>;
   updateMonitor: (id: string, body: MonitorInput) => Promise<Monitor | null>;
   deleteMonitor: (id: string) => Promise<boolean>;
-  loadMonitorEvents: (monitorId: string, limit?: number) => Promise<MonitorEvent[]>;
+  loadMonitorEvents: (
+    monitorId: string,
+    limit?: number,
+  ) => Promise<MonitorEvent[]>;
 }
 
 export const useFoundry = create<FoundryState>((set, get) => ({
@@ -482,21 +533,21 @@ export const useFoundry = create<FoundryState>((set, get) => ({
 
   loadSummary: async () => {
     try {
-      const r = await apiFetch('/api/foundry/summary');
+      const r = await apiFetch("/api/foundry/summary");
       if (r.ok) set({ summary: await readJson<Summary>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'summary: request failed' });
+      set({ error: "summary: request failed" });
     }
   },
 
   loadDatasets: async () => {
     try {
-      const r = await apiFetch('/api/foundry/datasets');
+      const r = await apiFetch("/api/foundry/datasets");
       if (r.ok) set({ datasets: await readJson<Dataset[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'datasets: request failed' });
+      set({ error: "datasets: request failed" });
     }
   },
 
@@ -507,15 +558,15 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'dataset: request failed' });
+      set({ error: "dataset: request failed" });
       return null;
     }
   },
 
   createDataset: async (name, description) => {
     try {
-      const r = await apiFetch('/api/foundry/datasets', {
-        method: 'POST',
+      const r = await apiFetch("/api/foundry/datasets", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({ name, description }),
       });
@@ -527,22 +578,27 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'create dataset: request failed' });
+      set({ error: "create dataset: request failed" });
       return null;
     }
   },
 
   deleteDataset: async (id) => {
     try {
-      const r = await apiFetch(`/api/foundry/datasets/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/foundry/datasets/${id}`, {
+        method: "DELETE",
+      });
       if (r.ok) {
-        set((s) => ({ datasets: s.datasets.filter((d) => d.id !== id), error: null }));
+        set((s) => ({
+          datasets: s.datasets.filter((d) => d.id !== id),
+          error: null,
+        }));
         return true;
       }
       set({ error: await detailOf(r) });
       return false;
     } catch {
-      set({ error: 'delete dataset: request failed' });
+      set({ error: "delete dataset: request failed" });
       return false;
     }
   },
@@ -550,12 +606,15 @@ export const useFoundry = create<FoundryState>((set, get) => ({
   uploadDataset: async (file, name, description, opts) => {
     try {
       const form = new FormData();
-      form.append('file', file);
-      form.append('name', name);
-      if (description) form.append('description', description);
+      form.append("file", file);
+      form.append("name", name);
+      if (description) form.append("description", description);
       if (opts?.types && Object.keys(opts.types).length)
-        form.append('types', JSON.stringify(opts.types));
-      const r = await apiFetch('/api/foundry/datasets/upload', { method: 'POST', body: form });
+        form.append("types", JSON.stringify(opts.types));
+      const r = await apiFetch("/api/foundry/datasets/upload", {
+        method: "POST",
+        body: form,
+      });
       if (r.ok) {
         const d = await readJson<Dataset & { auto_sync?: AutoSyncResult[] }>(r);
         set({ lastAutoSync: d.auto_sync ?? null });
@@ -565,20 +624,23 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'upload: request failed' });
+      set({ error: "upload: request failed" });
       return null;
     }
   },
 
-  uploadVersion: async (id, file, mode = 'snapshot', opts) => {
+  uploadVersion: async (id, file, mode = "snapshot", opts) => {
     try {
       const form = new FormData();
-      form.append('file', file);
-      form.append('mode', mode);
+      form.append("file", file);
+      form.append("mode", mode);
       if (opts?.types && Object.keys(opts.types).length)
-        form.append('types', JSON.stringify(opts.types));
-      if (opts?.cascade) form.append('cascade', 'true');
-      const r = await apiFetch(`/api/foundry/datasets/${id}/upload`, { method: 'POST', body: form });
+        form.append("types", JSON.stringify(opts.types));
+      if (opts?.cascade) form.append("cascade", "true");
+      const r = await apiFetch(`/api/foundry/datasets/${id}/upload`, {
+        method: "POST",
+        body: form,
+      });
       if (r.ok) {
         const d = await readJson<
           Dataset & { auto_sync?: AutoSyncResult[]; cascade_build?: Build }
@@ -590,7 +652,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'upload version: request failed' });
+      set({ error: "upload version: request failed" });
       return null;
     }
   },
@@ -598,7 +660,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
   rollbackDataset: async (id, version) => {
     try {
       const r = await apiFetch(`/api/foundry/datasets/${id}/rollback`, {
-        method: 'POST',
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({ version }),
       });
@@ -611,21 +673,26 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'rollback: request failed' });
+      set({ error: "rollback: request failed" });
       return null;
     }
   },
 
   getDatasetRows: async (id, version, limit = 50, offset = 0) => {
     try {
-      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-      if (version != null) params.set('version', String(version));
-      const r = await apiFetch(`/api/foundry/datasets/${id}/rows?${params.toString()}`);
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      });
+      if (version != null) params.set("version", String(version));
+      const r = await apiFetch(
+        `/api/foundry/datasets/${id}/rows?${params.toString()}`,
+      );
       if (r.ok) return readJson<RowsPage>(r);
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'rows: request failed' });
+      set({ error: "rows: request failed" });
       return null;
     }
   },
@@ -637,32 +704,34 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return [];
     } catch {
-      set({ error: 'versions: request failed' });
+      set({ error: "versions: request failed" });
       return [];
     }
   },
 
   getDatasetStats: async (id, version) => {
     try {
-      const params = version != null ? `?version=${version}` : '';
+      const params = version != null ? `?version=${version}` : "";
       const r = await apiFetch(`/api/foundry/datasets/${id}/stats${params}`);
       if (r.ok) return readJson<ColumnStat[]>(r);
       set({ error: await detailOf(r) });
       return [];
     } catch {
-      set({ error: 'stats: request failed' });
+      set({ error: "stats: request failed" });
       return [];
     }
   },
 
   getDeadLetter: async (id, limit = 100) => {
     try {
-      const r = await apiFetch(`/api/foundry/datasets/${id}/dead-letter?limit=${limit}`);
+      const r = await apiFetch(
+        `/api/foundry/datasets/${id}/dead-letter?limit=${limit}`,
+      );
       if (r.ok) return readJson<DeadLetterEntry[]>(r);
       set({ error: await detailOf(r) });
       return [];
     } catch {
-      set({ error: 'dead-letter: request failed' });
+      set({ error: "dead-letter: request failed" });
       return [];
     }
   },
@@ -674,7 +743,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'column-lineage: request failed' });
+      set({ error: "column-lineage: request failed" });
       return null;
     }
   },
@@ -686,7 +755,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'docs: request failed' });
+      set({ error: "docs: request failed" });
       return null;
     }
   },
@@ -698,25 +767,26 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'geo: request failed' });
+      set({ error: "geo: request failed" });
       return null;
     }
   },
 
   loadTransforms: async () => {
     try {
-      const r = await apiFetch('/api/foundry/transforms');
-      if (r.ok) set({ transforms: await readJson<Transform[]>(r), error: null });
+      const r = await apiFetch("/api/foundry/transforms");
+      if (r.ok)
+        set({ transforms: await readJson<Transform[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'transforms: request failed' });
+      set({ error: "transforms: request failed" });
     }
   },
 
   createTransform: async (body) => {
     try {
-      const r = await apiFetch('/api/foundry/transforms', {
-        method: 'POST',
+      const r = await apiFetch("/api/foundry/transforms", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
@@ -729,14 +799,14 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       // rendering — NOT pushed to the shared global `error`.
       return { ok: false, error: await detailOf(r) };
     } catch {
-      return { ok: false, error: 'create transform: request failed' };
+      return { ok: false, error: "create transform: request failed" };
     }
   },
 
   updateTransform: async (id, body) => {
     try {
       const r = await apiFetch(`/api/foundry/transforms/${id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
@@ -747,43 +817,48 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       }
       return { ok: false, error: await detailOf(r) };
     } catch {
-      return { ok: false, error: 'update transform: request failed' };
+      return { ok: false, error: "update transform: request failed" };
     }
   },
 
   deleteTransform: async (id) => {
     try {
-      const r = await apiFetch(`/api/foundry/transforms/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/foundry/transforms/${id}`, {
+        method: "DELETE",
+      });
       if (r.ok) {
-        set((s) => ({ transforms: s.transforms.filter((t) => t.id !== id), error: null }));
+        set((s) => ({
+          transforms: s.transforms.filter((t) => t.id !== id),
+          error: null,
+        }));
         return true;
       }
       set({ error: await detailOf(r) });
       return false;
     } catch {
-      set({ error: 'delete transform: request failed' });
+      set({ error: "delete transform: request failed" });
       return false;
     }
   },
 
   previewSpec: async (body) => {
     try {
-      const r = await apiFetch('/api/foundry/transforms/preview', {
-        method: 'POST',
+      const r = await apiFetch("/api/foundry/transforms/preview", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({ limit: 20, ...body }),
       });
       if (r.ok) return { ok: true, value: await readJson<PreviewData>(r) };
       return { ok: false, error: await detailOf(r) };
     } catch {
-      return { ok: false, error: 'preview: request failed' };
+      return { ok: false, error: "preview: request failed" };
     }
   },
 
   previewTransform: async (id, limit = 20) => {
     try {
       const r = await apiFetch(`/api/foundry/transforms/${id}/preview`, {
-        method: 'POST',
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({ limit }),
       });
@@ -791,14 +866,16 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'preview: request failed' });
+      set({ error: "preview: request failed" });
       return null;
     }
   },
 
   buildTransform: async (id) => {
     try {
-      const r = await apiFetch(`/api/foundry/transforms/${id}/build`, { method: 'POST' });
+      const r = await apiFetch(`/api/foundry/transforms/${id}/build`, {
+        method: "POST",
+      });
       if (r.ok) {
         const b = await readJson<Build>(r);
         await get().loadBuilds();
@@ -807,15 +884,15 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'build: request failed' });
+      set({ error: "build: request failed" });
       return null;
     }
   },
 
   buildPipeline: async (onlyStale = false) => {
     try {
-      const r = await apiFetch('/api/foundry/pipeline/build', {
-        method: 'POST',
+      const r = await apiFetch("/api/foundry/pipeline/build", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({ only_stale: onlyStale }),
       });
@@ -827,7 +904,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'build all: request failed' });
+      set({ error: "build all: request failed" });
       return null;
     }
   },
@@ -838,45 +915,49 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       if (r.ok) set({ builds: await readJson<Build[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'builds: request failed' });
+      set({ error: "builds: request failed" });
     }
   },
 
   loadLineage: async () => {
     try {
-      const r = await apiFetch('/api/foundry/lineage');
+      const r = await apiFetch("/api/foundry/lineage");
       if (r.ok) set({ lineage: await readJson<Lineage>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'lineage: request failed' });
+      set({ error: "lineage: request failed" });
     }
   },
 
   loadBindings: async () => {
     try {
-      const r = await apiFetch('/api/foundry/bindings');
+      const r = await apiFetch("/api/foundry/bindings");
       if (r.ok) set({ bindings: await readJson<Binding[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'bindings: request failed' });
+      set({ error: "bindings: request failed" });
     }
   },
 
   loadKinds: async () => {
     if (get().kinds.length) return; // static set — fetch once per session
     try {
-      const r = await apiFetch('/api/foundry/kinds');
-      if (r.ok) set({ kinds: (await readJson<{ kinds: string[] }>(r)).kinds, error: null });
+      const r = await apiFetch("/api/foundry/kinds");
+      if (r.ok)
+        set({
+          kinds: (await readJson<{ kinds: string[] }>(r)).kinds,
+          error: null,
+        });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'kinds: request failed' });
+      set({ error: "kinds: request failed" });
     }
   },
 
   createBinding: async (body) => {
     try {
-      const r = await apiFetch('/api/foundry/bindings', {
-        method: 'POST',
+      const r = await apiFetch("/api/foundry/bindings", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
@@ -888,7 +969,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'create binding: request failed' });
+      set({ error: "create binding: request failed" });
       return null;
     }
   },
@@ -896,7 +977,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
   updateBinding: async (id, body) => {
     try {
       const r = await apiFetch(`/api/foundry/bindings/${id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
@@ -908,29 +989,36 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'update binding: request failed' });
+      set({ error: "update binding: request failed" });
       return null;
     }
   },
 
   deleteBinding: async (id) => {
     try {
-      const r = await apiFetch(`/api/foundry/bindings/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/foundry/bindings/${id}`, {
+        method: "DELETE",
+      });
       if (r.ok) {
-        set((s) => ({ bindings: s.bindings.filter((b) => b.id !== id), error: null }));
+        set((s) => ({
+          bindings: s.bindings.filter((b) => b.id !== id),
+          error: null,
+        }));
         return true;
       }
       set({ error: await detailOf(r) });
       return false;
     } catch {
-      set({ error: 'delete binding: request failed' });
+      set({ error: "delete binding: request failed" });
       return false;
     }
   },
 
   syncBinding: async (id) => {
     try {
-      const r = await apiFetch(`/api/foundry/bindings/${id}/sync`, { method: 'POST' });
+      const r = await apiFetch(`/api/foundry/bindings/${id}/sync`, {
+        method: "POST",
+      });
       if (r.ok) {
         const res = await readJson<SyncResult>(r);
         await get().loadBindings();
@@ -939,25 +1027,25 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'sync: request failed' });
+      set({ error: "sync: request failed" });
       return null;
     }
   },
 
   loadSchedules: async () => {
     try {
-      const r = await apiFetch('/api/foundry/schedules');
+      const r = await apiFetch("/api/foundry/schedules");
       if (r.ok) set({ schedules: await readJson<Schedule[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'schedules: request failed' });
+      set({ error: "schedules: request failed" });
     }
   },
 
   createSchedule: async (body) => {
     try {
-      const r = await apiFetch('/api/foundry/schedules', {
-        method: 'POST',
+      const r = await apiFetch("/api/foundry/schedules", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
@@ -969,7 +1057,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'create schedule: request failed' });
+      set({ error: "create schedule: request failed" });
       return null;
     }
   },
@@ -977,7 +1065,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
   updateSchedule: async (id, body) => {
     try {
       const r = await apiFetch(`/api/foundry/schedules/${id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
@@ -989,22 +1077,27 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'update schedule: request failed' });
+      set({ error: "update schedule: request failed" });
       return null;
     }
   },
 
   deleteSchedule: async (id) => {
     try {
-      const r = await apiFetch(`/api/foundry/schedules/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/foundry/schedules/${id}`, {
+        method: "DELETE",
+      });
       if (r.ok) {
-        set((s) => ({ schedules: s.schedules.filter((sc) => sc.id !== id), error: null }));
+        set((s) => ({
+          schedules: s.schedules.filter((sc) => sc.id !== id),
+          error: null,
+        }));
         return true;
       }
       set({ error: await detailOf(r) });
       return false;
     } catch {
-      set({ error: 'delete schedule: request failed' });
+      set({ error: "delete schedule: request failed" });
       return false;
     }
   },
@@ -1015,14 +1108,14 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       if (r.ok) set({ checks: await readJson<Check[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'checks: request failed' });
+      set({ error: "checks: request failed" });
     }
   },
 
   createCheck: async (body) => {
     try {
-      const r = await apiFetch('/api/foundry/checks', {
-        method: 'POST',
+      const r = await apiFetch("/api/foundry/checks", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
@@ -1034,7 +1127,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'create check: request failed' });
+      set({ error: "create check: request failed" });
       return null;
     }
   },
@@ -1042,56 +1135,64 @@ export const useFoundry = create<FoundryState>((set, get) => ({
   updateCheck: async (id, body) => {
     try {
       const r = await apiFetch(`/api/foundry/checks/${id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
       if (r.ok) {
         const c = await readJson<Check>(r);
-        const datasetId = get().checks.find((x) => x.id === id)?.dataset_id ?? c.dataset_id;
+        const datasetId =
+          get().checks.find((x) => x.id === id)?.dataset_id ?? c.dataset_id;
         await get().loadChecks(datasetId);
         return c;
       }
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'update check: request failed' });
+      set({ error: "update check: request failed" });
       return null;
     }
   },
 
   deleteCheck: async (id) => {
     try {
-      const r = await apiFetch(`/api/foundry/checks/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/foundry/checks/${id}`, {
+        method: "DELETE",
+      });
       if (r.ok) {
-        set((s) => ({ checks: s.checks.filter((c) => c.id !== id), error: null }));
+        set((s) => ({
+          checks: s.checks.filter((c) => c.id !== id),
+          error: null,
+        }));
         return true;
       }
       set({ error: await detailOf(r) });
       return false;
     } catch {
-      set({ error: 'delete check: request failed' });
+      set({ error: "delete check: request failed" });
       return false;
     }
   },
 
   getCheckResults: async (datasetId, version) => {
     try {
-      const params = version != null ? `?version=${version}` : '';
-      const r = await apiFetch(`/api/foundry/datasets/${datasetId}/checks/results${params}`);
+      const params = version != null ? `?version=${version}` : "";
+      const r = await apiFetch(
+        `/api/foundry/datasets/${datasetId}/checks/results${params}`,
+      );
       if (r.ok) return readJson<CheckResult[]>(r);
       set({ error: await detailOf(r) });
       return [];
     } catch {
-      set({ error: 'check results: request failed' });
+      set({ error: "check results: request failed" });
       return [];
     }
   },
 
   runSql: async (datasetIds, query, maxRows) => {
     try {
-      const r = await apiFetch('/api/foundry/sql', {
-        method: 'POST',
+      const r = await apiFetch("/api/foundry/sql", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({
           dataset_ids: datasetIds,
@@ -1103,26 +1204,26 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'sql: request failed' });
+      set({ error: "sql: request failed" });
       return null;
     }
   },
 
   loadMonitors: async (datasetId) => {
     try {
-      const params = datasetId ? `?dataset_id=${datasetId}` : '';
+      const params = datasetId ? `?dataset_id=${datasetId}` : "";
       const r = await apiFetch(`/api/foundry/monitors${params}`);
       if (r.ok) set({ monitors: await readJson<Monitor[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'monitors: request failed' });
+      set({ error: "monitors: request failed" });
     }
   },
 
   createMonitor: async (body) => {
     try {
-      const r = await apiFetch('/api/foundry/monitors', {
-        method: 'POST',
+      const r = await apiFetch("/api/foundry/monitors", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
@@ -1134,7 +1235,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'create monitor: request failed' });
+      set({ error: "create monitor: request failed" });
       return null;
     }
   },
@@ -1142,7 +1243,7 @@ export const useFoundry = create<FoundryState>((set, get) => ({
   updateMonitor: async (id, body) => {
     try {
       const r = await apiFetch(`/api/foundry/monitors/${id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
@@ -1154,34 +1255,41 @@ export const useFoundry = create<FoundryState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'update monitor: request failed' });
+      set({ error: "update monitor: request failed" });
       return null;
     }
   },
 
   deleteMonitor: async (id) => {
     try {
-      const r = await apiFetch(`/api/foundry/monitors/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/foundry/monitors/${id}`, {
+        method: "DELETE",
+      });
       if (r.ok) {
-        set((s) => ({ monitors: s.monitors.filter((m) => m.id !== id), error: null }));
+        set((s) => ({
+          monitors: s.monitors.filter((m) => m.id !== id),
+          error: null,
+        }));
         return true;
       }
       set({ error: await detailOf(r) });
       return false;
     } catch {
-      set({ error: 'delete monitor: request failed' });
+      set({ error: "delete monitor: request failed" });
       return false;
     }
   },
 
   loadMonitorEvents: async (monitorId, limit = 100) => {
     try {
-      const r = await apiFetch(`/api/foundry/monitors/${monitorId}/events?limit=${limit}`);
+      const r = await apiFetch(
+        `/api/foundry/monitors/${monitorId}/events?limit=${limit}`,
+      );
       if (r.ok) return readJson<MonitorEvent[]>(r);
       set({ error: await detailOf(r) });
       return [];
     } catch {
-      set({ error: 'monitor events: request failed' });
+      set({ error: "monitor events: request failed" });
       return [];
     }
   },

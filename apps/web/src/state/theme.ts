@@ -6,22 +6,22 @@
 // This used to be a two-value light/dark flag. It is now the scheme id from
 // theme/schemes.ts — `dark` and `light` keep their names, so a persisted value
 // written by the old store still resolves.
-import { create } from 'zustand';
+import { create } from "zustand";
 
-import { isSchemeId, SCHEMES, type SchemeId } from '../theme/schemes.js';
+import { isSchemeId, SCHEMES, type SchemeId } from "../theme/schemes.js";
 
 /** @deprecated The old two-value name. Kept as an alias so callers that only
  *  care that this is "the theme" do not have to churn. */
 export type ThemeMode = SchemeId;
 
-const LS_KEY = 'velocity.theme';
+const LS_KEY = "velocity.theme";
 
 function read(): SchemeId {
   try {
     const v = localStorage.getItem(LS_KEY);
-    return isSchemeId(v) ? v : 'dark';
+    return isSchemeId(v) ? v : "dark";
   } catch {
-    return 'dark';
+    return "dark";
   }
 }
 

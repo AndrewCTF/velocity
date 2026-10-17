@@ -4,12 +4,12 @@ The Workflows app can reach OUT of the platform to an operator-run endpoint:
 call an HTTP API, fire a webhook, or command a drone / robot / device. Four
 blocks do this:
 
-| Block | Category | What it does |
-|-------|----------|--------------|
-| `op.http` | op (0–1 in) | HTTP request to any server; response becomes rows, or one request per input row. The universal in/out primitive. |
-| `control.webhook` | control | POST rows to a URL — batch (all rows) or per-row. |
-| `control.drone` | control | Command a drone/UAV via your ground-control server (auto-nav `goto`, plus takeoff/land/rtl/orbit/follow/arm/disarm/pause). |
-| `control.device` | control | Command any controllable item (relay, gimbal, PTZ camera, rover, siren…). |
+| Block             | Category    | What it does                                                                                                               |
+| ----------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `op.http`         | op (0–1 in) | HTTP request to any server; response becomes rows, or one request per input row. The universal in/out primitive.           |
+| `control.webhook` | control     | POST rows to a URL — batch (all rows) or per-row.                                                                          |
+| `control.drone`   | control     | Command a drone/UAV via your ground-control server (auto-nav `goto`, plus takeoff/land/rtl/orbit/follow/arm/disarm/pause). |
+| `control.device`  | control     | Command any controllable item (relay, gimbal, PTZ camera, rover, siren…).                                                  |
 
 The platform stays protocol-agnostic: a control block speaks the JSON envelope
 below to a **control server** that translates it to whatever your hardware
@@ -30,7 +30,7 @@ or a SITL (ArduPilot / PX4). Two ways to run it:
   shutdown, same as the AIS/ADS-B feeders. OFF by default — a bridge that
   auto-connects to a drone at boot is not implicit.
 - **Standalone.** `PORT=9010 MAVLINK_CONNECT=udpout:127.0.0.1:14550
-  python -m app.mavlink_bridge` (from `apps/api`).
+python -m app.mavlink_bridge` (from `apps/api`).
 
 Then point `control.drone.server_url` at `http://127.0.0.1:9010`.
 
@@ -54,7 +54,7 @@ server per the contract below.
 All safety plumbing is in `apps/api/app/workflows/control.py`:
 
 - **Preview never actuates.** In the editor's live preview, `control.*` blocks
-  and any unsafe `op.http` method (POST/PUT/PATCH/DELETE) run *dry* — the
+  and any unsafe `op.http` method (POST/PUT/PATCH/DELETE) run _dry_ — the
   envelope is built and returned so you can see exactly what would be sent, but
   no request leaves the box. GET/HEAD preview live (read-only). Only a real
   **run** actuates.
@@ -69,7 +69,7 @@ All safety plumbing is in `apps/api/app/workflows/control.py`:
   (BYO-compute posture). Localhost is never implicitly blocked — your control
   server is often on the same machine.
 - **Auth without secrets in the spec.** Every control block takes an `auth_env`
-  = the *name* of an environment variable holding a bearer token. The token is
+  = the _name_ of an environment variable holding a bearer token. The token is
   read at run time and sent as `Authorization: Bearer <token>`; only the env var
   name is stored in the saved workflow.
 - Same posture as `op.python`: this is a single-operator local tool, not a

@@ -34,7 +34,8 @@ export function markCrossed(
   now: number,
   marks: readonly PauseMark[],
 ): PauseMark | null {
-  if (!Number.isFinite(prev) || !Number.isFinite(now) || prev === now) return null;
+  if (!Number.isFinite(prev) || !Number.isFinite(now) || prev === now)
+    return null;
   const lo = Math.min(prev, now);
   const hi = Math.max(prev, now);
   // Nearest to the direction of travel, so a jump spanning several marks stops
@@ -53,8 +54,13 @@ export function markCrossed(
  * stops nine times in eight seconds and the operator turns the feature off,
  * which is worse than never having had it.
  */
-export function dedupeMarks(marks: readonly PauseMark[], minGapSec = 30): PauseMark[] {
-  const sorted = [...marks].filter((m) => Number.isFinite(m.t)).sort((a, b) => a.t - b.t);
+export function dedupeMarks(
+  marks: readonly PauseMark[],
+  minGapSec = 30,
+): PauseMark[] {
+  const sorted = [...marks]
+    .filter((m) => Number.isFinite(m.t))
+    .sort((a, b) => a.t - b.t);
   const out: PauseMark[] = [];
   for (const m of sorted) {
     const last = out[out.length - 1];

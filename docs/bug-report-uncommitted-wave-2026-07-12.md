@@ -18,20 +18,19 @@ assertions). `pnpm -r typecheck` green; eslint clean on the 3 changed FE files;
 `ruff check` clean; web unit tests 18/18 on the touched suites. The frontend
 fixes (#7–#10) are typechecked + lint-clean but NOT yet browser-verified.
 
-| # | File | Fix |
-|---|------|-----|
-| 1 | routes/evidence.py | `/blob` now forces `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff` + `Content-Security-Policy: default-src 'none'; sandbox` |
-| 2 | intel/evidence.py | `_ip_is_blocked` unwraps IPv4-mapped / 6to4 / Teredo IPv6 before the flag checks |
-| 3 | intel/evidence.py, case_export.py | manifest adds a real re-hashed `blob_verified`; report labels verified / ALTERED / MISSING off it, never stat-only presence |
-| 4 | intel/ontology_local.py | byte-cap prune excludes `prop='custody'` (both count and DELETE), mirroring the per-object cap |
-| 5 | routes/evidence.py, intel/evidence.py | blob read+hash and the 200 MB write moved off the event loop via `asyncio.to_thread` |
-| 6 | intel/evidence.py | per-content-hash `asyncio` lock serializes the get→upsert→custody section so concurrent identical captures log one `created` |
-| 7 | globe/GlobeToolbar.tsx | Move tool grabs a marker only within `GRAB_PX` screen pixels + horizon-occlusion test (zoom-aware; distant/back-of-globe markers ignored, panning restored) |
-| 8 | shell/FloatingPanel.tsx | drag/resize use `setPointerCapture` + `pointercancel` teardown; no more stuck-to-cursor / permanent `user-select:none` |
-| 9 | evidence/EvidencePanel.tsx | thumbnail re-checks `cancelled` after the blob await so no object-URL leak on unmount |
-| 10 | evidence/EvidencePanel.tsx | download defers `revokeObjectURL` (+ in-DOM anchor) so Firefox/Safari don't abort the save |
-| 11 | tests | clamp test asserts no un-clamped run survives; `openMode` test asserts the value `is True` |
-
+| #   | File                                  | Fix                                                                                                                                                         |
+| --- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | routes/evidence.py                    | `/blob` now forces `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff` + `Content-Security-Policy: default-src 'none'; sandbox`           |
+| 2   | intel/evidence.py                     | `_ip_is_blocked` unwraps IPv4-mapped / 6to4 / Teredo IPv6 before the flag checks                                                                            |
+| 3   | intel/evidence.py, case_export.py     | manifest adds a real re-hashed `blob_verified`; report labels verified / ALTERED / MISSING off it, never stat-only presence                                 |
+| 4   | intel/ontology_local.py               | byte-cap prune excludes `prop='custody'` (both count and DELETE), mirroring the per-object cap                                                              |
+| 5   | routes/evidence.py, intel/evidence.py | blob read+hash and the 200 MB write moved off the event loop via `asyncio.to_thread`                                                                        |
+| 6   | intel/evidence.py                     | per-content-hash `asyncio` lock serializes the get→upsert→custody section so concurrent identical captures log one `created`                                |
+| 7   | globe/GlobeToolbar.tsx                | Move tool grabs a marker only within `GRAB_PX` screen pixels + horizon-occlusion test (zoom-aware; distant/back-of-globe markers ignored, panning restored) |
+| 8   | shell/FloatingPanel.tsx               | drag/resize use `setPointerCapture` + `pointercancel` teardown; no more stuck-to-cursor / permanent `user-select:none`                                      |
+| 9   | evidence/EvidencePanel.tsx            | thumbnail re-checks `cancelled` after the blob await so no object-URL leak on unmount                                                                       |
+| 10  | evidence/EvidencePanel.tsx            | download defers `revokeObjectURL` (+ in-DOM anchor) so Firefox/Safari don't abort the save                                                                  |
+| 11  | tests                                 | clamp test asserts no un-clamped run survives; `openMode` test asserts the value `is True`                                                                  |
 
 Method: 8 parallel Opus "finder" agents, one lens each (backend correctness,
 security, new-UI React, modified-shell React, Cesium/globe invariants,
@@ -48,6 +47,7 @@ Two lenses (contracts, one backend pass) returned zero findings.
 ## Confirmed-by-multiple-finders / highest confidence
 
 ### 1. Case export certifies tampered evidence as "verified" — MEDIUM (3 finders independently)
+
 `apps/api/app/intel/case_export.py:181`, `apps/api/app/intel/evidence.py:567`
 
 `custody_manifest` sets each exhibit's `blob_present` from `blob_exists()` — a
@@ -72,6 +72,7 @@ stat.
 ## Security
 
 ### 2. Stored XSS via evidence `/blob` (attacker-controlled Content-Type, inline, no nosniff) — HIGH
+
 `apps/api/app/routes/evidence.py:272`
 
 The blob route returns the object's stored `media_type` verbatim
@@ -92,6 +93,7 @@ equivalent vector.
 `X-Content-Type-Options: nosniff`, or force a whitelisted/safe Content-Type.
 
 ### 3. SSRF guard bypass via IPv4-mapped IPv6 on the pinned 3.12 container — MEDIUM (version-dependent, NOT reproduced this turn)
+
 `apps/api/app/intel/evidence.py:282`
 
 `_ip_is_blocked` classifies resolved addresses purely via stdlib `ipaddress`
@@ -112,6 +114,7 @@ any non-`is_global` address explicitly.
 ## Backend correctness / durability
 
 ### 4. Byte-budget prune can delete append-only custody assertions — LOW severity tag, HIGH impact
+
 `apps/api/app/intel/ontology_local.py:604`
 
 The evidence wave guarantees `prop='custody'` events are the append-only legal
@@ -121,13 +124,14 @@ them (`AND prop!='custody'`). But the soft size cap `_maybe_enforce_size_cap`
 10% of **all** assertions with **no** `prop!='custody'` exclusion. Since an
 evidence object is captured once and never re-touched, its custody assertions
 carry the oldest `observed_at` and sort first under `ORDER BY observed_at ASC,
-id ASC` — so the chain-of-custody log is the *first* thing purged, silently
+id ASC` — so the chain-of-custody log is the _first_ thing purged, silently
 destroying the record the feature promises to keep.
 
 **Fix direction:** mirror the per-object cap's `AND prop!='custody'` exclusion
 in `_maybe_enforce_size_cap`.
 
 ### 5. Metadata/blob routes read + hash up to 200 MB synchronously on the event loop — MEDIUM
+
 `apps/api/app/routes/evidence.py:252` (and `:267-270`)
 
 `GET /api/evidence/{sha}` calls `verify_blob()`, which does `read_blob()`
@@ -141,6 +145,7 @@ invariant. Same blocking pattern in `GET .../blob` and the 200 MB `_write_blob`.
 `run_in_threadpool`.
 
 ### 6. Concurrent captures of identical bytes append duplicate "created" custody events — LOW
+
 `apps/api/app/intel/evidence.py:234`
 
 `capture_bytes` does `existing = await reg.get(obj_id)` — the `await` yields the
@@ -155,12 +160,13 @@ lock/uniqueness guard between the get and the upsert.
 ## Frontend (new UI substrate)
 
 ### 7. Move tool grabs the globally-nearest annotation with no distance threshold — MEDIUM
+
 `apps/web/src/globe/GlobeToolbar.tsx:152`
 
 The comment promises a "~40 km" angular threshold but it was never implemented.
 `best` is set to the nearest point-annotation and only compared via `d <
-best.d`; `if (best)` is true whenever *any* annotation exists. So with the Move
-tool active, a mouse-down + drag *anywhere* (e.g. panning over empty ocean)
+best.d`; `if (best)` is true whenever _any_ annotation exists. So with the Move
+tool active, a mouse-down + drag _anywhere_ (e.g. panning over empty ocean)
 grabs the single nearest marker — even one on another continent — disables
 camera rotate/translate, and `MOUSE_MOVE` teleports that marker to the drop
 point. Net: the globe can't be panned while Move is active, and annotation
@@ -170,6 +176,7 @@ positions get silently corrupted.
 capturing `dragId`.
 
 ### 8. FloatingPanel drag/resize leaks a `pointermove` listener and sticks to cursor — MEDIUM
+
 `apps/web/src/shell/FloatingPanel.tsx:54`
 
 `onDragDown`/`onResizeDown` register `pointermove`+`pointerup` on `window` and
@@ -183,6 +190,7 @@ unselectable). Present in both handlers.
 **Fix direction:** add `pointercancel` to teardown and/or use pointer capture.
 
 ### 9. `EvidenceThumb` leaks an object URL if unmounted during `r.blob()` await — LOW
+
 `apps/web/src/evidence/EvidencePanel.tsx:40`
 
 If the component unmounts (or `sha` changes) while suspended at `await
@@ -192,6 +200,7 @@ URL that is never revoked (the `if (!cancelled)` skips `setSrc` but not the
 allocation). Leak persists until reload.
 
 ### 10. Evidence download revokes the object URL synchronously after `a.click()` — LOW
+
 `apps/web/src/evidence/EvidencePanel.tsx:78`
 
 Creates a fresh object URL, `a.click()`, then `URL.revokeObjectURL(url)` in the
@@ -207,15 +216,17 @@ tick).
 ## Test integrity (weak assertions that protect nothing)
 
 ### 11a. Prompt-clamp test passes even if `_clamp_props` is a no-op — LOW
+
 `apps/api/app/routes/ai_selection.py:69`, `apps/api/tests/test_ai_selection.py:303`
 
 `test_selection_brief_clamps_long_string_props` sends `{"note": "y"*800}` and
-asserts `len(content) < len(long_val) + 200` (i.e. < 1000). The *unclamped*
+asserts `len(content) < len(long_val) + 200` (i.e. < 1000). The _unclamped_
 prompt is only ~832 chars, already < 1000 — so the assertion holds whether or
 not the clamp truncates. Removing the clamp or raising `_MAX_STRING_LEN` above
 800 still passes. Correct bound would be near `_MAX_STRING_LEN` (~600).
 
 ### 11b. `openMode` config test checks type only, not the deterministic value — LOW
+
 `apps/api/app/routes/config.py:48`, `apps/api/tests/test_config_route.py:35`
 
 Asserts only `isinstance(body["openMode"], bool)`. In the conftest env

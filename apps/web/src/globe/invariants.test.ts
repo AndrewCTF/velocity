@@ -2,13 +2,13 @@
 // Each test cites the decision it enforces (full history: docs/decisions.md).
 // A failure here means a sacred behavior regressed — fix the code, or revoke
 // the decision deliberately by changing BOTH the test and CLAUDE.md.
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
 
-const SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
-const read = (rel: string) => readFileSync(join(SRC, rel), 'utf8');
+const SRC = join(dirname(fileURLToPath(import.meta.url)), "..");
+const read = (rel: string) => readFileSync(join(SRC, rel), "utf8");
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -19,71 +19,76 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-describe('CLAUDE.md sacred behaviors (source-scan guards)', () => {
-  it('GlobeCanvas viewer opts keep requestRenderMode:true + maximumRenderTimeChange:0', () => {
+describe("CLAUDE.md sacred behaviors (source-scan guards)", () => {
+  it("GlobeCanvas viewer opts keep requestRenderMode:true + maximumRenderTimeChange:0", () => {
     // Decision 2026-06: requestRenderMode saves GPU; maximumRenderTimeChange 0
     // is what makes SampledPositionProperty interpolation play smoothly.
-    const s = read('globe/GlobeCanvas.tsx');
+    const s = read("globe/GlobeCanvas.tsx");
     expect(s).toMatch(/requestRenderMode:\s*true/);
     expect(s).toMatch(/maximumRenderTimeChange:\s*0[,\s]/);
   });
 
-  it('PollGeoJsonAdapter never calls removeAll (upsert-by-id)', () => {
+  it("PollGeoJsonAdapter never calls removeAll (upsert-by-id)", () => {
     // Decision 2026-06: removeAll()+add() re-creates entities every poll —
     // contacts blink and the motion model resets.
-    expect(read('globe/adapters/PollGeoJsonAdapter.ts')).not.toContain('.removeAll(');
+    expect(read("globe/adapters/PollGeoJsonAdapter.ts")).not.toContain(
+      ".removeAll(",
+    );
   });
 
-  it('AnnotationLayer never calls removeAll (upsert-by-id)', () => {
+  it("AnnotationLayer never calls removeAll (upsert-by-id)", () => {
     // Same invariant, different file. The annotation renderer did
     // removeAll() + re-add on EVERY store change, so one keystroke in the label
     // field (the panel fires update() per character) or one frame of a marker
     // drag destroyed and recreated every annotation entity. The rule had simply
     // never been extended past PollGeoJsonAdapter, which is why it went unseen.
-    expect(read('globe/AnnotationLayer.ts')).not.toContain('.removeAll(');
-    expect(read('globe/AnnotationLayer.ts')).toContain('getById');
+    expect(read("globe/AnnotationLayer.ts")).not.toContain(".removeAll(");
+    expect(read("globe/AnnotationLayer.ts")).toContain("getById");
   });
 
-  it('aircraft/vessel category styling keeps its SVG palette, no bare points', () => {
+  it("aircraft/vessel category styling keeps its SVG palette, no bare points", () => {
     // Decision: every contact renders as its category SVG icon, never a dot.
-    const s = read('globe/adapters/styles.ts');
+    const s = read("globe/adapters/styles.ts");
     const palette = [
-      '#facc15', // airliner
-      '#2dd4bf', // private
-      '#c084fc', // helicopter
-      '#93c5fd', // glider
-      '#f59e0b', // military
-      '#ef4444', // emergency / SAR / dark vessel
-      '#14b8a6', // cargo
-      '#d97706', // tanker
+      "#facc15", // airliner
+      "#2dd4bf", // private
+      "#c084fc", // helicopter
+      "#93c5fd", // glider
+      "#f59e0b", // military
+      "#ef4444", // emergency / SAR / dark vessel
+      "#14b8a6", // cargo
+      "#d97706", // tanker
     ];
-    for (const c of palette) expect(s, `missing category color ${c}`).toContain(c);
-    expect(s).not.toContain('PointGraphics');
+    for (const c of palette)
+      expect(s, `missing category color ${c}`).toContain(c);
+    expect(s).not.toContain("PointGraphics");
   });
 
-  it('HistoryPlayback interpolates between recorded fixes for both aircraft and vessel replay tracks (sanctioned, docs/decisions.md 2026-07-11)', () => {
+  it("HistoryPlayback interpolates between recorded fixes for both aircraft and vessel replay tracks (sanctioned, docs/decisions.md 2026-07-11)", () => {
     // Decision "Replay motion: interpolation between recorded fixes is
     // sanctioned (2026-07-11)": replay draws only RECORDED REAL fixes and
     // glides between them for both kinds — scoped away from the live-path
     // no-synthesis rule. This must fail loud if a future edit "fixes" replay
     // to teleport (swaps in a CallbackProperty/held position) for either
     // kind, before HistoryPlayback.test.ts's behavioral assertions even run.
-    const s = read('globe/HistoryPlayback.ts');
+    const s = read("globe/HistoryPlayback.ts");
     expect(s).toMatch(/new Cesium\.SampledPositionProperty\(\)/);
     expect(s).toMatch(/LinearApproximation/);
-    expect(s).not.toContain('CallbackProperty');
-    expect(s).not.toContain('ConstantPositionProperty');
+    expect(s).not.toContain("CallbackProperty");
+    expect(s).not.toContain("ConstantPositionProperty");
   });
 
-  it('every WebSocket is opened through openAuthedWebSocket()', () => {
+  it("every WebSocket is opened through openAuthedWebSocket()", () => {
     // Decision (CLAUDE.md Auth): raw sockets bypass auth. transport/http.ts is
     // the one place that constructs a WebSocket, carrying the credential in
     // Sec-WebSocket-Protocol rather than the URL (ASVS V14.2.1).
     for (const file of walk(SRC)) {
-      if (/\.test\.tsx?$/.test(file) || file.endsWith('transport/http.ts')) continue;
-      expect(readFileSync(file, 'utf8'), `${file}: new WebSocket outside openAuthedWebSocket()`).not.toContain(
-        'new WebSocket(',
-      );
+      if (/\.test\.tsx?$/.test(file) || file.endsWith("transport/http.ts"))
+        continue;
+      expect(
+        readFileSync(file, "utf8"),
+        `${file}: new WebSocket outside openAuthedWebSocket()`,
+      ).not.toContain("new WebSocket(");
     }
   });
 });
@@ -96,18 +101,23 @@ describe('CLAUDE.md sacred behaviors (source-scan guards)', () => {
 // and LayerRail's mission presets each enable a whole set at once, so N ungated
 // fetches and N builds landed in the same frame. That is the "toggling backend
 // options from the panel spikes CPU and lags" report.
-describe('layer enable is gated', () => {
-  const src = read('globe/adapters/PollGeoJsonAdapter.ts');
+describe("layer enable is gated", () => {
+  const src = read("globe/adapters/PollGeoJsonAdapter.ts");
 
-  it('routes the first fetch through onMoveSettle, not straight to scheduleNext(0)', () => {
-    expect(src).toContain('onMoveSettle(this.props.ctx.descriptor.id, this.firstFetch)');
+  it("routes the first fetch through onMoveSettle, not straight to scheduleNext(0)", () => {
+    expect(src).toContain(
+      "onMoveSettle(this.props.ctx.descriptor.id, this.firstFetch)",
+    );
     // The bare immediate call must not come back in attach().
-    const attach = src.slice(src.indexOf('async attach('), src.indexOf('private firstFetch'));
+    const attach = src.slice(
+      src.indexOf("async attach("),
+      src.indexOf("private firstFetch"),
+    );
     expect(attach).not.toMatch(/^\s*this\.scheduleNext\(0\);\s*$/m);
   });
 
-  it('cancels the queued first fetch when the layer is switched off again', () => {
-    expect(src).toContain('cancelMoveSettle(this.firstFetch)');
+  it("cancels the queued first fetch when the layer is switched off again", () => {
+    expect(src).toContain("cancelMoveSettle(this.firstFetch)");
   });
 });
 
@@ -121,29 +131,40 @@ describe('layer enable is gated', () => {
 //
 // The risk it creates: an entity graphic whose visualizer is no longer installed
 // silently does not render. This guard fails the moment anything sets one.
-describe('trimmed Cesium visualizers', () => {
-  const files = walk(SRC).filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f));
+describe("trimmed Cesium visualizers", () => {
+  const files = walk(SRC).filter(
+    (f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f),
+  );
 
-  it('installs exactly the visualizers the app uses', () => {
-    const gc = read('globe/GlobeCanvas.tsx');
-    expect(gc).toContain('defaultVisualizersCallback');
+  it("installs exactly the visualizers the app uses", () => {
+    const gc = read("globe/GlobeCanvas.tsx");
+    expect(gc).toContain("defaultVisualizersCallback");
     for (const v of [
-      'BillboardVisualizer', 'GeometryVisualizer', 'LabelVisualizer',
-      'PointVisualizer', 'PolylineVisualizer',
+      "BillboardVisualizer",
+      "GeometryVisualizer",
+      "LabelVisualizer",
+      "PointVisualizer",
+      "PolylineVisualizer",
     ]) {
       expect(gc).toContain(v);
     }
   });
 
-  it('no entity sets model / path / tileset graphics', () => {
+  it("no entity sets model / path / tileset graphics", () => {
     // These three visualizers were dropped. Setting the graphics they draw
     // would produce an invisible entity, which is worse than a slow one.
     const offenders: string[] = [];
     for (const f of files) {
-      const src = readFileSync(f, 'utf8');
-      for (const m of [/\bentity\.model\s*=/, /\be\.model\s*=/, /\bopts\.model\s*=/,
-                       /\bentity\.path\s*=/, /\be\.path\s*=/, /\bopts\.path\s*=/,
-                       /\bopts\.tileset\s*=/]) {
+      const src = readFileSync(f, "utf8");
+      for (const m of [
+        /\bentity\.model\s*=/,
+        /\be\.model\s*=/,
+        /\bopts\.model\s*=/,
+        /\bentity\.path\s*=/,
+        /\be\.path\s*=/,
+        /\bopts\.path\s*=/,
+        /\bopts\.tileset\s*=/,
+      ]) {
         if (m.test(src)) offenders.push(`${f.slice(SRC.length + 1)} :: ${m}`);
       }
     }

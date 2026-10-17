@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type * as Cesium from 'cesium';
-import { Icon, type IconName } from '../../normal/Icon.js';
-import { searchObjects, type ObjectResult } from '../../transport/search.js';
-import { parseLatLon } from '../../globe/CoordEntry.js';
-import { viewerCenter } from '../../globe/center.js';
-import { haversineKm } from '../../globe/draw.js';
-import { flyToPosition } from '../../globe/camera.js';
-import { useSelection } from '../../state/stores.js';
-import { useSavedSearches } from '../../state/savedSearches.js';
-import { toast } from '../toast.js';
-import { OrgCard } from '../../entity-panel/OrgCard.js';
-import { OntologyHits } from './OntologyHits.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type * as Cesium from "cesium";
+import { Icon, type IconName } from "../../normal/Icon.js";
+import { searchObjects, type ObjectResult } from "../../transport/search.js";
+import { parseLatLon } from "../../globe/CoordEntry.js";
+import { viewerCenter } from "../../globe/center.js";
+import { haversineKm } from "../../globe/draw.js";
+import { flyToPosition } from "../../globe/camera.js";
+import { useSelection } from "../../state/stores.js";
+import { useSavedSearches } from "../../state/savedSearches.js";
+import { toast } from "../toast.js";
+import { OrgCard } from "../../entity-panel/OrgCard.js";
+import { OntologyHits } from "./OntologyHits.js";
 
 // Find, built from docs/mockups/console-2026-08 (`14-map-find.html`) and fed by
 // the same `searchObjects` call the old Search Objects sidebar made.
@@ -34,49 +34,55 @@ const RADII = [10, 50, 200, 1000] as const;
  *  the window and gave no way to ask a type question at all. `searchObjects`
  *  has taken both since it was written; only the controls were missing. */
 const TYPES = [
-  { id: 'all', label: 'All' },
-  { id: 'aircraft', label: 'Air' },
-  { id: 'vessel', label: 'Sea' },
-  { id: 'quake', label: 'Quake' },
-  { id: 'fire', label: 'Fire' },
-  { id: 'place', label: 'Place' },
+  { id: "all", label: "All" },
+  { id: "aircraft", label: "Air" },
+  { id: "vessel", label: "Sea" },
+  { id: "quake", label: "Quake" },
+  { id: "fire", label: "Fire" },
+  { id: "place", label: "Place" },
 ] as const;
 const WINDOWS = [
-  { s: 900, label: '15 m' },
-  { s: 3600, label: '1 h' },
-  { s: 21_600, label: '6 h' },
-  { s: 86_400, label: '24 h' },
+  { s: 900, label: "15 m" },
+  { s: 3600, label: "1 h" },
+  { s: 21_600, label: "6 h" },
+  { s: 86_400, label: "24 h" },
 ] as const;
 
 /** Result kind to icon. The old list printed the kind as a lowercase word in a
  *  column; an icon reads at a glance and matches the map symbol for the same
  *  contact. */
 const KIND_ICON: Record<string, IconName> = {
-  aircraft: 'plane',
-  vessel: 'ship',
-  airport: 'plane',
-  port: 'anchor',
-  chokepoint: 'route',
-  facility: 'building',
-  quake: 'quake',
-  fire: 'fire',
-  satellite: 'satellite',
-  place: 'pin',
+  aircraft: "plane",
+  vessel: "ship",
+  airport: "plane",
+  port: "anchor",
+  chokepoint: "route",
+  facility: "building",
+  quake: "quake",
+  fire: "fire",
+  satellite: "satellite",
+  place: "pin",
 };
 
 /** Contacts move, places do not. Two sections because they answer different
  *  questions: one is traffic, the other is geography. */
-const MOVING = new Set(['aircraft', 'vessel', 'satellite']);
+const MOVING = new Set(["aircraft", "vessel", "satellite"]);
 
 interface Hit extends ObjectResult {
   km: number;
 }
 
-export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Element {
-  const [q, setQ] = useState('');
-  const [anchor, setAnchor] = useState<{ lat: number; lon: number } | null>(null);
+export function FindPanel({
+  viewer,
+}: {
+  viewer?: Cesium.Viewer | null;
+}): JSX.Element {
+  const [q, setQ] = useState("");
+  const [anchor, setAnchor] = useState<{ lat: number; lon: number } | null>(
+    null,
+  );
   const [radiusKm, setRadiusKm] = useState<number>(50);
-  const [type, setType] = useState<string>('all');
+  const [type, setType] = useState<string>("all");
   const [sinceS, setSinceS] = useState<number>(900);
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -89,7 +95,8 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
   // The anchor defaults to what the camera is looking at, so the panel has an
   // answer the moment it opens rather than an empty box demanding input.
   const here = useCallback(
-    (): { lat: number; lon: number } | null => anchor ?? viewerCenter(viewer ?? null),
+    (): { lat: number; lon: number } | null =>
+      anchor ?? viewerCenter(viewer ?? null),
     [anchor, viewer],
   );
 
@@ -112,13 +119,26 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
       const bbox = center
         ? ((): [number, number, number, number] => {
             const dLat = km / 111;
-            const dLon = km / (111 * Math.max(0.05, Math.cos((center.lat * Math.PI) / 180)));
-            return [center.lon - dLon, center.lat - dLat, center.lon + dLon, center.lat + dLat];
+            const dLon =
+              km /
+              (111 * Math.max(0.05, Math.cos((center.lat * Math.PI) / 180)));
+            return [
+              center.lon - dLon,
+              center.lat - dLat,
+              center.lon + dLon,
+              center.lat + dLat,
+            ];
           })()
         : undefined;
 
       searchObjects(
-        { q: text, limit: 300, sinceS: facets.sinceS, type: facets.type, ...(bbox ? { bbox } : {}) },
+        {
+          q: text,
+          limit: 300,
+          sinceS: facets.sinceS,
+          type: facets.type,
+          ...(bbox ? { bbox } : {}),
+        },
         ac.signal,
       )
         .then((d) => {
@@ -132,8 +152,8 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
           setHits(scored);
         })
         .catch((e: unknown) => {
-          if (e instanceof DOMException && e.name === 'AbortError') return;
-          setErr('Search failed. The objects service did not answer.');
+          if (e instanceof DOMException && e.name === "AbortError") return;
+          setErr("Search failed. The objects service did not answer.");
         })
         .finally(() => setBusy(false));
     },
@@ -146,7 +166,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
     if (coord) {
       setAnchor(coord);
       if (viewer) flyToPosition(viewer, coord.lon, coord.lat, 200_000, 0.8);
-      run(coord, radiusKm, '', facets);
+      run(coord, radiusKm, "", facets);
     } else {
       run(here(), radiusKm, q, facets);
     }
@@ -171,7 +191,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') submit();
+              if (e.key === "Enter") submit();
             }}
             placeholder="Name, callsign, MMSI or 54.31, 18.71"
             aria-label="Find objects"
@@ -180,7 +200,7 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
           {q && (
             <button
               type="button"
-              onClick={() => setQ('')}
+              onClick={() => setQ("")}
               aria-label="Clear the search box"
               className="shrink-0 text-txt-3 hover:text-txt-0"
             >
@@ -202,7 +222,8 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
             type="button"
             disabled={!center || !viewer}
             onClick={() => {
-              if (center && viewer) flyToPosition(viewer, center.lon, center.lat, 200_000, 0.8);
+              if (center && viewer)
+                flyToPosition(viewer, center.lon, center.lat, 200_000, 0.8);
             }}
             className="flex h-[24px] items-center gap-[5px] rounded-sm border border-line-2 px-[8px] text-[12px] text-txt-1 hover:bg-(--hover) disabled:opacity-40"
           >
@@ -216,17 +237,20 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
           <button
             type="button"
             onClick={() => {
-              const label =
-                [q.trim() || 'all objects', type === 'all' ? null : type, `${radiusKm} km`]
-                  .filter(Boolean)
-                  .join(' · ');
+              const label = [
+                q.trim() || "all objects",
+                type === "all" ? null : type,
+                `${radiusKm} km`,
+              ]
+                .filter(Boolean)
+                .join(" · ");
               useSavedSearches.getState().add(label, {
-                q: parseLatLon(q) ? '' : q,
+                q: parseLatLon(q) ? "" : q,
                 type,
                 sinceS,
                 limit: 300,
               });
-              toast.ok('Search saved. New matches land in the Inbox.');
+              toast.ok("Search saved. New matches land in the Inbox.");
             }}
             title="Save this search as an Inbox subscription. You are notified when new objects match."
             className="flex h-[24px] items-center gap-[5px] rounded-sm border border-line-2 px-[8px] text-[12px] text-txt-1 hover:bg-(--hover)"
@@ -251,20 +275,24 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
 
         {/* The radius is the scale every bar below is drawn against, so it is a
             control rather than a buried setting. */}
-        <div className="mt-[8px] flex items-center gap-[4px]" role="group" aria-label="Search radius">
+        <div
+          className="mt-[8px] flex items-center gap-[4px]"
+          role="group"
+          aria-label="Search radius"
+        >
           {RADII.map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => {
                 setRadiusKm(r);
-                run(here(), r, parseLatLon(q) ? '' : q, facets);
+                run(here(), r, parseLatLon(q) ? "" : q, facets);
               }}
               aria-pressed={radiusKm === r}
               className={`mono h-[20px] rounded-sm px-[7px] text-[12px] ${
                 radiusKm === r
-                  ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                  : 'text-txt-2 hover:bg-(--hover)'
+                  ? "bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]"
+                  : "text-txt-2 hover:bg-(--hover)"
               }`}
             >
               {r} km
@@ -274,20 +302,27 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
 
         {/* Object type. `all` first, so the panel still answers the broad
             question by default and narrowing is one click. */}
-        <div className="mt-[6px] flex flex-wrap items-center gap-[4px]" role="group" aria-label="Object type">
+        <div
+          className="mt-[6px] flex flex-wrap items-center gap-[4px]"
+          role="group"
+          aria-label="Object type"
+        >
           {TYPES.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => {
                 setType(t.id);
-                run(here(), radiusKm, parseLatLon(q) ? '' : q, { type: t.id, sinceS });
+                run(here(), radiusKm, parseLatLon(q) ? "" : q, {
+                  type: t.id,
+                  sinceS,
+                });
               }}
               aria-pressed={type === t.id}
               className={`mono h-[20px] rounded-sm px-[7px] text-[12px] ${
                 type === t.id
-                  ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                  : 'text-txt-2 hover:bg-(--hover)'
+                  ? "bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]"
+                  : "text-txt-2 hover:bg-(--hover)"
               }`}
             >
               {t.label}
@@ -296,20 +331,27 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
         </div>
 
         {/* How far back a fix still counts. */}
-        <div className="mt-[4px] flex flex-wrap items-center gap-[4px]" role="group" aria-label="Time window">
+        <div
+          className="mt-[4px] flex flex-wrap items-center gap-[4px]"
+          role="group"
+          aria-label="Time window"
+        >
           {WINDOWS.map((w) => (
             <button
               key={w.s}
               type="button"
               onClick={() => {
                 setSinceS(w.s);
-                run(here(), radiusKm, parseLatLon(q) ? '' : q, { type, sinceS: w.s });
+                run(here(), radiusKm, parseLatLon(q) ? "" : q, {
+                  type,
+                  sinceS: w.s,
+                });
               }}
               aria-pressed={sinceS === w.s}
               className={`mono h-[20px] rounded-sm px-[7px] text-[12px] ${
                 sinceS === w.s
-                  ? 'bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]'
-                  : 'text-txt-2 hover:bg-(--hover)'
+                  ? "bg-accent-dim text-accent-fg shadow-[inset_0_0_0_1px_var(--accent-line)]"
+                  : "text-txt-2 hover:bg-(--hover)"
               }`}
             >
               {w.label}
@@ -319,8 +361,8 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
 
         <p className="mt-[8px] text-[12px] leading-relaxed text-txt-3">
           {center
-            ? `Centred on ${center.lat.toFixed(4)} ${center.lat >= 0 ? 'N' : 'S'} · ${center.lon.toFixed(4)} ${center.lon >= 0 ? 'E' : 'W'}${anchor ? ' · pinned' : ' · map centre'}`
-            : 'Point the camera at an area, or type a coordinate, to set the search centre.'}
+            ? `Centred on ${center.lat.toFixed(4)} ${center.lat >= 0 ? "N" : "S"} · ${center.lon.toFixed(4)} ${center.lon >= 0 ? "E" : "W"}${anchor ? " · pinned" : " · map centre"}`
+            : "Point the camera at an area, or type a coordinate, to set the search centre."}
         </p>
       </div>
 
@@ -353,7 +395,8 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
           <Icon name="search" className="h-6 w-6 text-txt-3" />
           <div className="text-[13px] text-txt-1">Nothing searched yet</div>
           <p className="max-w-[220px] text-[12px] leading-relaxed text-txt-3">
-            Search the radius around the map centre, or type a name, callsign, MMSI or coordinate.
+            Search the radius around the map centre, or type a name, callsign,
+            MMSI or coordinate.
           </p>
         </div>
       )}
@@ -365,15 +408,22 @@ export function FindPanel({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.El
       {hits !== null && hits.length === 0 && !busy && (
         <div className="flex flex-col items-center gap-2 p-8 text-center">
           <Icon name="search" className="h-6 w-6 text-txt-3" />
-          <div className="text-[13px] text-txt-1">No objects within {radiusKm} km</div>
+          <div className="text-[13px] text-txt-1">
+            No objects within {radiusKm} km
+          </div>
           <p className="max-w-[220px] text-[12px] leading-relaxed text-txt-3">
-            Widen the radius or the time window, drop the type filter, or move the centre to an area
-            with traffic.
+            Widen the radius or the time window, drop the type filter, or move
+            the centre to an area with traffic.
           </p>
         </div>
       )}
 
-      <Section label="Contacts" rows={contacts} viewer={viewer} select={select} />
+      <Section
+        label="Contacts"
+        rows={contacts}
+        viewer={viewer}
+        select={select}
+      />
       <Section label="Places" rows={places} viewer={viewer} select={select} />
     </div>
   );
@@ -404,7 +454,9 @@ function Section({
           {label}
         </span>
         <span className="flex-1" />
-        <span className="mono text-[12px] tabular-nums text-txt-3">{rows.length}</span>
+        <span className="mono text-[12px] tabular-nums text-txt-3">
+          {rows.length}
+        </span>
       </div>
       {shown.map((h) => (
         <button
@@ -418,10 +470,12 @@ function Section({
         >
           {/* The thumbnail the old row never carried. */}
           <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-sm bg-bg-0 text-txt-2">
-            <Icon name={KIND_ICON[h.kind] ?? 'circle'} className="h-3 w-3" />
+            <Icon name={KIND_ICON[h.kind] ?? "circle"} className="h-3 w-3" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[12px] text-txt-1">{h.label || h.id}</span>
+            <span className="block truncate text-[12px] text-txt-1">
+              {h.label || h.id}
+            </span>
             <span className="block truncate text-[12px] text-txt-3">
               {h.kind} · {h.source}
             </span>
@@ -437,7 +491,9 @@ function Section({
           >
             <i
               className="absolute inset-y-0 left-0 block bg-accent"
-              style={{ width: `${Math.max(3, Math.min(100, (h.km / far) * 100))}%` }}
+              style={{
+                width: `${Math.max(3, Math.min(100, (h.km / far) * 100))}%`,
+              }}
             />
           </span>
         </button>

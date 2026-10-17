@@ -75,8 +75,13 @@ _stats: dict[str, Any] = {
 
 def stats() -> dict[str, Any]:
     s = get_settings()
+    from app import ais_pipeline  # noqa: PLC0415 — one-way; the pipeline never imports this
+
     return {
         **_stats,
+        # The pipeline runs the ShipXplorer pull now; report its count here so
+        # /api/status and /api/intel/sources keep one place to read it.
+        "shipxplorer_vessels": ais_pipeline._stats["shipxplorer_vessels"],
         "kystdatahuset_enabled": s.ais_kystdatahuset_enabled,
         "digitraffic_mqtt_enabled": s.ais_digitraffic_mqtt_enabled,
         "vesselfinder_sidecar_enabled": s.ais_vesselfinder_sidecar_enabled,
@@ -678,8 +683,10 @@ def start() -> None:
         _tasks.append(
             asyncio.create_task(_run_myshiptracking_sidecar(), name="ais_myshiptracking_sidecar")
         )
-    if s.ais_shipxplorer_enabled and not _running("shipxplorer"):
-        _tasks.append(asyncio.create_task(_run_shipxplorer(), name="ais_shipxplorer"))
+    # ShipXplorer is NOT started here any more: app.ais_pipeline owns the one
+    # world pull per cycle and bridges it into the shared store with the
+    # upstream fix time (this module's loop stamped wall clock and dropped
+    # name/heading/flag). Two loops on one flag meant two 6 MB pulls per 45 s.
 
 
 def _running(tag: str) -> bool:

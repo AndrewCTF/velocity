@@ -29,9 +29,9 @@ export const FRESH_POS_S = 120;
  * function?" (docs/research-last30days-2026-07-29.md §3).
  */
 export const CONFIDENCE_RULE =
-  'high: two or more independent sources and a fix under 2 minutes old. ' +
-  'medium: one source with a fresh fix, or several sources with an ageing one. ' +
-  'low: a single source and a fix older than 2 minutes.';
+  "high: two or more independent sources and a fix under 2 minutes old. " +
+  "medium: one source with a fresh fix, or several sources with an ageing one. " +
+  "low: a single source and a fix older than 2 minutes.";
 
 /** Opacity applied to a stale contact's icon. Dim enough to recede, bright
  *  enough to stay legible against the dark globe. */
@@ -43,8 +43,8 @@ export const STALE_ALPHA = 0.45;
  * would be the same class of lie the backend fix just removed.
  */
 export function positionAgeS(props: Record<string, unknown>): number | null {
-  const v = props['seen_pos_s'];
-  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return null;
+  const v = props["seen_pos_s"];
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0) return null;
   return v;
 }
 
@@ -54,8 +54,8 @@ export function positionAgeS(props: Record<string, unknown>): number | null {
  * refresh interval means) and falls back to the age threshold.
  */
 export function isStale(props: Record<string, unknown>): boolean {
-  const flag = props['stale'];
-  if (typeof flag === 'boolean') return flag;
+  const flag = props["stale"];
+  if (typeof flag === "boolean") return flag;
   const age = positionAgeS(props);
   return age != null && age > FRESH_POS_S;
 }
@@ -78,7 +78,9 @@ export function agoText(seconds: number): string {
  * unknown). Separator is ` · ` per the dashboard copy rule in CLAUDE.md — no em
  * dashes anywhere in operator-visible copy.
  */
-export function staleLabelSuffix(props: Record<string, unknown>): string | null {
+export function staleLabelSuffix(
+  props: Record<string, unknown>,
+): string | null {
   if (!isStale(props)) return null;
   const age = positionAgeS(props);
   if (age == null) return null;
@@ -115,7 +117,7 @@ export const UNCORROBORATED_ALPHA = 0.18;
  * as "only one source saw it" would fade real traffic for a bookkeeping reason.
  */
 export function isCorroborated(props: Record<string, unknown>): boolean {
-  const n = props['source_count'];
-  if (typeof n !== 'number' || !Number.isFinite(n)) return true;
+  const n = props["source_count"];
+  if (typeof n !== "number" || !Number.isFinite(n)) return true;
   return n >= 2;
 }

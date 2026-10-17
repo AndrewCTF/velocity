@@ -13,24 +13,24 @@
 // of them at once.
 
 export type SchemeId =
-  | 'dark'
-  | 'midnight'
-  | 'slate'
-  | 'amber'
-  | 'contrast'
-  | 'light'
-  | 'paper'
-  | 'bp-dark'
-  | 'bp-turquoise'
-  | 'bp-indigo'
-  | 'bp-light';
+  | "dark"
+  | "midnight"
+  | "slate"
+  | "amber"
+  | "contrast"
+  | "light"
+  | "paper"
+  | "bp-dark"
+  | "bp-turquoise"
+  | "bp-indigo"
+  | "bp-light";
 
 export interface Scheme {
   id: SchemeId;
   label: string;
   /** One line, stating when an operator would pick this one. */
   hint: string;
-  family: 'dark' | 'light';
+  family: "dark" | "light";
   /** True when every token comes from Palantir's published Blueprint ramp.
    *  `theme/contrast.test.ts` holds these to that claim swatch by swatch, so it
    *  is a checked property rather than a name. */
@@ -40,53 +40,53 @@ export interface Scheme {
 
 export const SCHEMES: readonly Scheme[] = [
   {
-    id: 'dark',
-    label: 'Carbon',
+    id: "dark",
+    label: "Carbon",
     hint: "The default. IBM Carbon's Gray 100: neutral greys, blue 60 for interaction.",
-    family: 'dark',
-    swatch: { bg: '#161616', panel: '#262626', accent: '#0f62fe' },
+    family: "dark",
+    swatch: { bg: "#161616", panel: "#262626", accent: "#0f62fe" },
   },
   {
-    id: 'midnight',
-    label: 'Primer dark',
+    id: "midnight",
+    label: "Primer dark",
     hint: "GitHub Primer's dark theme. Cool blue-black, the operations-room look.",
-    family: 'dark',
-    swatch: { bg: '#010409', panel: '#161b22', accent: '#1f6feb' },
+    family: "dark",
+    swatch: { bg: "#010409", panel: "#161b22", accent: "#1f6feb" },
   },
   {
-    id: 'slate',
-    label: 'Slate',
-    hint: 'Radix slate with a teal accent, so blue stays a data colour.',
-    family: 'dark',
-    swatch: { bg: '#111113', panel: '#212225', accent: '#12a594' },
+    id: "slate",
+    label: "Slate",
+    hint: "Radix slate with a teal accent, so blue stays a data colour.",
+    family: "dark",
+    swatch: { bg: "#111113", panel: "#212225", accent: "#12a594" },
   },
   {
-    id: 'amber',
-    label: 'Night watch',
-    hint: 'Radix sand with an amber accent for a darkened room. Threat hues stay distinct.',
-    family: 'dark',
-    swatch: { bg: '#111110', panel: '#222221', accent: '#ffc53d' },
+    id: "amber",
+    label: "Night watch",
+    hint: "Radix sand with an amber accent for a darkened room. Threat hues stay distinct.",
+    family: "dark",
+    swatch: { bg: "#111110", panel: "#222221", accent: "#ffc53d" },
   },
   {
-    id: 'contrast',
-    label: 'High contrast',
+    id: "contrast",
+    label: "High contrast",
     hint: "GitHub Primer's high-contrast dark. Visible hairlines; every tier clears AAA.",
-    family: 'dark',
-    swatch: { bg: '#010409', panel: '#151b23', accent: '#409eff' },
+    family: "dark",
+    swatch: { bg: "#010409", panel: "#151b23", accent: "#409eff" },
   },
   {
-    id: 'light',
-    label: 'Daylight',
+    id: "light",
+    label: "Daylight",
     hint: "IBM Carbon's White theme. For a bright room or a projector.",
-    family: 'light',
-    swatch: { bg: '#f4f4f4', panel: '#f4f4f4', accent: '#0f62fe' },
+    family: "light",
+    swatch: { bg: "#f4f4f4", panel: "#f4f4f4", accent: "#0f62fe" },
   },
   {
-    id: 'paper',
-    label: 'Paper',
-    hint: 'Radix sand light with indigo. Warm and print-adjacent, where Daylight reads clinical.',
-    family: 'light',
-    swatch: { bg: '#f1f0ef', panel: '#f9f9f8', accent: '#3e63dd' },
+    id: "paper",
+    label: "Paper",
+    hint: "Radix sand light with indigo. Warm and print-adjacent, where Daylight reads clinical.",
+    family: "light",
+    swatch: { bg: "#f1f0ef", panel: "#f9f9f8", accent: "#3e63dd" },
   },
 
   // ── Blueprint ─────────────────────────────────────────────────────────────
@@ -105,43 +105,43 @@ export const SCHEMES: readonly Scheme[] = [
   // Blueprint is what these palettes actually are, and a picker full of product
   // names would imply an affiliation this project does not have.
   {
-    id: 'bp-dark',
-    label: 'Blueprint dark',
+    id: "bp-dark",
+    label: "Blueprint dark",
     hint: "Blueprint's published dark ramp, on the design system's own panel surface.",
-    family: 'dark',
+    family: "dark",
     blueprint: true,
-    swatch: { bg: '#111418', panel: '#2f343c', accent: '#2d72d2' },
+    swatch: { bg: "#111418", panel: "#2f343c", accent: "#2d72d2" },
   },
   {
-    id: 'bp-turquoise',
-    label: 'Blueprint turquoise',
-    hint: 'The same substrate, accented turquoise so blue stays a data colour.',
-    family: 'dark',
+    id: "bp-turquoise",
+    label: "Blueprint turquoise",
+    hint: "The same substrate, accented turquoise so blue stays a data colour.",
+    family: "dark",
     blueprint: true,
-    swatch: { bg: '#111418', panel: '#2f343c', accent: '#00a396' },
+    swatch: { bg: "#111418", panel: "#2f343c", accent: "#00a396" },
   },
   {
-    id: 'bp-indigo',
-    label: 'Blueprint indigo',
-    hint: 'The same substrate, accented with the hue reserved for model output.',
-    family: 'dark',
+    id: "bp-indigo",
+    label: "Blueprint indigo",
+    hint: "The same substrate, accented with the hue reserved for model output.",
+    family: "dark",
     blueprint: true,
-    swatch: { bg: '#111418', panel: '#2f343c', accent: '#7961db' },
+    swatch: { bg: "#111418", panel: "#2f343c", accent: "#7961db" },
   },
   {
-    id: 'bp-light',
-    label: 'Blueprint light',
+    id: "bp-light",
+    label: "Blueprint light",
     hint: "Blueprint's published light surface: white panels on light grey.",
-    family: 'light',
+    family: "light",
     blueprint: true,
-    swatch: { bg: '#edeff2', panel: '#f6f7f9', accent: '#215db0' },
+    swatch: { bg: "#edeff2", panel: "#f6f7f9", accent: "#215db0" },
   },
 ];
 
 export const SCHEME_IDS: readonly SchemeId[] = SCHEMES.map((s) => s.id);
 
 export function isSchemeId(v: unknown): v is SchemeId {
-  return typeof v === 'string' && (SCHEME_IDS as readonly string[]).includes(v);
+  return typeof v === "string" && (SCHEME_IDS as readonly string[]).includes(v);
 }
 
 export function schemeById(id: SchemeId): Scheme {

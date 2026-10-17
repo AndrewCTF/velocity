@@ -20,15 +20,15 @@
 //     honestly: 503 (Supabase unset) → an explicit "not configured" state;
 //     empty graph → an empty-state, never a crash.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useInvestigation } from './investigationStore.js';
-import { GraphHistory } from './GraphHistory.js';
-import { useSelection } from '../state/stores.js';
-import { relLabel, useOntologySchema } from '../state/ontologySchema.js';
-import { apiFetch } from '../transport/http.js';
-import { search, LOCATION_KINDS } from '../transport/search.js';
-import { SectionLabel, Btn, MicroLabel, Badge } from '../shell/instruments.js';
-import { Icon } from '../normal/Icon.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useInvestigation } from "./investigationStore.js";
+import { GraphHistory } from "./GraphHistory.js";
+import { useSelection } from "../state/stores.js";
+import { relLabel, useOntologySchema } from "../state/ontologySchema.js";
+import { apiFetch } from "../transport/http.js";
+import { search, LOCATION_KINDS } from "../transport/search.js";
+import { SectionLabel, Btn, MicroLabel, Badge } from "../shell/instruments.js";
+import { Icon } from "../normal/Icon.js";
 
 // ── ontology wire types (mirror intel/ontology.py response models) ────────────
 
@@ -64,43 +64,43 @@ interface PathResult {
 // ── per-kind colour (reuses the shell theme vars, matches ConnectionsCard) ─────
 // The ontology kinds are derived from the id prefix server-side.
 const KIND_COLOR: Record<string, string> = {
-  aircraft: 'var(--accent)',
-  vessel: 'var(--ok)',
-  incident: 'var(--alert)',
-  sim: 'var(--mag)',
-  target: 'var(--warn)',
-  watch: 'var(--warn)',
-  investigation: 'var(--txt-1)',
+  aircraft: "var(--accent)",
+  vessel: "var(--ok)",
+  incident: "var(--alert)",
+  sim: "var(--mag)",
+  target: "var(--warn)",
+  watch: "var(--warn)",
+  investigation: "var(--txt-1)",
   // digital-OSINT infra kinds (minted by app/osint)
-  domain: 'var(--accent)',
-  ip: 'var(--ok)',
-  cert: 'var(--txt-1)',
-  asn: 'var(--warn)',
-  service: 'var(--mag)',
-  threat: 'var(--alert)',
-  org: 'var(--txt-1)',
-  email: 'var(--txt-2)',
-  person: 'var(--accent)',
-  username: 'var(--mag)',
-  url: 'var(--accent)',
-  wallet: 'var(--ok)',
-  tx: 'var(--txt-2)',
-  file: 'var(--alert)',
-  object: 'var(--txt-2)',
+  domain: "var(--accent)",
+  ip: "var(--ok)",
+  cert: "var(--txt-1)",
+  asn: "var(--warn)",
+  service: "var(--mag)",
+  threat: "var(--alert)",
+  org: "var(--txt-1)",
+  email: "var(--txt-2)",
+  person: "var(--accent)",
+  username: "var(--mag)",
+  url: "var(--accent)",
+  wallet: "var(--ok)",
+  tx: "var(--txt-2)",
+  file: "var(--alert)",
+  object: "var(--txt-2)",
 };
 function kindColor(kind: string): string {
-  return KIND_COLOR[kind] ?? KIND_COLOR['object']!;
+  return KIND_COLOR[kind] ?? KIND_COLOR["object"]!;
 }
 
 // A short human label for a node: a distilled prop (callsign / name / title) →
 // the id's local part (after the prefix) → the whole id.
 function nodeLabel(o: OntObject): string {
   const p = o.props ?? {};
-  for (const k of ['callsign', 'name', 'title', 'label', 'registration']) {
+  for (const k of ["callsign", "name", "title", "label", "registration"]) {
     const v = p[k];
-    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === "string" && v.trim()) return v.trim();
   }
-  const local = o.id.includes(':') ? o.id.slice(o.id.indexOf(':') + 1) : o.id;
+  const local = o.id.includes(":") ? o.id.slice(o.id.indexOf(":") + 1) : o.id;
   return local || o.id;
 }
 
@@ -194,9 +194,13 @@ function relax(nodes: LNode[], edges: LEdge[]): void {
 
 // ── fetch helpers ───────────────────────────────────────────────────────────────
 
-type LoadState = 'idle' | 'loading' | 'error' | 'unconfigured';
+type LoadState = "idle" | "loading" | "error" | "unconfigured";
 
-async function fetchAround(id: string, depth: number, signal: AbortSignal): Promise<SearchAround | number> {
+async function fetchAround(
+  id: string,
+  depth: number,
+  signal: AbortSignal,
+): Promise<SearchAround | number> {
   const r = await apiFetch(
     `/api/ontology/search-around/${encodeURIComponent(id)}?depth=${depth}`,
     { signal },
@@ -225,7 +229,7 @@ export function InvestigationCanvas(): JSX.Element {
   // Kept fresh by an effect and, for back-to-back mutations, synchronously at
   // each commit below.
   const objectsRef = useRef(objects);
-  const [status, setStatus] = useState<LoadState>('idle');
+  const [status, setStatus] = useState<LoadState>("idle");
   const [expanding, setExpanding] = useState<string | null>(null);
 
   // Path-finding: pick two endpoints; the result highlights the chain.
@@ -234,7 +238,7 @@ export function InvestigationCanvas(): JSX.Element {
   const [path, setPath] = useState<PathResult | null>(null);
 
   // Save-investigation UI.
-  const [saveName, setSaveName] = useState('');
+  const [saveName, setSaveName] = useState("");
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -252,71 +256,72 @@ export function InvestigationCanvas(): JSX.Element {
     setPathTo(null);
     setSaveMsg(null);
     if (!rootId) {
-      setStatus('idle');
+      setStatus("idle");
       return;
     }
-    setStatus('loading');
+    setStatus("loading");
     const ab = new AbortController();
     fetchAround(rootId, 1, ab.signal)
       .then((res) => {
-        if (typeof res === 'number') {
-          setStatus(res === 503 ? 'unconfigured' : 'error');
+        if (typeof res === "number") {
+          setStatus(res === 503 ? "unconfigured" : "error");
           return;
         }
         const seeded = indexObjects(res.objects);
         objectsRef.current = seeded;
         setObjects(seeded);
         setEdges(res.links);
-        setStatus('idle');
+        setStatus("idle");
         useInvestigation.getState().record({
-          kind: 'root',
+          kind: "root",
           label: `seed ${rootId}`,
           nodeIds: [...seeded.keys()],
         });
       })
       .catch((e: unknown) => {
-        if ((e as { name?: string }).name !== 'AbortError') setStatus('error');
+        if ((e as { name?: string }).name !== "AbortError") setStatus("error");
       });
     return () => ab.abort();
   }, [rootId]);
 
   // Expand a node: fetch its 1-hop neighbourhood and merge into the graph.
-  const expand = useCallback(
-    (id: string) => {
-      setExpanding(id);
-      const ab = new AbortController();
-      fetchAround(id, 1, ab.signal)
-        .then((res) => {
-          if (typeof res === 'number') {
-            if (res === 503) setStatus('unconfigured');
-            return;
+  const expand = useCallback((id: string) => {
+    setExpanding(id);
+    const ab = new AbortController();
+    fetchAround(id, 1, ab.signal)
+      .then((res) => {
+        if (typeof res === "number") {
+          if (res === 503) setStatus("unconfigured");
+          return;
+        }
+        const prev = objectsRef.current;
+        const next = new Map(prev);
+        const before = next.size;
+        for (const o of res.objects) {
+          // Prefer a persisted row over a derived stub already present.
+          const cur = next.get(o.id);
+          if (
+            !cur ||
+            (Object.keys(o.props ?? {}).length > 0 &&
+              Object.keys(cur.props ?? {}).length === 0)
+          ) {
+            next.set(o.id, o);
+          } else if (!next.has(o.id)) {
+            next.set(o.id, o);
           }
-          const prev = objectsRef.current;
-          const next = new Map(prev);
-          const before = next.size;
-          for (const o of res.objects) {
-            // Prefer a persisted row over a derived stub already present.
-            const cur = next.get(o.id);
-            if (!cur || (Object.keys(o.props ?? {}).length > 0 && Object.keys(cur.props ?? {}).length === 0)) {
-              next.set(o.id, o);
-            } else if (!next.has(o.id)) {
-              next.set(o.id, o);
-            }
-          }
-          objectsRef.current = next;
-          setObjects(next);
-          setEdges((prevEdges) => mergeEdges(prevEdges, res.links));
-          useInvestigation.getState().record({
-            kind: 'expand',
-            label: `expanded ${id} (+${next.size - before} nodes)`,
-            nodeIds: [...next.keys()],
-          });
-        })
-        .catch(() => undefined)
-        .finally(() => setExpanding((cur) => (cur === id ? null : cur)));
-    },
-    [],
-  );
+        }
+        objectsRef.current = next;
+        setObjects(next);
+        setEdges((prevEdges) => mergeEdges(prevEdges, res.links));
+        useInvestigation.getState().record({
+          kind: "expand",
+          label: `expanded ${id} (+${next.size - before} nodes)`,
+          nodeIds: [...next.keys()],
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => setExpanding((cur) => (cur === id ? null : cur)));
+  }, []);
 
   // Node click: re-select on the globe (EntityPanel follows) + expand it. A live
   // aircraft/vessel id reselects the Cesium entity; any id is still expandable.
@@ -340,7 +345,11 @@ export function InvestigationCanvas(): JSX.Element {
     setPathFrom((p) => (p === id ? null : p));
     setPathTo((p) => (p === id ? null : p));
     setPath(null);
-    useInvestigation.getState().record({ kind: 'remove', label: `removed ${id}`, nodeIds: [...pruned.keys()] });
+    useInvestigation.getState().record({
+      kind: "remove",
+      label: `removed ${id}`,
+      nodeIds: [...pruned.keys()],
+    });
   }, []);
 
   // Run path-finding between the two chosen endpoints.
@@ -379,7 +388,7 @@ export function InvestigationCanvas(): JSX.Element {
     const id = `investigation:${slug(name)}-${Date.now().toString(36)}`;
     const body = {
       id,
-      kind: 'investigation',
+      kind: "investigation",
       props: {
         title: name,
         root: rootId,
@@ -388,20 +397,24 @@ export function InvestigationCanvas(): JSX.Element {
         saved_at: new Date().toISOString(),
       },
     };
-    apiFetch('/api/ontology/object', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+    apiFetch("/api/ontology/object", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     })
       .then(async (r) => {
         if (r.ok) {
           setSaveMsg(`saved · ${objects.size} nodes`);
-          setSaveName('');
+          setSaveName("");
         } else {
-          setSaveMsg(r.status === 503 ? 'backend store not configured' : `failed (${r.status})`);
+          setSaveMsg(
+            r.status === 503
+              ? "backend store not configured"
+              : `failed (${r.status})`,
+          );
         }
       })
-      .catch(() => setSaveMsg('network error'))
+      .catch(() => setSaveMsg("network error"))
       .finally(() => setSaving(false));
   }, [saveName, objects, rootId]);
 
@@ -417,7 +430,10 @@ export function InvestigationCanvas(): JSX.Element {
   // read-only that revision's node set — filter objects to its ids and drop any
   // edge touching a hidden id. Live (null) renders the full accumulated graph.
   const scrubIds = useMemo(
-    () => (viewRev !== null && revisions[viewRev] ? new Set(revisions[viewRev]!.nodeIds) : null),
+    () =>
+      viewRev !== null && revisions[viewRev]
+        ? new Set(revisions[viewRev]!.nodeIds)
+        : null,
     [viewRev, revisions],
   );
   const viewObjects = useMemo(() => {
@@ -436,9 +452,10 @@ export function InvestigationCanvas(): JSX.Element {
       <div className="p-4">
         <SectionLabel title="Investigation" />
         <p className="mt-2 text-txt-3 text-[11px] leading-snug">
-          No investigation open. Select an entity and press{' '}
-          <span className="mono text-txt-2">⊹ Search around</span> in its panel to build a
-          multi-hop link graph from the saved ontology, or seed it by name below.
+          No investigation open. Select an entity and press{" "}
+          <span className="mono text-txt-2">⊹ Search around</span> in its panel
+          to build a multi-hop link graph from the saved ontology, or seed it by
+          name below.
         </p>
         <div className="mt-3">
           <SeedSearch />
@@ -450,17 +467,23 @@ export function InvestigationCanvas(): JSX.Element {
   return (
     <div className="p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <SectionLabel title="Investigation" {...(objects.size ? { count: `${objects.size} nodes` } : {})} />
+        <SectionLabel
+          title="Investigation"
+          {...(objects.size ? { count: `${objects.size} nodes` } : {})}
+        />
         <button
           type="button"
           onClick={clear}
           className="mono text-[10px] text-txt-3 hover:text-alert px-1"
           title="Close investigation"
-        ><Icon name="x" className="w-3 h-3" /></button>
+        >
+          <Icon name="x" className="w-3 h-3" />
+        </button>
       </div>
 
       <div className="mono text-[10px] text-txt-3 leading-snug">
-        root <span className="text-txt-1">{rootId}</span> · click expands · alt-click removes
+        root <span className="text-txt-1">{rootId}</span> · click expands ·
+        alt-click removes
       </div>
 
       {/* Re-seed the graph by typing (callsign / MMSI / name), without a map click. */}
@@ -468,7 +491,7 @@ export function InvestigationCanvas(): JSX.Element {
 
       {viewRev !== null && revisions[viewRev] && (
         <div className="mono text-[10px] text-warn leading-snug">
-          viewing revision {viewRev + 1}/{revisions.length}, click{' '}
+          viewing revision {viewRev + 1}/{revisions.length}, click{" "}
           <span className="text-accent">live</span> to return
         </div>
       )}
@@ -519,14 +542,19 @@ export function InvestigationCanvas(): JSX.Element {
         <p className="mono text-[10px] text-txt-3 leading-tight">
           shift-click two nodes to set A and B
         </p>
-        <Btn size="sm" tone="accent" disabled={!pathFrom || !pathTo} onClick={runPath}>
+        <Btn
+          size="sm"
+          tone="accent"
+          disabled={!pathFrom || !pathTo}
+          onClick={runPath}
+        >
           ⇆ Find path
         </Btn>
         {path && (
           <div className="mono text-[10px] leading-snug mt-1">
             {path.found ? (
               <span className="text-ok">
-                connected · {path.hops} hop{path.hops === 1 ? '' : 's'}
+                connected · {path.hops} hop{path.hops === 1 ? "" : "s"}
               </span>
             ) : (
               <span className="text-warn">no connection within 6 hops</span>
@@ -547,20 +575,25 @@ export function InvestigationCanvas(): JSX.Element {
             maxLength={120}
             className="flex-1 min-w-0 bg-bg-2 border border-line-2 rounded-sm px-2 py-1 mono text-[10px] text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
-          <Btn size="sm" disabled={saving || !saveName.trim() || objects.size === 0} onClick={saveInvestigation}>
-            {saving ? '…' : 'Save'}
+          <Btn
+            size="sm"
+            disabled={saving || !saveName.trim() || objects.size === 0}
+            onClick={saveInvestigation}
+          >
+            {saving ? "…" : "Save"}
           </Btn>
         </div>
         {saveMsg && (
           <span
-            className={`mono text-[10px] ${saveMsg.startsWith('saved') ? 'text-ok' : 'text-alert'}`}
+            className={`mono text-[10px] ${saveMsg.startsWith("saved") ? "text-ok" : "text-alert"}`}
           >
             {saveMsg}
           </span>
         )}
         <p className="mono text-[10px] text-txt-3 leading-tight">
-          persists the {objects.size} node id{objects.size === 1 ? '' : 's'} as an{' '}
-          <span className="text-txt-2">investigation:</span> object on your account
+          persists the {objects.size} node id{objects.size === 1 ? "" : "s"} as
+          an <span className="text-txt-2">investigation:</span> object on your
+          account
         </p>
       </section>
 
@@ -571,13 +604,24 @@ export function InvestigationCanvas(): JSX.Element {
 }
 
 // ── path endpoint chip ──────────────────────────────────────────────────────────
-function EndpointSlot({ label, id, color }: { label: string; id: string | null; color: string }): JSX.Element {
+function EndpointSlot({
+  label,
+  id,
+  color,
+}: {
+  label: string;
+  id: string | null;
+  color: string;
+}): JSX.Element {
   return (
     <div className="flex items-center gap-1.5 border border-line-2 rounded-sm px-1.5 py-1 bg-bg-2 min-w-0">
       <span className="mono text-[10px] text-txt-3 flex-none">{label}</span>
-      <span className="h-2 w-2 rounded-full flex-none" style={{ background: id ? color : 'var(--line-2)' }} />
-      <span className="mono text-[10px] text-txt-1 truncate" title={id ?? ''}>
-        {id ?? '—'}
+      <span
+        className="h-2 w-2 rounded-full flex-none"
+        style={{ background: id ? color : "var(--line-2)" }}
+      />
+      <span className="mono text-[10px] text-txt-1 truncate" title={id ?? ""}>
+        {id ?? "—"}
       </span>
     </div>
   );
@@ -592,7 +636,7 @@ function EndpointSlot({ label, id, color }: { label: string; id: string | null; 
 // click-to-seed path; self-contained local state so it can live in both the
 // empty-state and the open-canvas header without lifting anything.
 function SeedSearch(): JSX.Element {
-  const [text, setText] = useState('');
+  const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
@@ -607,14 +651,14 @@ function SeedSearch(): JSX.Element {
         const entity = results.find((r) => !LOCATION_KINDS.has(r.kind));
         if (entity) {
           useInvestigation.getState().searchAround(entity.id);
-          setText('');
+          setText("");
         } else if (results.length > 0) {
           setHint("no aircraft/vessel matched: places can't seed a graph");
         } else {
-          setHint('No match found.');
+          setHint("No match found.");
         }
       })
-      .catch(() => setHint('Search failed.'))
+      .catch(() => setHint("Search failed."))
       .finally(() => setBusy(false));
   }, [text, busy]);
 
@@ -629,7 +673,7 @@ function SeedSearch(): JSX.Element {
             if (hint) setHint(null);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (e.key === "Enter") {
               e.preventDefault();
               run();
             }
@@ -638,11 +682,20 @@ function SeedSearch(): JSX.Element {
           maxLength={120}
           className="flex-1 min-w-0 bg-bg-2 border border-line-2 rounded-sm px-2 py-1 mono text-[10px] text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
         />
-        <Btn size="sm" tone="accent" disabled={busy || !text.trim()} onClick={run}>
-          {busy ? '…' : 'Seed'}
+        <Btn
+          size="sm"
+          tone="accent"
+          disabled={busy || !text.trim()}
+          onClick={run}
+        >
+          {busy ? "…" : "Seed"}
         </Btn>
       </div>
-      {hint && <span className="mono text-[10px] text-warn leading-snug block">{hint}</span>}
+      {hint && (
+        <span className="mono text-[10px] text-warn leading-snug block">
+          {hint}
+        </span>
+      )}
     </div>
   );
 }
@@ -685,13 +738,24 @@ function GraphView({
 
   // View transform (pan/zoom) — pure presentation, doesn't perturb layout.
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
-  const dragRef = useRef<{ kind: 'pan' | 'node'; id?: string; sx: number; sy: number; ox: number; oy: number } | null>(
-    null,
-  );
+  const dragRef = useRef<{
+    kind: "pan" | "node";
+    id?: string;
+    sx: number;
+    sy: number;
+    ox: number;
+    oy: number;
+  } | null>(null);
 
   // Reconcile layout nodes with the object set whenever it changes.
   const ledges: LEdge[] = useMemo(
-    () => edges.map((e) => ({ src: e.src, dst: e.dst, rel: e.rel, onPath: pathEdgeKeys.has(edgeKey(e.src, e.dst)) })),
+    () =>
+      edges.map((e) => ({
+        src: e.src,
+        dst: e.dst,
+        rel: e.rel,
+        onPath: pathEdgeKeys.has(edgeKey(e.src, e.dst)),
+      })),
     [edges, pathEdgeKeys],
   );
 
@@ -753,37 +817,66 @@ function GraphView({
   // Pointer handlers: drag a node to pin it, or drag the background to pan.
   // Typed to the common SVG base so it accepts both the root <svg> pointerdown
   // (pan) and a node <g> pointerdown (drag).
-  const onPointerDown = (e: React.PointerEvent<SVGElement>, nodeId?: string): void => {
+  const onPointerDown = (
+    e: React.PointerEvent<SVGElement>,
+    nodeId?: string,
+  ): void => {
     (e.target as Element).setPointerCapture?.(e.pointerId);
     if (nodeId) {
       const n = nodesRef.current.get(nodeId);
       if (n) {
         n.pinned = true;
-        dragRef.current = { kind: 'node', id: nodeId, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y };
+        dragRef.current = {
+          kind: "node",
+          id: nodeId,
+          sx: e.clientX,
+          sy: e.clientY,
+          ox: n.x,
+          oy: n.y,
+        };
       }
     } else {
-      dragRef.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y };
+      dragRef.current = {
+        kind: "pan",
+        sx: e.clientX,
+        sy: e.clientY,
+        ox: view.x,
+        oy: view.y,
+      };
     }
   };
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>): void => {
     const d = dragRef.current;
     if (!d) return;
-    if (d.kind === 'node' && d.id) {
+    if (d.kind === "node" && d.id) {
       const n = nodesRef.current.get(d.id);
       if (n) {
-        n.x = Math.max(14, Math.min(VIEW_W - 14, d.ox + (e.clientX - d.sx) / view.scale));
-        n.y = Math.max(14, Math.min(VIEW_H - 14, d.oy + (e.clientY - d.sy) / view.scale));
+        n.x = Math.max(
+          14,
+          Math.min(VIEW_W - 14, d.ox + (e.clientX - d.sx) / view.scale),
+        );
+        n.y = Math.max(
+          14,
+          Math.min(VIEW_H - 14, d.oy + (e.clientY - d.sy) / view.scale),
+        );
         force((t) => t + 1);
       }
     } else {
-      setView((v) => ({ ...v, x: d.ox + (e.clientX - d.sx), y: d.oy + (e.clientY - d.sy) }));
+      setView((v) => ({
+        ...v,
+        x: d.ox + (e.clientX - d.sx),
+        y: d.oy + (e.clientY - d.sy),
+      }));
     }
   };
   const onPointerUp = (): void => {
     dragRef.current = null;
   };
   const onWheel = (e: React.WheelEvent<SVGSVGElement>): void => {
-    const next = Math.max(0.5, Math.min(2.4, view.scale * (e.deltaY < 0 ? 1.12 : 0.89)));
+    const next = Math.max(
+      0.5,
+      Math.min(2.4, view.scale * (e.deltaY < 0 ? 1.12 : 0.89)),
+    );
     setView((v) => ({ ...v, scale: next }));
   };
 
@@ -795,7 +888,10 @@ function GraphView({
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         className="w-full rounded-md border border-line bg-bg-2/40 touch-none select-none"
-        style={{ height: VIEW_H, cursor: dragRef.current?.kind === 'pan' ? 'grabbing' : 'grab' }}
+        style={{
+          height: VIEW_H,
+          cursor: dragRef.current?.kind === "pan" ? "grabbing" : "grab",
+        }}
         onPointerDown={(e) => onPointerDown(e)}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -815,7 +911,7 @@ function GraphView({
                   y1={a.y}
                   x2={b.x}
                   y2={b.y}
-                  stroke={e.onPath ? 'var(--mag)' : 'var(--line-2)'}
+                  stroke={e.onPath ? "var(--mag)" : "var(--line-2)"}
                   strokeWidth={e.onPath ? 2 : 1}
                 />
                 <text
@@ -844,7 +940,7 @@ function GraphView({
             return (
               <g
                 key={n.id}
-                style={{ cursor: 'pointer' }}
+                style={{ cursor: "pointer" }}
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   onPointerDown(e, n.id);
@@ -867,11 +963,25 @@ function GraphView({
                   cy={n.y}
                   r={r}
                   fill={kindColor(n.kind)}
-                  stroke={onPath ? 'var(--mag)' : isRoot ? 'var(--txt-0)' : 'transparent'}
+                  stroke={
+                    onPath
+                      ? "var(--mag)"
+                      : isRoot
+                        ? "var(--txt-0)"
+                        : "transparent"
+                  }
                   strokeWidth={onPath || isRoot ? 1.5 : 0}
                 />
                 {expanding === n.id && (
-                  <circle cx={n.x} cy={n.y} r={r + 3} fill="none" stroke="var(--accent)" strokeWidth={1} opacity={0.7} />
+                  <circle
+                    cx={n.x}
+                    cy={n.y}
+                    r={r + 3}
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth={1}
+                    opacity={0.7}
+                  />
                 )}
                 <text
                   x={n.x}
@@ -890,40 +1000,48 @@ function GraphView({
       </svg>
 
       {/* status / empty overlays */}
-      {status === 'loading' && (
+      {status === "loading" && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <MicroLabel>loading graph…</MicroLabel>
         </div>
       )}
-      {status === 'unconfigured' && (
+      {status === "unconfigured" && (
         <div className="absolute inset-0 flex items-center justify-center px-4 text-center pointer-events-none">
           <MicroLabel className="block text-warn">
-            ontology store not configured: sign in with a Supabase account to persist + traverse a
-            graph
+            ontology store not configured: sign in with a Supabase account to
+            persist + traverse a graph
           </MicroLabel>
         </div>
       )}
-      {status === 'error' && objects.size === 0 && (
+      {status === "error" && objects.size === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <MicroLabel className="block text-warn">could not load graph</MicroLabel>
+          <MicroLabel className="block text-warn">
+            could not load graph
+          </MicroLabel>
         </div>
       )}
-      {status === 'idle' && objects.size <= 1 && (
+      {status === "idle" && objects.size <= 1 && (
         <div className="absolute bottom-2 left-0 right-0 flex justify-center px-4 pointer-events-none">
           <MicroLabel className="block text-center text-txt-3">
-            no saved links yet: flag / nominate / promote this entity (Actions) to grow its graph
+            no saved links yet: flag / nominate / promote this entity (Actions)
+            to grow its graph
           </MicroLabel>
         </div>
       )}
 
       {/* legend */}
       <div className="flex flex-wrap gap-1.5 mt-1.5">
-        {Array.from(new Set(nodes.map((n) => n.kind))).slice(0, 6).map((k) => (
-          <span key={k} className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full" style={{ background: kindColor(k) }} />
-            <span className="mono text-[10px] text-txt-3">{k}</span>
-          </span>
-        ))}
+        {Array.from(new Set(nodes.map((n) => n.kind)))
+          .slice(0, 6)
+          .map((k) => (
+            <span key={k} className="inline-flex items-center gap-1">
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: kindColor(k) }}
+              />
+              <span className="mono text-[10px] text-txt-3">{k}</span>
+            </span>
+          ))}
         {nodes.length > 0 && <Badge tone="neutral">dbl-click = re-root</Badge>}
       </div>
     </div>
@@ -957,9 +1075,11 @@ function mergeEdges(prev: OntLink[], incoming: OntLink[]): OntLink[] {
 }
 
 function slug(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40) || 'inv';
+  return (
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "inv"
+  );
 }

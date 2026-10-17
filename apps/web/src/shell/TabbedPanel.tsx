@@ -1,7 +1,7 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { useReducedMotion } from './useReducedMotion.js';
-import { ErrorBoundary } from './ErrorBoundary.js';
-import { Icon } from '../normal/Icon.js';
+import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useReducedMotion } from "./useReducedMotion.js";
+import { ErrorBoundary } from "./ErrorBoundary.js";
+import { Icon } from "../normal/Icon.js";
 
 // Generic tabbed-panel container — used by both rails (frontend.md §4).
 // Tab strip (.tabs/.tab) follows the Cobalt/Ink mockup: a flex row on bg-1 with
@@ -27,11 +27,19 @@ interface Props {
   // 'tabs' = the classic horizontal strip (good for ≤4 short tabs). 'menu' = a
   // single dropdown chooser that lists every panel by name — scales past the
   // ~6-tab point where the strip clips/horizontally scrolls (the right rail).
-  variant?: 'tabs' | 'menu';
+  variant?: "tabs" | "menu";
 }
 
-export function TabbedPanel({ tabs, defaultTab, ariaLabel, variant = 'tabs' }: Props): JSX.Element {
-  const initial = defaultTab && tabs.some((t) => t.id === defaultTab) ? defaultTab : tabs[0]?.id ?? '';
+export function TabbedPanel({
+  tabs,
+  defaultTab,
+  ariaLabel,
+  variant = "tabs",
+}: Props): JSX.Element {
+  const initial =
+    defaultTab && tabs.some((t) => t.id === defaultTab)
+      ? defaultTab
+      : (tabs[0]?.id ?? "");
   const [activeId, setActiveId] = useState<string>(initial);
   const [menuOpen, setMenuOpen] = useState(false);
   const reduced = useReducedMotion();
@@ -59,19 +67,19 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel, variant = 'tabs' }: P
 
   const onTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
     switch (e.key) {
-      case 'ArrowRight':
+      case "ArrowRight":
         e.preventDefault();
         focusTabAt(activeIndex + 1);
         break;
-      case 'ArrowLeft':
+      case "ArrowLeft":
         e.preventDefault();
         focusTabAt(activeIndex - 1);
         break;
-      case 'Home':
+      case "Home":
         e.preventDefault();
         focusTabAt(0);
         break;
-      case 'End':
+      case "End":
         e.preventDefault();
         focusTabAt(tabs.length - 1);
         break;
@@ -81,8 +89,12 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel, variant = 'tabs' }: P
   };
 
   return (
-    <div className="h-full flex flex-col" role="region" aria-label={ariaLabel ?? 'Tabbed panel'}>
-      {variant === 'menu' ? (
+    <div
+      className="h-full flex flex-col"
+      role="region"
+      aria-label={ariaLabel ?? "Tabbed panel"}
+    >
+      {variant === "menu" ? (
         <MenuChooser
           tabs={tabs}
           active={active}
@@ -94,7 +106,7 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel, variant = 'tabs' }: P
       ) : (
         <div
           role="tablist"
-          aria-label={ariaLabel ?? 'Panel tabs'}
+          aria-label={ariaLabel ?? "Panel tabs"}
           // overflow-x-auto + hidden scrollbar: with 7 tabs the strip can exceed the
           // rail width, so it scrolls horizontally instead of CLIPPING the last tabs.
           className="flex items-stretch flex-none border-b border-line-2 bg-bg-1 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
@@ -116,15 +128,27 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel, variant = 'tabs' }: P
                 onClick={(e) => {
                   setActiveId(t.id);
                   // Bring a partially-offscreen tab fully into the scrollable strip.
-                  e.currentTarget.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+                  e.currentTarget.scrollIntoView({
+                    inline: "nearest",
+                    block: "nearest",
+                  });
                 }}
                 onKeyDown={onTabKeyDown}
                 className={[
-                  'relative mono text-[10px] tracking-[0.4px] px-2 py-[9px] border-r border-line',
-                  'flex items-center gap-1.5 whitespace-nowrap',
-                  isActive ? 'text-txt-0 bg-bg-2' : 'text-txt-3 hover:text-txt-1',
-                ].join(' ')}
-                style={reduced ? undefined : { transition: 'color 120ms ease, background-color 120ms ease' }}
+                  "relative mono text-[10px] tracking-[0.4px] px-2 py-[9px] border-r border-line",
+                  "flex items-center gap-1.5 whitespace-nowrap",
+                  isActive
+                    ? "text-txt-0 bg-bg-2"
+                    : "text-txt-3 hover:text-txt-1",
+                ].join(" ")}
+                style={
+                  reduced
+                    ? undefined
+                    : {
+                        transition:
+                          "color 120ms ease, background-color 120ms ease",
+                      }
+                }
               >
                 {t.icon}
                 <span>{t.label}</span>
@@ -151,12 +175,18 @@ export function TabbedPanel({ tabs, defaultTab, ariaLabel, variant = 'tabs' }: P
             key={t.id}
             role="tabpanel"
             id={`tabpanel-${t.id}`}
-            {...(variant === 'tabs' ? { 'aria-labelledby': `tab-${t.id}` } : {})}
+            {...(variant === "tabs"
+              ? { "aria-labelledby": `tab-${t.id}` }
+              : {})}
             aria-hidden={!isActive}
             tabIndex={isActive ? 0 : -1}
             hidden={!isActive}
             className="flex-1 overflow-y-auto"
-            style={reduced || !isActive ? undefined : { transition: 'opacity 120ms ease' }}
+            style={
+              reduced || !isActive
+                ? undefined
+                : { transition: "opacity 120ms ease" }
+            }
           >
             <ErrorBoundary label={t.label}>{t.content}</ErrorBoundary>
           </div>
@@ -191,17 +221,24 @@ function MenuChooser({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={ariaLabel ?? 'Choose panel'}
+        aria-label={ariaLabel ?? "Choose panel"}
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-bg-2 transition-colors"
       >
-        {active?.icon && <span className="text-accent shrink-0">{active.icon}</span>}
-        <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-2">Panel</span>
+        {active?.icon && (
+          <span className="text-accent shrink-0">{active.icon}</span>
+        )}
+        <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-2">
+          Panel
+        </span>
         <span className="mono text-[12px] tracking-[0.3px] text-txt-0 flex-1 truncate">
-          {active?.label ?? '—'}
+          {active?.label ?? "—"}
         </span>
         <span className="mono text-[10px] text-txt-2" aria-hidden="true">
-          <Icon name={open ? 'chevron-up' : 'chevron-down'} className="w-3.5 h-3.5" />
+          <Icon
+            name={open ? "chevron-up" : "chevron-down"}
+            className="w-3.5 h-3.5"
+          />
         </span>
       </button>
       {open && (
@@ -216,9 +253,9 @@ function MenuChooser({
           />
           <ul
             role="listbox"
-            aria-label={ariaLabel ?? 'Panels'}
+            aria-label={ariaLabel ?? "Panels"}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') setOpen(false);
+              if (e.key === "Escape") setOpen(false);
             }}
             className="absolute left-0 right-0 top-full z-(--z-dropdown) max-h-[60vh] overflow-y-auto border-b border-x border-line-2 bg-bg-1 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.8)]"
           >
@@ -235,16 +272,23 @@ function MenuChooser({
                       setOpen(false);
                     }}
                     className={[
-                      'w-full flex items-center gap-2.5 px-3 py-2.5 text-left border-l-2 transition-colors',
+                      "w-full flex items-center gap-2.5 px-3 py-2.5 text-left border-l-2 transition-colors",
                       isActive
-                        ? 'border-accent bg-accent-dim text-txt-0'
-                        : 'border-transparent text-txt-1 hover:bg-bg-2 hover:text-txt-0',
-                    ].join(' ')}
+                        ? "border-accent bg-accent-dim text-txt-0"
+                        : "border-transparent text-txt-1 hover:bg-bg-2 hover:text-txt-0",
+                    ].join(" ")}
                   >
-                    <span className="w-4 text-center shrink-0 text-accent">{t.icon ?? '▸'}</span>
-                    <span className="mono text-[12px] tracking-[0.3px] flex-1 truncate">{t.label}</span>
+                    <span className="w-4 text-center shrink-0 text-accent">
+                      {t.icon ?? "▸"}
+                    </span>
+                    <span className="mono text-[12px] tracking-[0.3px] flex-1 truncate">
+                      {t.label}
+                    </span>
                     {isActive && (
-                      <span className="text-accent text-[10px]" aria-hidden="true">
+                      <span
+                        className="text-accent text-[10px]"
+                        aria-hidden="true"
+                      >
                         ●
                       </span>
                     )}

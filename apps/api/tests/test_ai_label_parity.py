@@ -25,10 +25,10 @@ def _ts_label() -> str:
     # itself contains one ("...as a drafting aid; a human must verify..."), and
     # a non-greedy match to the first semicolon silently truncated the string
     # to six words and compared that.
-    m = re.search(r"export const AI_LABEL =\s*(.*?';)", src, re.S)
+    m = re.search(r"export const AI_LABEL =\s*(.*?['\"];)", src, re.S)
     assert m, "aiLabel.tsx lost its `export const AI_LABEL` declaration"
-    # A '+'-joined run of single-quoted fragments.
-    parts = re.findall(r"'([^']*)'", m.group(1))
+    # A '+'-joined run of quoted fragments, in whichever quote the formatter wrote.
+    parts = [a or b for a, b in re.findall(r"'([^']*)'|\"([^\"]*)\"", m.group(1))]
     assert parts, "AI_LABEL is no longer a quoted string literal"
     return "".join(parts)
 

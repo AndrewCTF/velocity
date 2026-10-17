@@ -3,9 +3,9 @@
 // A single <ToastHost/> (mounted once in AppRouter) renders the stack, sits at
 // the --z-toast layer (above every modal/wizard), and announces politely for
 // screen readers. Toasts auto-dismiss; click to dismiss early.
-import { useEffect } from 'react';
-import { create } from 'zustand';
-import { InlineAlert, type AlertTone } from './InlineAlert.js';
+import { useEffect } from "react";
+import { create } from "zustand";
+import { InlineAlert, type AlertTone } from "./InlineAlert.js";
 
 export interface ToastItem {
   id: number;
@@ -34,10 +34,14 @@ const useToastStore = create<ToastState>((set) => ({
 
 // Imperative API — the ergonomic surface later code should adopt.
 export const toast = {
-  info: (msg: string, ttl?: number) => useToastStore.getState().push('info', msg, ttl),
-  ok: (msg: string, ttl?: number) => useToastStore.getState().push('ok', msg, ttl),
-  warn: (msg: string, ttl?: number) => useToastStore.getState().push('warn', msg, ttl),
-  error: (msg: string, ttl?: number) => useToastStore.getState().push('alert', msg, ttl),
+  info: (msg: string, ttl?: number) =>
+    useToastStore.getState().push("info", msg, ttl),
+  ok: (msg: string, ttl?: number) =>
+    useToastStore.getState().push("ok", msg, ttl),
+  warn: (msg: string, ttl?: number) =>
+    useToastStore.getState().push("warn", msg, ttl),
+  error: (msg: string, ttl?: number) =>
+    useToastStore.getState().push("alert", msg, ttl),
   dismiss: (id: number) => useToastStore.getState().dismiss(id),
 };
 
@@ -52,7 +56,7 @@ function ToastRow({ item }: { item: ToastItem }): JSX.Element {
       type="button"
       onClick={() => dismiss(item.id)}
       className="pointer-events-auto text-left w-[300px] rounded-sm bg-bg-1"
-      style={{ boxShadow: 'var(--sh-2)' }}
+      style={{ boxShadow: "var(--sh-2)" }}
       title="Dismiss"
     >
       <InlineAlert tone={item.tone}>{item.msg}</InlineAlert>

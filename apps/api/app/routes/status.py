@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import gc
 import os
 import subprocess
 import sys
+import threading
 import time
 from collections import deque
 from typing import Any
@@ -312,20 +314,114 @@ async def _lag_probe_forever() -> None:
         _LAG_SAMPLES.append(max(0.0, (loop.time() - t0 - _LAG_TICK_S) * 1000.0))
 
 
+# The lag number says THAT the loop stalled, never on what, and nothing outside
+# the process can ask: ptrace is refused on the box this runs on, so py-spy and
+# perf see nothing. A thread watches a heartbeat the loop refreshes; while the
+# heartbeat is late it samples the loop thread's stack and charges the time to
+# the innermost frames of ours. `cpu_ms` is how much of that wall time the loop
+# thread itself was on a CPU: close to `wall_ms` means the loop was computing,
+# far below it means the loop was waiting (for the GIL a pool thread held, or in
+# a blocking call). Measured 2026-10-10: a 2 ms route took over 100 ms for 45 %
+# of the wall clock with nothing asking, and up to 4 s under a tile burst.
+_STALL_AFTER_S = 0.1
+_STALL_TICK_S = 0.05
+# ponytail: a few hundred call sites at most reach here; past the cap a new site
+# is counted under "other" instead of growing the table.
+_STALL_SITES_MAX = 300
+_STALLS: dict[str, list[float]] = {}  # call site → [samples, wall ms, cpu ms]
+_STALL_SINCE = 0.0
+_beat = 0.0
+_BEAT_TASK: asyncio.Task[None] | None = None
+_WATCH_STOP: threading.Event | None = None
+_GC = {"collections": 0, "pause_ms_total": 0.0, "pause_ms_max": 0.0, "over_100ms": 0}
+_gc_t0 = 0.0
+_APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
+
+
+async def _heartbeat_forever() -> None:
+    global _beat
+    while True:
+        _beat = time.monotonic()
+        await asyncio.sleep(_STALL_TICK_S)
+
+
+def _blame(frame: Any) -> str:
+    """Innermost frame, then the three innermost frames of ours, outermost last."""
+    ours: list[str] = []
+    inner = ""
+    while frame is not None and len(ours) < 3:
+        code = frame.f_code
+        if code.co_filename.startswith(_APP_DIR):
+            where = code.co_filename[len(_APP_DIR) :]
+            ours.append(f"{where}:{frame.f_lineno} {code.co_name}")
+        elif not ours and not inner:
+            inner = f"[{os.path.basename(code.co_filename)}:{frame.f_lineno} {code.co_name}] "
+        frame = frame.f_back
+    return inner + " < ".join(ours) if ours else inner + "(no frame of ours)"
+
+
+def _watch_stalls(loop_thread: int, stop: threading.Event) -> None:
+    clock = getattr(time, "pthread_getcpuclockid", None)  # Linux; absent on macOS
+    cpu_id = clock(loop_thread) if clock else None
+    last, last_cpu = time.monotonic(), time.clock_gettime(cpu_id) if cpu_id else 0.0
+    while not stop.wait(_STALL_TICK_S):
+        now, cpu = time.monotonic(), time.clock_gettime(cpu_id) if cpu_id else 0.0
+        if now - _beat > _STALL_AFTER_S:
+            site = _blame(sys._current_frames().get(loop_thread))
+            if site not in _STALLS and len(_STALLS) >= _STALL_SITES_MAX:
+                site = "other"
+            row = _STALLS.setdefault(site, [0, 0.0, 0.0])
+            row[0] += 1
+            row[1] += (now - last) * 1000.0
+            row[2] += (cpu - last_cpu) * 1000.0
+        last, last_cpu = now, cpu
+
+
+def _on_gc(phase: str, _info: dict[str, int]) -> None:
+    # A collection holds the GIL, so the loop waits it out whichever thread
+    # triggered it, and no sample can be taken until it is over.
+    global _gc_t0
+    if phase == "start":
+        _gc_t0 = time.perf_counter()
+        return
+    ms = (time.perf_counter() - _gc_t0) * 1000.0
+    _GC["collections"] += 1
+    _GC["pause_ms_total"] += ms
+    _GC["pause_ms_max"] = max(_GC["pause_ms_max"], ms)
+    _GC["over_100ms"] += ms > 100.0
+
+
 def start_lag_probe() -> None:
-    global _LAG_TASK
+    global _LAG_TASK, _BEAT_TASK, _WATCH_STOP, _STALL_SINCE, _beat
     if _LAG_TASK is None or _LAG_TASK.done():
         _LAG_TASK = asyncio.create_task(_lag_probe_forever())
+    if _BEAT_TASK is None or _BEAT_TASK.done():
+        _beat = _STALL_SINCE = time.monotonic()
+        _BEAT_TASK = asyncio.create_task(_heartbeat_forever())
+        _WATCH_STOP = threading.Event()
+        threading.Thread(
+            target=_watch_stalls,
+            args=(threading.get_ident(), _WATCH_STOP),
+            name="loop-stall-watch",
+            daemon=True,
+        ).start()
+        if _on_gc not in gc.callbacks:
+            gc.callbacks.append(_on_gc)
 
 
 async def stop_lag_probe() -> None:
-    global _LAG_TASK
-    t = _LAG_TASK
-    _LAG_TASK = None
-    if t and not t.done():
-        t.cancel()
-        with contextlib.suppress(asyncio.CancelledError, Exception):
-            await t
+    global _LAG_TASK, _BEAT_TASK
+    if _WATCH_STOP is not None:
+        _WATCH_STOP.set()
+    if _on_gc in gc.callbacks:
+        gc.callbacks.remove(_on_gc)
+    tasks = (_LAG_TASK, _BEAT_TASK)
+    _LAG_TASK = _BEAT_TASK = None
+    for t in tasks:
+        if t and not t.done():
+            t.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await t
 
 
 def _pct(values: list[float], p: float) -> float | None:
@@ -346,6 +442,14 @@ async def status_perf() -> dict[str, Any]:
         "loop_lag_ms_max": round(max(lag), 2) if lag else None,
         "loop_lag_samples": len(lag),
         "loop_lag_window_s": round(len(lag) * _LAG_TICK_S, 1),
+        # Where the stalled time went since boot, worst first.
+        "loop_stall_window_s": round(time.monotonic() - _STALL_SINCE, 1) if _STALL_SINCE else 0,
+        "loop_stall_ms_total": round(sum(r[1] for r in list(_STALLS.values()))),
+        "loop_stalls": [
+            {"at": at, "samples": int(n), "wall_ms": round(wall), "cpu_ms": round(cpu)}
+            for at, (n, wall, cpu) in sorted(_STALLS.items(), key=lambda kv: -kv[1][1])[:15]
+        ],
+        "gc": {k: round(v, 1) for k, v in _GC.items()},
     }
     # ADS-B world blob — size and age come from module state, no snapshot walk.
     try:

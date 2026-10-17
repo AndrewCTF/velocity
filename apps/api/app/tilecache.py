@@ -53,6 +53,13 @@ class TileCache:
             raise ValueError("tile path escapes the cache root")
         return Path(path)
 
+    def size(self, source: str, z: int, x: int, y: int, ext: str) -> int | None:
+        """Bytes of the cached tile, or None when there is none."""
+        try:
+            return self._path(source, z, x, y, ext).stat().st_size
+        except OSError:
+            return None
+
     def _lock_for(self, key: str) -> asyncio.Lock:
         lock = self._locks.get(key)
         if lock is None:
@@ -104,7 +111,10 @@ class TileCache:
             data = await loader()
             if data:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                tmp = path.with_suffix(path.suffix + ".tmp")
+                # Named for the process: the tile lane (app/tiles_main.py) and
+                # the API write into this tree at once, and a shared name let
+                # one of them rename the other's half-written file into place.
+                tmp = path.with_suffix(f"{path.suffix}.{os.getpid()}.tmp")
                 tmp.write_bytes(data)
                 os.replace(tmp, path)
                 await self._maybe_evict()
@@ -150,12 +160,19 @@ class TileCache:
                         st = os.stat(fp)
                     except OSError:
                         continue
-                    files.append((st.st_mtime, st.st_size, fp))
+                    # Last USED, not last fetched: by fetch time alone the
+                    # places looked at every day went first, simply for having
+                    # been fetched first, and loaded cold again (a Manhattan
+                    # view is 110 MB of a 1 GB cap; eight new views evicted it,
+                    # 2026-10-11). Reads move atime, at worst once a day under
+                    # relatime, which is fine-grained enough for this; a
+                    # noatime mount falls back to fetch time.
+                    files.append((max(st.st_mtime, st.st_atime), st.st_size, fp))
                     total += st.st_size
             if total <= self.max_bytes:
                 return
             target = int(self.max_bytes * _EVICT_LOW_WATER)
-            files.sort()  # oldest mtime first
+            files.sort()  # least recently used first
             freed = 0
             removed = 0
             for _mtime, size, fp in files:

@@ -6,9 +6,9 @@ Nothing here is fixed yet; this is the map for the next wave.
 
 ## 1. Should be
 
-Operator, verbatim: *"palantir level of shit and a lot more detailed data, better
-UI, no more BS in the UI, easily readable. no more clipping"* and *"some places
-like above the strait of hormuz, planes refresh time is too slow"*.
+Operator, verbatim: _"palantir level of shit and a lot more detailed data, better
+UI, no more BS in the UI, easily readable. no more clipping"_ and _"some places
+like above the strait of hormuz, planes refresh time is too slow"_.
 
 The spine for "Palantir level" is already written and not re-derived here:
 `docs/plan-99-2026-08.md` §0 (provenance tiers, clean primary data, no
@@ -45,12 +45,12 @@ pump stall plus one second.
 
 Per region, same 90 s window (`tools/perf/adsb_region_refresh.py`, bbox Hormuz 23-30N 50-60E):
 
-| Region | Aircraft | Updates / 90 s (median) | No update in 90 s | seen_pos_s p90 |
-|---|---|---|---|---|
-| Hormuz / Gulf | 136 | 9 | 16% | 106 s |
-| India | 332 | 8 | 11% | 80 s |
-| Europe | 3,173 | 11 | 16% | 30 s |
-| CONUS | 4,239 | 12 | 9% | 12 s |
+| Region        | Aircraft | Updates / 90 s (median) | No update in 90 s | seen_pos_s p90 |
+| ------------- | -------- | ----------------------- | ----------------- | -------------- |
+| Hormuz / Gulf | 136      | 9                       | 16%               | 106 s          |
+| India         | 332      | 8                       | 11%               | 80 s           |
+| Europe        | 3,173    | 11                      | 16%               | 30 s           |
+| CONUS         | 4,239    | 12                      | 9%                | 12 s           |
 
 Hormuz gets ~25% fewer updates than CONUS and its oldest decile is 9x staler.
 That part is community-receiver density over the Gulf (all three sources are
@@ -77,18 +77,18 @@ plus the 4 left panels plus a selected aircraft. Limits: no scrolling, no hover,
 first clipping ancestor only, and it does not model occlusion: the "overlapping" column is not trusted: on AI, Workflows, City and Reports it counts the hidden TimeDock under the opaque app overlay (`AppSurface.tsx:121`), not visible defects. Content below the fold (Explorer's 2,500 list rows)
 is excluded; it is scroll, not clipping.
 
-| Surface | Truncated @1920 | Truncated @1440 | Text < 11 px | Overlapping text |
-|---|---|---|---|---|
-| Map, default | 3 | 8 | 41 | 0 |
-| Map, aircraft selected | 6 | 13 | 49 | 0 |
-| Info panel | 8 | 15 | 41 | 0 |
-| AI | 0 | 0 | **107** | 12 |
-| Explorer | 6 | 13 | **572** | 0 |
-| Country | 12 | 12 | **305** | 0 |
-| Markets | 5 | 5 | 60 | 0 |
-| Reports | 6 | 13 | 66 | 13 @1440 |
-| Workflows | 0 | 0 | 49 | 7 |
-| City | 0 | 0 | 49 | 5 @1440 |
+| Surface                | Truncated @1920 | Truncated @1440 | Text < 11 px | Overlapping text |
+| ---------------------- | --------------- | --------------- | ------------ | ---------------- |
+| Map, default           | 3               | 8               | 41           | 0                |
+| Map, aircraft selected | 6               | 13              | 49           | 0                |
+| Info panel             | 8               | 15              | 41           | 0                |
+| AI                     | 0               | 0               | **107**      | 12               |
+| Explorer               | 6               | 13              | **572**      | 0                |
+| Country                | 12              | 12              | **305**      | 0                |
+| Markets                | 5               | 5               | 60           | 0                |
+| Reports                | 6               | 13              | 66           | 13 @1440         |
+| Workflows              | 0               | 0               | 49           | 7                |
+| City                   | 0               | 0               | 49           | 5 @1440          |
 
 Source: `rg 'text-\[10px\]'` = **781** occurrences in `apps/web/src`,
 `text-[9px]` = **31**. The small-text floor is a codebase habit, not a few
@@ -97,17 +97,17 @@ the map legend, the compass N, all 10 px.
 
 ### Named offenders
 
-| What the operator sees | Where |
-|---|---|
-| Every feed name in Info cut to 153 px: "Aircraft · Emergency squ…", "Vessels · live (all AIS sou…" | `shell/panels/InfoPanel.tsx:170,219` (`span.block.truncate` in a 38 px row) |
-| At 1440 AOI subtitles cut: "Red Sea / Gulf of…", "Atlantic / Mediter…" | same rows |
-| World summary "Oldest fix · Vessels · live (all AIS sources, 24/7)" 267/233 px | `shell/panels/WorldPanel.tsx:173` |
-| Markets: all 5 instrument names in 68 px ("Nasdaq Composite" needs 99, "US Dollar / Japanese Yen" 131) | `markets/SnapshotCard.tsx:42` |
-| Country list: 12 names cut ("Congo, Democratic Republ…") at 12 px in a 240 px nav | `country/CountryApp.tsx:178,212` |
-| Timeline hour label overruns its tick box by 32 px on every surface | `shell/TimeDock.tsx` |
-| Selection panel: "Claim-tier reports within 50 km" 178/165 px; altitude "10668" exceeds its svg by 11 px | Selection dossier |
-| At 1440 the command box on the globe cuts "correlat", its footer "⌘J console" wraps, and "center 15.00°E" / "alt" sit under the box and the TimeDock | map furniture, `console.css` banner rules |
-| Reports situation title cut mid-word: "Vessel(s) went silent / dark near reported activ" | Reports, Situations list |
+| What the operator sees                                                                                                                               | Where                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Every feed name in Info cut to 153 px: "Aircraft · Emergency squ…", "Vessels · live (all AIS sou…"                                                   | `shell/panels/InfoPanel.tsx:170,219` (`span.block.truncate` in a 38 px row) |
+| At 1440 AOI subtitles cut: "Red Sea / Gulf of…", "Atlantic / Mediter…"                                                                               | same rows                                                                   |
+| World summary "Oldest fix · Vessels · live (all AIS sources, 24/7)" 267/233 px                                                                       | `shell/panels/WorldPanel.tsx:173`                                           |
+| Markets: all 5 instrument names in 68 px ("Nasdaq Composite" needs 99, "US Dollar / Japanese Yen" 131)                                               | `markets/SnapshotCard.tsx:42`                                               |
+| Country list: 12 names cut ("Congo, Democratic Republ…") at 12 px in a 240 px nav                                                                    | `country/CountryApp.tsx:178,212`                                            |
+| Timeline hour label overruns its tick box by 32 px on every surface                                                                                  | `shell/TimeDock.tsx`                                                        |
+| Selection panel: "Claim-tier reports within 50 km" 178/165 px; altitude "10668" exceeds its svg by 11 px                                             | Selection dossier                                                           |
+| At 1440 the command box on the globe cuts "correlat", its footer "⌘J console" wraps, and "center 15.00°E" / "alt" sit under the box and the TimeDock | map furniture, `console.css` banner rules                                   |
+| Reports situation title cut mid-word: "Vessel(s) went silent / dark near reported activ"                                                             | Reports, Situations list                                                    |
 
 ### Wasted space (the other half of "readable")
 
@@ -125,13 +125,13 @@ Each item was on screen during the sweep.
 
 1. **AI > Answers repeats one paragraph seven times.** Hormuz, Suez, Bab-el-Mandeb,
    Bosphorus, Malacca, Panama, Gibraltar all read `UNKNOWN · no evidence recorded ·
-   confidence low · No recorded vessel history in this strait yet` followed by the
+confidence low · No recorded vessel history in this strait yet` followed by the
    same two-line methodology. One line would say it: "7 straits need 3 days of
    recording before they answer." (`api/app/intel/answers.py`,
    `web/src/answers/AnswersCard.tsx`.) Meanwhile the AOI panel on the left shows
    live vessel counts for the same straits, so the page contradicts itself.
 2. **Raw ids and dead defaults in Info > Feeds**: `hazards.usgs.quakes · no reason
-   given` with an empty bar (`InfoPanel.tsx:179`). An id is not a label, and "no
+given` with an empty bar (`InfoPanel.tsx:179`). An id is not a label, and "no
    reason given" is the UI apologising for not knowing.
 3. **Leftover test records in this deployment's local state** (data, not shipped
    code): Reports > Situations lists "Riley test case - example.com"; Workflows
@@ -180,15 +180,15 @@ with lag.
 
 ## 6. Priority order
 
-| # | Gap | Why first | Check that proves it |
-|---|---|---|---|
-| 1 | **DONE 2026-09-13.** ADS-B pump publishes what answered instead of waiting on the slowest source | Operator-reported, measured 12-20 s global freezes | `tools/perf/adsb_region_refresh.py`: no pull with 0 changes; `verify.sh --live` refresh ≥ 20% |
-| 2 | Fix age visible on the icon (dim by `seen_pos_s`) | Makes Gulf coverage honest instead of looking frozen | invariants test on style alpha; screenshot over Hormuz |
-| 3 | Zero truncation at 1440: Info rows, Markets, Country, TimeDock, map furniture | "no more clipping" | `ui_clip_sweep.mjs 1440 900` truncated = 0 on the rows in §3 |
-| 4 | 11 px floor; drop the 820 px measure for dossier-style apps | "easily readable" | sweep `tiny` column; 781 → 0 `text-[10px]` for body copy |
-| 5 | Kill the BS list in §4 (collapse repeated answers, labels not ids, remove fixtures, Reports opens on cases, unreported ≠ 0) | "no more BS" | per-item guard or screenshot |
-| 6 | Object view depth: registry/owner chain + inline track history in Selection | "Palantir level", "more detailed data" | selected aircraft shows owner + 24 h history live |
-| 7 | T0 ↔ T2 join and the remaining plan-99 §3 sources | the moat | plan-99 §3 row status |
+| #   | Gap                                                                                                                         | Why first                                            | Check that proves it                                                                          |
+| --- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 1   | **DONE 2026-09-13.** ADS-B pump publishes what answered instead of waiting on the slowest source                            | Operator-reported, measured 12-20 s global freezes   | `tools/perf/adsb_region_refresh.py`: no pull with 0 changes; `verify.sh --live` refresh ≥ 20% |
+| 2   | Fix age visible on the icon (dim by `seen_pos_s`)                                                                           | Makes Gulf coverage honest instead of looking frozen | invariants test on style alpha; screenshot over Hormuz                                        |
+| 3   | Zero truncation at 1440: Info rows, Markets, Country, TimeDock, map furniture                                               | "no more clipping"                                   | `ui_clip_sweep.mjs 1440 900` truncated = 0 on the rows in §3                                  |
+| 4   | 11 px floor; drop the 820 px measure for dossier-style apps                                                                 | "easily readable"                                    | sweep `tiny` column; 781 → 0 `text-[10px]` for body copy                                      |
+| 5   | Kill the BS list in §4 (collapse repeated answers, labels not ids, remove fixtures, Reports opens on cases, unreported ≠ 0) | "no more BS"                                         | per-item guard or screenshot                                                                  |
+| 6   | Object view depth: registry/owner chain + inline track history in Selection                                                 | "Palantir level", "more detailed data"               | selected aircraft shows owner + 24 h history live                                             |
+| 7   | T0 ↔ T2 join and the remaining plan-99 §3 sources                                                                           | the moat                                             | plan-99 §3 row status                                                                         |
 
 Reproduce: boot the stack, then `node tools/perf/ui_clip_sweep.mjs 1440 900`
 (writes screenshots + `metrics-<w>.json` to `$OUT`, default `scratchpad/sweep`).

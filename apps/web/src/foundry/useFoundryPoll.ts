@@ -5,21 +5,24 @@
 // PollGeoJsonAdapter wall-clock-grid scheduler: that phases many feed pollers;
 // one 30s interval per active view doesn't need it and shouldn't touch the
 // feed invariants.
-import { useEffect, useRef } from 'react';
-import { useAppView } from '../state/appView.js';
+import { useEffect, useRef } from "react";
+import { useAppView } from "../state/appView.js";
 
-export function useFoundryPoll(fn: () => void | Promise<void>, intervalMs = 30_000): void {
+export function useFoundryPoll(
+  fn: () => void | Promise<void>,
+  intervalMs = 30_000,
+): void {
   const fnRef = useRef(fn);
   fnRef.current = fn;
   const app = useAppView((s) => s.app);
 
   useEffect(() => {
-    if (app !== 'foundry') return; // paused while another app is up
-    let active = document.visibilityState === 'visible';
+    if (app !== "foundry") return; // paused while another app is up
+    let active = document.visibilityState === "visible";
     let timer: ReturnType<typeof setInterval> | null = null;
 
     const run = (): void => {
-      if (document.visibilityState === 'visible') void fnRef.current();
+      if (document.visibilityState === "visible") void fnRef.current();
     };
     const start = (): void => {
       stop();
@@ -30,7 +33,7 @@ export function useFoundryPoll(fn: () => void | Promise<void>, intervalMs = 30_0
       timer = null;
     };
     const onVis = (): void => {
-      const now = document.visibilityState === 'visible';
+      const now = document.visibilityState === "visible";
       if (now && !active) run(); // refetch on resume
       active = now;
       if (now) start();
@@ -39,9 +42,9 @@ export function useFoundryPoll(fn: () => void | Promise<void>, intervalMs = 30_0
 
     run(); // immediate on activation
     if (active) start();
-    document.addEventListener('visibilitychange', onVis);
+    document.addEventListener("visibilitychange", onVis);
     return () => {
-      document.removeEventListener('visibilitychange', onVis);
+      document.removeEventListener("visibilitychange", onVis);
       stop();
     };
   }, [app, intervalMs]);

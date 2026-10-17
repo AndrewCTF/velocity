@@ -16,40 +16,40 @@ the design in without this list would silently drop the rest.
 
 ## Left rail, 18 panels
 
-| id | Component | Mockup | Wiring note |
-|---|---|---|---|
-| `layers` | `LayerCatalog` | **yes** `10-map` | the reference panel |
-| `filters` | `HistogramPanel` | **yes** `13-map-histogram` | faceted bars, clickable |
-| `feeds` | `FeedsPanel` | **yes** (merged into Info) | sparkline per feed |
-| `ops` | `OpsPanel` | **yes** (merged into Info) | keep the 3-state guard |
-| `search-objects` | `SearchObjectsSidebar` | partial (`14-map-find`) | Find covers geo search, not object search |
-| `imagery` | `ImageryControl` | **no** | has a legend + frame stepper; 18 image surfaces depend on it |
-| `annotate` | `AnnotationPanel` | **no** | threat-colour swatches are 3 emoji sites |
-| `watch` | `WatchboxPanel` | **no** | |
-| `inbox` | `InboxPanel` | **no** | |
-| `answers` | `AnswersCard` | **no** | |
-| `chokepoints` | `ChokepointsList` | **no** | |
-| `acars` | `AcarsPanel` | **no** | |
-| `extract` | `ExtractPanel` | **no** | |
-| `countries` | `CountriesPanel` | partial (`25-country`) | flag emoji built at runtime, 2 sites |
-| `allsources` | `LayerRail` | partial (`10-map`) | `MeterBar` on opacity only |
-| `field` | `FieldPanel` | **no** | |
-| `tasking` | `TaskingPanel` | partial (`32-decide`) | owns `SkyViewPlot`, the polar scope |
-| `cop` | `CopEditor` | **no** | MIL-STD-2525 via `milsymbol`, must not be restyled away |
+| id               | Component              | Mockup                     | Wiring note                                                  |
+| ---------------- | ---------------------- | -------------------------- | ------------------------------------------------------------ |
+| `layers`         | `LayerCatalog`         | **yes** `10-map`           | the reference panel                                          |
+| `filters`        | `HistogramPanel`       | **yes** `13-map-histogram` | faceted bars, clickable                                      |
+| `feeds`          | `FeedsPanel`           | **yes** (merged into Info) | sparkline per feed                                           |
+| `ops`            | `OpsPanel`             | **yes** (merged into Info) | keep the 3-state guard                                       |
+| `search-objects` | `SearchObjectsSidebar` | partial (`14-map-find`)    | Find covers geo search, not object search                    |
+| `imagery`        | `ImageryControl`       | **no**                     | has a legend + frame stepper; 18 image surfaces depend on it |
+| `annotate`       | `AnnotationPanel`      | **no**                     | threat-colour swatches are 3 emoji sites                     |
+| `watch`          | `WatchboxPanel`        | **no**                     |                                                              |
+| `inbox`          | `InboxPanel`           | **no**                     |                                                              |
+| `answers`        | `AnswersCard`          | **no**                     |                                                              |
+| `chokepoints`    | `ChokepointsList`      | **no**                     |                                                              |
+| `acars`          | `AcarsPanel`           | **no**                     |                                                              |
+| `extract`        | `ExtractPanel`         | **no**                     |                                                              |
+| `countries`      | `CountriesPanel`       | partial (`25-country`)     | flag emoji built at runtime, 2 sites                         |
+| `allsources`     | `LayerRail`            | partial (`10-map`)         | `MeterBar` on opacity only                                   |
+| `field`          | `FieldPanel`           | **no**                     |                                                              |
+| `tasking`        | `TaskingPanel`         | partial (`32-decide`)      | owns `SkyViewPlot`, the polar scope                          |
+| `cop`            | `CopEditor`            | **no**                     | MIL-STD-2525 via `milsymbol`, must not be restyled away      |
 
 ## Right rail, 9 tabs
 
-| id | Component | Mockup |
-|---|---|---|
-| `selection` | `EntityPanel` | **yes** `11-map-selected` |
-| `filters` | `HistogramPanel` | **yes** |
-| `investigation` | `InvestigationCanvas` | **yes** `20-graph` |
-| `intel` | `IntelPanel` | partial |
-| `news` | `NewsPanel` | partial (`29-reports`) |
-| `alerts` | `AlertsRailList` | **no** |
-| `collab` | `CollabPanel` | **no** |
-| `ground` | `GroundReconPanel` | **no** |
-| `field` | `FieldPanel` | **no** |
+| id              | Component             | Mockup                    |
+| --------------- | --------------------- | ------------------------- |
+| `selection`     | `EntityPanel`         | **yes** `11-map-selected` |
+| `filters`       | `HistogramPanel`      | **yes**                   |
+| `investigation` | `InvestigationCanvas` | **yes** `20-graph`        |
+| `intel`         | `IntelPanel`          | partial                   |
+| `news`          | `NewsPanel`           | partial (`29-reports`)    |
+| `alerts`        | `AlertsRailList`      | **no**                    |
+| `collab`        | `CollabPanel`         | **no**                    |
+| `ground`        | `GroundReconPanel`    | **no**                    |
+| `field`         | `FieldPanel`          | **no**                    |
 
 ## Apps, 14
 
@@ -67,23 +67,23 @@ because they render outside `ConsoleShell` and will not inherit shell styling.
 
 ## Overlays and chrome, not addressable from a registry
 
-| Surface | Mockup | Note |
-|---|---|---|
-| `CommandBar` | **yes** (title bar) | `SysStats` is 4 bare numbers, named in `VIDEO-ANALYSIS.md` |
-| `Omnibar` (⌘K) | **no** | the palette indexes everything; §2.2 rule 2 |
-| `AgentConsole` (⌘J) | **no** | 8 emoji sites |
-| `ContextMenu` | **yes** `14-map-find` | |
-| `ModeSurface` | **no** | 4 modes: targeting, tasking, fmv, cop |
-| `AlertsPanel` modal | **no** | |
-| `SimulationOverlay` | **no** | |
-| `FloatingPanel` | **no** | detach/drag; has a pointer-capture fix that must survive |
-| `TabbedPanel` | **no** | 3 emoji sites |
-| `Modal` / `toast` / `InlineAlert` | partial | toast **yes** |
-| Settings | **no** | `SettingsModal` |
-| First-run gate | **no** | `--z-wizard`, must stay above modals |
-| `MapHealthStrip` | **yes** (map strip) | |
-| `GlobeToolbar` | **yes** (7 tools) | |
-| `Timeline` | **yes** `12-map-replay` | |
+| Surface                           | Mockup                  | Note                                                       |
+| --------------------------------- | ----------------------- | ---------------------------------------------------------- |
+| `CommandBar`                      | **yes** (title bar)     | `SysStats` is 4 bare numbers, named in `VIDEO-ANALYSIS.md` |
+| `Omnibar` (⌘K)                    | **no**                  | the palette indexes everything; §2.2 rule 2                |
+| `AgentConsole` (⌘J)               | **no**                  | 8 emoji sites                                              |
+| `ContextMenu`                     | **yes** `14-map-find`   |                                                            |
+| `ModeSurface`                     | **no**                  | 4 modes: targeting, tasking, fmv, cop                      |
+| `AlertsPanel` modal               | **no**                  |                                                            |
+| `SimulationOverlay`               | **no**                  |                                                            |
+| `FloatingPanel`                   | **no**                  | detach/drag; has a pointer-capture fix that must survive   |
+| `TabbedPanel`                     | **no**                  | 3 emoji sites                                              |
+| `Modal` / `toast` / `InlineAlert` | partial                 | toast **yes**                                              |
+| Settings                          | **no**                  | `SettingsModal`                                            |
+| First-run gate                    | **no**                  | `--z-wizard`, must stay above modals                       |
+| `MapHealthStrip`                  | **yes** (map strip)     |                                                            |
+| `GlobeToolbar`                    | **yes** (7 tools)       |                                                            |
+| `Timeline`                        | **yes** `12-map-replay` |                                                            |
 
 ## Invariants the wiring must not break
 

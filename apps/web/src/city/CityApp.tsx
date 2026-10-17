@@ -7,16 +7,16 @@
 // (input + object URL), a pasted URL, or a deep link into the existing
 // satellite-AOI training flow in Reconstruction Studio (no training happens
 // here — CLAUDE.md "find the reuse first").
-import { RotateCw } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiFetch } from '../transport/http.js';
-import { Btn, Widget, Badge } from '../shell/instruments.js';
-import { SplatView, type CamPose } from '../studio/SplatView.js';
-import { splatCityFromSat } from './satToSplat.js';
+import { RotateCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { apiFetch } from "../transport/http.js";
+import { Btn, Widget, Badge } from "../shell/instruments.js";
+import { SplatView, type CamPose } from "../studio/SplatView.js";
+import { splatCityFromSat } from "./satToSplat.js";
 
 interface ReconJob {
   id: string;
-  status: 'running' | 'done' | 'error';
+  status: "running" | "done" | "error";
   stage: string;
   pct: number;
   error: string | null;
@@ -24,7 +24,7 @@ interface ReconJob {
   log_tail: string[];
 }
 
-type SceneSource = 'recon' | 'file' | 'url';
+type SceneSource = "recon" | "file" | "url";
 
 interface Scene {
   url: string;
@@ -41,7 +41,7 @@ export function CityApp(): JSX.Element {
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [scene, setScene] = useState<Scene | null>(null);
-  const [urlInput, setUrlInput] = useState('');
+  const [urlInput, setUrlInput] = useState("");
   const [lat, setLat] = useState(25.08);
   const [lon, setLon] = useState(55.14);
   const [radiusKm, setRadiusKm] = useState(2);
@@ -60,8 +60,9 @@ export function CityApp(): JSX.Element {
     setJobsLoading(true);
     setJobsError(null);
     try {
-      const res = await apiFetch('/api/recon/jobs');
-      if (!res.ok) throw new Error(`Recon jobs unavailable (HTTP ${res.status})`);
+      const res = await apiFetch("/api/recon/jobs");
+      if (!res.ok)
+        throw new Error(`Recon jobs unavailable (HTTP ${res.status})`);
       const body = (await res.json()) as { jobs?: ReconJob[] };
       setJobs(body.jobs ?? []);
     } catch (e) {
@@ -94,33 +95,36 @@ export function CityApp(): JSX.Element {
 
   // Same probe StudioPage.loadJob uses: prefer the compact full-SH .spz, fall
   // back to .ply (a 1-byte Range GET returns 206 if the file exists).
-  const openJob = useCallback(async (job: ReconJob) => {
-    const seq = ++openSeqRef.current;
-    let url = `/api/recon/jobs/${job.id}/result.ply`;
-    try {
-      const probe = await apiFetch(`/api/recon/jobs/${job.id}/result.spz`, {
-        headers: { Range: 'bytes=0-0' },
+  const openJob = useCallback(
+    async (job: ReconJob) => {
+      const seq = ++openSeqRef.current;
+      let url = `/api/recon/jobs/${job.id}/result.ply`;
+      try {
+        const probe = await apiFetch(`/api/recon/jobs/${job.id}/result.spz`, {
+          headers: { Range: "bytes=0-0" },
+        });
+        if (probe.ok) url = `/api/recon/jobs/${job.id}/result.spz`;
+      } catch {
+        /* no .spz -> .ply */
+      }
+      let cam: CamPose | null = null;
+      try {
+        const r = await apiFetch(`/api/recon/jobs/${job.id}/camera.json`);
+        if (r.ok) cam = (await r.json()) as CamPose;
+      } catch {
+        /* viewer falls back to its default camera */
+      }
+      if (seq !== openSeqRef.current) return; // superseded by a later click
+      setSceneRevokingPrior({
+        url,
+        cam,
+        label: `recon job ${job.id}`,
+        source: "recon",
+        splatCount: job.n_gaussians || null,
       });
-      if (probe.ok) url = `/api/recon/jobs/${job.id}/result.spz`;
-    } catch {
-      /* no .spz -> .ply */
-    }
-    let cam: CamPose | null = null;
-    try {
-      const r = await apiFetch(`/api/recon/jobs/${job.id}/camera.json`);
-      if (r.ok) cam = (await r.json()) as CamPose;
-    } catch {
-      /* viewer falls back to its default camera */
-    }
-    if (seq !== openSeqRef.current) return; // superseded by a later click
-    setSceneRevokingPrior({
-      url,
-      cam,
-      label: `recon job ${job.id}`,
-      source: 'recon',
-      splatCount: job.n_gaussians || null,
-    });
-  }, [setSceneRevokingPrior]);
+    },
+    [setSceneRevokingPrior],
+  );
 
   const openFile = useCallback((file: File) => {
     openSeqRef.current++; // supersede any in-flight openJob
@@ -130,33 +134,49 @@ export function CityApp(): JSX.Element {
     const url = URL.createObjectURL(file);
     objectUrlRef.current = url;
     setMeshCount(null);
-    setScene({ url, cam: null, label: file.name, source: 'file', splatCount: null });
+    setScene({
+      url,
+      cam: null,
+      label: file.name,
+      source: "file",
+      splatCount: null,
+    });
   }, []);
 
   const openUrl = useCallback(() => {
     const u = urlInput.trim();
     if (!u) return;
     openSeqRef.current++; // supersede any in-flight openJob
-    setSceneRevokingPrior({ url: u, cam: null, label: u, source: 'url', splatCount: null });
+    setSceneRevokingPrior({
+      url: u,
+      cam: null,
+      label: u,
+      source: "url",
+      splatCount: null,
+    });
   }, [urlInput, setSceneRevokingPrior]);
 
   // Deep-link into the existing satellite-AOI training flow — Studio owns the
   // actual reconstruction; City 3D never reimplements it (docs/dashboard-
   // workflows-plan.md §4 + CLAUDE.md "find the reuse first").
   const buildFromAoi = useCallback(() => {
-    const qs = new URLSearchParams({ lat: String(lat), lon: String(lon), radius: String(radiusKm) });
-    window.open(`/studio?${qs.toString()}`, '_blank', 'noopener');
+    const qs = new URLSearchParams({
+      lat: String(lat),
+      lon: String(lon),
+      radius: String(radiusKm),
+    });
+    window.open(`/studio?${qs.toString()}`, "_blank", "noopener");
   }, [lat, lon, radiusKm]);
 
   // Keyless "Splat this city": stitch a satellite chip from the keyless /tiles/sat
   // proxy around the AOI and run it through the feed-forward recon engine — a real
   // Gaussian splat of anywhere on Earth, no API key (satToSplat.ts).
   const splatThisCity = useCallback(async () => {
-    setCitySplatMsg('Stitching keyless satellite chip…');
+    setCitySplatMsg("Stitching keyless satellite chip…");
     try {
       const id = await splatCityFromSat(lat, lon, radiusKm);
       setCitySplatJob(id);
-      setCitySplatMsg('Generating Gaussians (feed-forward)…');
+      setCitySplatMsg("Generating Gaussians (feed-forward)…");
       void fetchJobs();
     } catch (e) {
       setCitySplatMsg(e instanceof Error ? e.message : String(e));
@@ -170,16 +190,19 @@ export function CityApp(): JSX.Element {
     const tick = async (): Promise<void> => {
       try {
         const r = await apiFetch(`/api/recon/jobs/${citySplatJob}`);
-        if (!r.ok) throw new Error(`Splat job status unavailable (HTTP ${r.status})`);
+        if (!r.ok)
+          throw new Error(`Splat job status unavailable (HTTP ${r.status})`);
         const job = (await r.json()) as ReconJob;
         if (stop) return;
-        if (job.status === 'done') {
-          setCitySplatMsg(`Done: ${job.n_gaussians.toLocaleString()} Gaussians`);
+        if (job.status === "done") {
+          setCitySplatMsg(
+            `Done: ${job.n_gaussians.toLocaleString()} Gaussians`,
+          );
           setCitySplatJob(null);
           void fetchJobs();
           void openJob(job);
-        } else if (job.status === 'error') {
-          setCitySplatMsg(job.error || 'recon failed');
+        } else if (job.status === "error") {
+          setCitySplatMsg(job.error || "recon failed");
           setCitySplatJob(null);
         } else {
           setCitySplatMsg(`${job.stage} · ${job.pct}%`);
@@ -196,27 +219,44 @@ export function CityApp(): JSX.Element {
     };
   }, [citySplatJob, fetchJobs, openJob]);
 
-  const doneJobs = jobs.filter((j) => j.status === 'done');
+  const doneJobs = jobs.filter((j) => j.status === "done");
   const shownCount = scene?.splatCount ?? meshCount;
 
   return (
     <div className="h-full flex text-txt-1 bg-bg-0">
       <nav className="w-[230px] shrink-0 border-r border-line-2 bg-bg-1 flex flex-col overflow-y-auto">
         <div className="flex items-center gap-2 px-3 h-11 border-b border-line-2 shrink-0">
-          <span aria-hidden className="w-2.5 h-2.5 bg-accent rotate-45 shrink-0" />
-          <span className="mono font-semibold tracking-[1.5px] text-[12px] text-txt-0">CITY 3D</span>
+          <span
+            aria-hidden
+            className="w-2.5 h-2.5 bg-accent rotate-45 shrink-0"
+          />
+          <span className="mono font-semibold tracking-[1.5px] text-[12px] text-txt-0">
+            CITY 3D
+          </span>
         </div>
         <div className="flex-1 p-2.5 flex flex-col gap-3">
           <Widget
             title="RECON JOBS"
             count={doneJobs.length}
             action={
-              <Btn size="sm" onClick={() => void fetchJobs()} disabled={jobsLoading} title="Refresh" aria-label="Refresh">
-                <RotateCw size={13} strokeWidth={1.75} className={jobsLoading ? 'animate-spin' : ''} />
+              <Btn
+                size="sm"
+                onClick={() => void fetchJobs()}
+                disabled={jobsLoading}
+                title="Refresh"
+                aria-label="Refresh"
+              >
+                <RotateCw
+                  size={13}
+                  strokeWidth={1.75}
+                  className={jobsLoading ? "animate-spin" : ""}
+                />
               </Btn>
             }
           >
-            {jobsError && <div className="mono text-[10px] text-alert">{jobsError}</div>}
+            {jobsError && (
+              <div className="mono text-[10px] text-alert">{jobsError}</div>
+            )}
             {!jobsError && !jobsLoading && doneJobs.length === 0 && (
               <div className="mono text-[10px] text-txt-3">
                 No finished recon jobs yet. Build one in Reconstruction Studio.
@@ -224,7 +264,9 @@ export function CityApp(): JSX.Element {
             )}
             <div className="flex flex-col gap-1">
               {doneJobs.map((j) => {
-                const active = scene?.source === 'recon' && scene.label === `recon job ${j.id}`;
+                const active =
+                  scene?.source === "recon" &&
+                  scene.label === `recon job ${j.id}`;
                 return (
                   <button
                     key={j.id}
@@ -232,15 +274,17 @@ export function CityApp(): JSX.Element {
                     data-testid={`city-job-${j.id}`}
                     onClick={() => void openJob(j)}
                     className={[
-                      'text-left px-2 py-1.5 rounded-sm border flex items-center justify-between gap-2 transition-colors',
+                      "text-left px-2 py-1.5 rounded-sm border flex items-center justify-between gap-2 transition-colors",
                       active
-                        ? 'border-accent-line bg-accent-dim text-txt-0'
-                        : 'border-line-2 bg-bg-2 text-txt-2 hover:text-txt-0 hover:border-accent-line',
-                    ].join(' ')}
+                        ? "border-accent-line bg-accent-dim text-txt-0"
+                        : "border-line-2 bg-bg-2 text-txt-2 hover:text-txt-0 hover:border-accent-line",
+                    ].join(" ")}
                   >
                     <span className="mono text-[10px] truncate">{j.id}</span>
                     <span className="mono text-[9px] text-txt-3 tabular-nums shrink-0">
-                      {j.n_gaussians ? `${j.n_gaussians.toLocaleString()} pts` : ''}
+                      {j.n_gaussians
+                        ? `${j.n_gaussians.toLocaleString()} pts`
+                        : ""}
                     </span>
                   </button>
                 );
@@ -257,11 +301,15 @@ export function CityApp(): JSX.Element {
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) openFile(f);
-                  e.target.value = '';
+                  e.target.value = "";
                 }}
               />
-              <div className="mono text-[10px] text-txt-2">Click to choose a local splat file</div>
-              <div className="mono text-[9px] text-txt-3 mt-1">.ply · .splat · .spz · .ksplat</div>
+              <div className="mono text-[10px] text-txt-2">
+                Click to choose a local splat file
+              </div>
+              <div className="mono text-[9px] text-txt-3 mt-1">
+                .ply · .splat · .spz · .ksplat
+              </div>
             </label>
           </Widget>
 
@@ -322,7 +370,9 @@ export function CityApp(): JSX.Element {
               disabled={!!citySplatJob}
               title="Keyless: stitch a satellite chip for this AOI and generate a real Gaussian splat (anywhere on Earth, no API key)"
             >
-              {citySplatJob ? 'GENERATING…' : 'SPLAT THIS CITY (keyless satellite)'}
+              {citySplatJob
+                ? "GENERATING…"
+                : "SPLAT THIS CITY (keyless satellite)"}
             </Btn>
             {citySplatMsg && (
               <div
@@ -333,8 +383,8 @@ export function CityApp(): JSX.Element {
               </div>
             )}
             <div className="mono text-[9px] text-txt-4 mt-2 leading-tight">
-              Single-view feed-forward → a 2.5D relief splat. For multi-view training,
-              open Reconstruction Studio:
+              Single-view feed-forward → a 2.5D relief splat. For multi-view
+              training, open Reconstruction Studio:
             </div>
             <Btn size="sm" className="mt-1.5 w-full" onClick={buildFromAoi}>
               OPEN STUDIO →
@@ -354,7 +404,11 @@ export function CityApp(): JSX.Element {
       <div className="on-dark flex-1 min-w-0 relative bg-[#0b0d10]">
         {scene ? (
           <>
-            <SplatView url={scene.url} cam={scene.cam} onStats={(s) => setMeshCount(s.numSplats)} />
+            <SplatView
+              url={scene.url}
+              cam={scene.cam}
+              onStats={(s) => setMeshCount(s.numSplats)}
+            />
             <div className="absolute top-2 right-2 flex flex-col items-end gap-1 pointer-events-none">
               <Badge tone="accent">{scene.source}</Badge>
               <div
@@ -374,11 +428,14 @@ export function CityApp(): JSX.Element {
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="flex flex-col items-center gap-2 text-center max-w-[420px] px-6">
               <span aria-hidden className="w-2.5 h-2.5 bg-accent rotate-45" />
-              <span className="mono font-semibold tracking-[1.5px] text-[12px] text-txt-0">CITY 3D</span>
+              <span className="mono font-semibold tracking-[1.5px] text-[12px] text-txt-0">
+                CITY 3D
+              </span>
               <p className="text-[11px] text-txt-3 leading-relaxed">
-                No scene loaded. Pick a finished recon job, open a local .ply / .splat / .spz
-                / .ksplat file, paste a splat URL, or build one from a satellite AOI in
-                Reconstruction Studio. Every source here is keyless.
+                No scene loaded. Pick a finished recon job, open a local .ply /
+                .splat / .spz / .ksplat file, paste a splat URL, or build one
+                from a satellite AOI in Reconstruction Studio. Every source here
+                is keyless.
               </p>
             </div>
           </div>

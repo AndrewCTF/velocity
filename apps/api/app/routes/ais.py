@@ -40,9 +40,10 @@ _upstream_task: asyncio.Task[None] | None = None
 # update emit a category-tagged frame so the globe can pick a per-category
 # icon without waiting for the next static refresh.
 _ship_type_by_mmsi: dict[int, int] = {}
-# Bound the cache so a long-running session can't grow it unbounded. ~50k
-# distinct MMSIs covers any plausible bbox; we evict in FIFO order beyond that.
-_SHIP_TYPE_CACHE_MAX = 50_000
+# Bound the cache so a long-running session can't grow it unbounded. Sized for
+# the bridged world union (past 100k typed vessels since 2026-10-04; the old
+# 50k cap made every ingest cycle evict and re-insert most of it). FIFO beyond.
+_SHIP_TYPE_CACHE_MAX = 300_000
 
 
 async def _broadcast(payload: str) -> None:

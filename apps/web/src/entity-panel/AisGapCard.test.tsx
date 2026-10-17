@@ -9,42 +9,53 @@
 // These prove the card now discloses a shortened window even with an empty
 // gap list, and stays silent (as before) when the window is effectively full.
 
-import { render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AisGapCard } from './AisGapCard.js';
+import { render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AisGapCard } from "./AisGapCard.js";
 
-vi.mock('../transport/http.js', () => ({
+vi.mock("../transport/http.js", () => ({
   apiFetch: vi.fn(),
 }));
 
-import { apiFetch } from '../transport/http.js';
+import { apiFetch } from "../transport/http.js";
 
 const mockedFetch = vi.mocked(apiFetch);
 
 function jsonResponse(body: unknown): Response {
-  return { ok: true, status: 200, statusText: 'OK', json: async () => body } as unknown as Response;
+  return {
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    json: async () => body,
+  } as unknown as Response;
 }
 
-const GAP = { start: 1_700_000_000, end: 1_700_000_900, minutes: 15, lon: 5.0, lat: 50.0 };
+const GAP = {
+  start: 1_700_000_000,
+  end: 1_700_000_900,
+  minutes: 15,
+  lon: 5.0,
+  lat: 50.0,
+};
 
-describe('AisGapCard', () => {
+describe("AisGapCard", () => {
   beforeEach(() => {
     mockedFetch.mockReset();
   });
 
-  it('renders nothing when there is no mmsi', () => {
+  it("renders nothing when there is no mmsi", () => {
     const { container } = render(<AisGapCard mmsi={null} />);
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders nothing when the vessel is not found', async () => {
+  it("renders nothing when the vessel is not found", async () => {
     mockedFetch.mockResolvedValue(jsonResponse({ found: false }));
     const { container } = render(<AisGapCard mmsi="477961500" />);
     await waitFor(() => expect(mockedFetch).toHaveBeenCalled());
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders nothing when the window is effectively full and there are no gaps', async () => {
+  it("renders nothing when the window is effectively full and there are no gaps", async () => {
     // Requested and available line up (a fresh box / generous retention) —
     // preserve the original "render nothing" quiet behaviour, no false alarm.
     const nowS = Date.now() / 1000;
@@ -61,7 +72,7 @@ describe('AisGapCard', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders the gap list as before when the window is not shortened', async () => {
+  it("renders the gap list as before when the window is not shortened", async () => {
     const nowS = Date.now() / 1000;
     mockedFetch.mockResolvedValue(
       jsonResponse({
@@ -72,8 +83,8 @@ describe('AisGapCard', () => {
       }),
     );
     render(<AisGapCard mmsi="477961500" />);
-    expect(await screen.findByText('AIS gaps')).toBeTruthy();
-    expect(screen.getByText('15 min')).toBeTruthy();
+    expect(await screen.findByText("AIS gaps")).toBeTruthy();
+    expect(screen.getByText("15 min")).toBeTruthy();
     expect(screen.queryByText(/available history/)).toBeNull();
   });
 
@@ -88,11 +99,13 @@ describe('AisGapCard', () => {
       }),
     );
     render(<AisGapCard mmsi="477961500" />);
-    expect(await screen.findByText('AIS gaps')).toBeTruthy();
-    expect(screen.getByText('Gaps within available history · last 2.0 h')).toBeTruthy();
+    expect(await screen.findByText("AIS gaps")).toBeTruthy();
+    expect(
+      screen.getByText("Gaps within available history · last 2.0 h"),
+    ).toBeTruthy();
   });
 
-  it('shows the shortened-window disclosure alongside a real gap list', async () => {
+  it("shows the shortened-window disclosure alongside a real gap list", async () => {
     const nowS = Date.now() / 1000;
     mockedFetch.mockResolvedValue(
       jsonResponse({
@@ -103,7 +116,9 @@ describe('AisGapCard', () => {
       }),
     );
     render(<AisGapCard mmsi="477961500" />);
-    expect(await screen.findByText('15 min')).toBeTruthy();
-    expect(screen.getByText('Gaps within available history · last 1.2 h')).toBeTruthy();
+    expect(await screen.findByText("15 min")).toBeTruthy();
+    expect(
+      screen.getByText("Gaps within available history · last 1.2 h"),
+    ).toBeTruthy();
   });
 });

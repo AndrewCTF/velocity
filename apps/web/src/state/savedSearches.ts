@@ -6,10 +6,10 @@
 // ponytail: persisted list + one 60 s poller guarded to only run when searches
 // exist. No websockets — a periodic re-query of the existing /api/search/objects
 // is enough for "did new objects match my saved filter".
-import { create } from 'zustand';
-import type { Alert } from '@osint/shared';
-import { searchObjects, type ObjectFacets } from '../transport/search.js';
-import { useAlerts } from './stores.js';
+import { create } from "zustand";
+import type { Alert } from "@osint/shared";
+import { searchObjects, type ObjectFacets } from "../transport/search.js";
+import { useAlerts } from "./stores.js";
 
 export interface SavedSearch {
   id: string;
@@ -19,7 +19,7 @@ export interface SavedSearch {
   lastCheckedMs: number;
 }
 
-const LS_KEY = 'velocity.savedSearches';
+const LS_KEY = "velocity.savedSearches";
 
 function read(): SavedSearch[] {
   try {
@@ -47,7 +47,7 @@ interface SavedSearchState {
 // id without Date/Math.random (banned in some contexts here) — derive from the
 // facets + the current length; collisions across identical saved queries are fine.
 function nextId(list: SavedSearch[], facets: ObjectFacets): string {
-  return `ss_${list.length}_${(facets.type ?? 'all')}_${(facets.q ?? '').slice(0, 8)}`;
+  return `ss_${list.length}_${facets.type ?? "all"}_${(facets.q ?? "").slice(0, 8)}`;
 }
 
 export const useSavedSearches = create<SavedSearchState>((set, get) => ({
@@ -55,7 +55,13 @@ export const useSavedSearches = create<SavedSearchState>((set, get) => ({
   add: (label, facets) => {
     const list = get().searches;
     if (list.length >= 20) return; // ponytail: cap; 20 standing queries is plenty
-    const s: SavedSearch = { id: nextId(list, facets), label, facets, lastCount: -1, lastCheckedMs: 0 };
+    const s: SavedSearch = {
+      id: nextId(list, facets),
+      label,
+      facets,
+      lastCount: -1,
+      lastCheckedMs: 0,
+    };
     const next = [...list, s];
     persist(next);
     set({ searches: next });
@@ -68,7 +74,9 @@ export const useSavedSearches = create<SavedSearchState>((set, get) => ({
   updateResult: (id, count) =>
     set((state) => {
       const next = state.searches.map((s) =>
-        s.id === id ? { ...s, lastCount: count, lastCheckedMs: pollClock() } : s,
+        s.id === id
+          ? { ...s, lastCount: count, lastCheckedMs: pollClock() }
+          : s,
       );
       persist(next);
       return { searches: next };
@@ -78,7 +86,9 @@ export const useSavedSearches = create<SavedSearchState>((set, get) => ({
 // performance.now()-based wall clock (Date.now() is unavailable in some sandboxes;
 // this only needs to be monotonic-ish for "last checked").
 function pollClock(): number {
-  return typeof performance !== 'undefined' ? Math.round(performance.timeOrigin + performance.now()) : 0;
+  return typeof performance !== "undefined"
+    ? Math.round(performance.timeOrigin + performance.now())
+    : 0;
 }
 
 // ── background poller ───────────────────────────────────────────────────────
@@ -92,7 +102,12 @@ async function pollOnce(): Promise<void> {
     try {
       const res = await searchObjects({ ...s.facets, limit: 1 });
       const count = res.count;
-      const alert = buildGrowthAlert(s, count, pollClock(), useAlerts.getState().alerts.map((a) => a.id));
+      const alert = buildGrowthAlert(
+        s,
+        count,
+        pollClock(),
+        useAlerts.getState().alerts.map((a) => a.id),
+      );
       if (alert) useAlerts.getState().push(alert);
       st.updateResult(s.id, count);
     } catch {
@@ -121,10 +136,10 @@ export function buildGrowthAlert(
   if (existingIds.includes(id)) return null;
   return {
     id,
-    ruleId: 'saved_search',
-    severity: 'low',
+    ruleId: "saved_search",
+    severity: "low",
     t,
-    geom: { type: 'Point', coordinates: bboxCenter(s.facets) },
+    geom: { type: "Point", coordinates: bboxCenter(s.facets) },
     confidence: 1,
     message: `Saved search "${s.label}": ${count - s.lastCount} new (${count} match)`,
     contributingObservations: [],

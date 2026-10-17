@@ -1,19 +1,26 @@
-import type * as Cesium from 'cesium';
-import { chokepoints, type Chokepoint } from '../registry/chokepoints.js';
-import { flyToChokepoint } from '../globe/camera.js';
-import { useAoi } from '../state/aoi.js';
-import { useReducedMotion } from '../shell/useReducedMotion.js';
-import { SectionLabel, MicroLabel, Badge, Btn, KV, KVRow } from '../shell/instruments.js';
+import type * as Cesium from "cesium";
+import { chokepoints, type Chokepoint } from "../registry/chokepoints.js";
+import { flyToChokepoint } from "../globe/camera.js";
+import { useAoi } from "../state/aoi.js";
+import { useReducedMotion } from "../shell/useReducedMotion.js";
+import {
+  SectionLabel,
+  MicroLabel,
+  Badge,
+  Btn,
+  KV,
+  KVRow,
+} from "../shell/instruments.js";
 
 interface Props {
   viewer: Cesium.Viewer | null;
 }
 
-const CATEGORY_LABEL: Record<Chokepoint['category'], string> = {
-  maritime: 'maritime',
-  aviation: 'aviation',
-  cable: 'cable',
-  'air-corridor': 'air-corridor',
+const CATEGORY_LABEL: Record<Chokepoint["category"], string> = {
+  maritime: "maritime",
+  aviation: "aviation",
+  cable: "cable",
+  "air-corridor": "air-corridor",
 };
 
 // Chokepoints rail tab — strategic AOI list (see registry/chokepoints.ts).
@@ -31,12 +38,19 @@ export function ChokepointsList({ viewer }: Props): JSX.Element {
       {active && (
         <div className="mt-2.5 flex items-center justify-between gap-2 rounded-sm border border-accent-line bg-accent-dim px-2 py-1.5">
           <div className="min-w-0">
-            <div className="mono text-[11px] text-txt-0 truncate" title={active.name}>
+            <div
+              className="mono text-[11px] text-txt-0 truncate"
+              title={active.name}
+            >
               {active.name}
             </div>
             <MicroLabel className="mt-0.5 block">active AOI</MicroLabel>
           </div>
-          <Btn size="sm" onClick={() => setActive(null)} title="Clear active AOI">
+          <Btn
+            size="sm"
+            onClick={() => setActive(null)}
+            title="Clear active AOI"
+          >
             clear
           </Btn>
         </div>
@@ -46,7 +60,10 @@ export function ChokepointsList({ viewer }: Props): JSX.Element {
         {chokepoints.map((c) => {
           const isActive = active?.id === c.id;
           return (
-            <li key={c.id} className="border-b border-[rgba(255,255,255,0.035)] last:border-b-0">
+            <li
+              key={c.id}
+              className="border-b border-[rgba(255,255,255,0.035)] last:border-b-0"
+            >
               <button
                 type="button"
                 onClick={() => {
@@ -54,20 +71,28 @@ export function ChokepointsList({ viewer }: Props): JSX.Element {
                   if (viewer) flyToChokepoint(viewer, c, reduced ? 0 : 1.4);
                 }}
                 className={[
-                  'w-full text-left border-l-2 pl-2 pr-1.5 py-[7px] transition-colors',
+                  "w-full text-left border-l-2 pl-2 pr-1.5 py-[7px] transition-colors",
                   isActive
-                    ? 'border-accent bg-accent-dim/60'
-                    : 'border-transparent hover:border-accent-line hover:bg-bg-2',
-                ].join(' ')}
+                    ? "border-accent bg-accent-dim/60"
+                    : "border-transparent hover:border-accent-line hover:bg-bg-2",
+                ].join(" ")}
                 aria-pressed={isActive}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="mono text-[11.5px] text-txt-0 truncate" title={c.name}>
+                  <span
+                    className="mono text-[11.5px] text-txt-0 truncate"
+                    title={c.name}
+                  >
                     {c.name}
                   </span>
-                  <Badge tone={isActive ? 'accent' : 'neutral'}>{CATEGORY_LABEL[c.category]}</Badge>
+                  <Badge tone={isActive ? "accent" : "neutral"}>
+                    {CATEGORY_LABEL[c.category]}
+                  </Badge>
                 </div>
-                <div className="mono text-[10px] text-txt-3 truncate mt-0.5" title={c.region}>
+                <div
+                  className="mono text-[10px] text-txt-3 truncate mt-0.5"
+                  title={c.region}
+                >
                   {c.region}
                 </div>
                 <div

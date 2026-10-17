@@ -1,9 +1,20 @@
-export interface WhatsWrong { source: string; technique: string; quote: string; }
-export interface Proof { source: string; url: string; published: string; }
+export interface WhatsWrong {
+  source: string;
+  technique: string;
+  quote: string;
+}
+export interface Proof {
+  source: string;
+  url: string;
+  published: string;
+}
 export interface SupportingDoc {
-  kind: 'incident' | 'satellite';
-  url?: string; caption?: string;
-  incident_id?: string; threat_level?: string; narrative?: string;
+  kind: "incident" | "satellite";
+  url?: string;
+  caption?: string;
+  incident_id?: string;
+  threat_level?: string;
+  narrative?: string;
   centroid?: { lon: number; lat: number };
 }
 // Verifier ensemble output for one story (apps/api/app/news/verify.py). Every
@@ -11,8 +22,15 @@ export interface SupportingDoc {
 // none of this (verification skipped: no local models installed, budget
 // exhausted, etc).
 export type VerificationStatus =
-  | 'verified-neutral' | 'reviewed-revised' | 'contested' | 'reviewed' | 'unverified';
-export interface Diversity { outlets: number; buckets: string[]; }
+  | "verified-neutral"
+  | "reviewed-revised"
+  | "contested"
+  | "reviewed"
+  | "unverified";
+export interface Diversity {
+  outlets: number;
+  buckets: string[];
+}
 export interface Verification {
   status?: VerificationStatus;
   models?: string[];

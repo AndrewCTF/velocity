@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type * as Cesium from 'cesium';
-import { Icon } from '../normal/Icon.js';
-import { apiFetch } from '../transport/http.js';
-import { useTime } from '../state/stores.js';
-import { usePolReplay } from '../state/polReplayStore.js';
-import { installHistoryPlayback, type PlaybackController, type PlaybackInfo } from '../globe/HistoryPlayback.js';
-import { CoverageStrip, type Coverage } from '../timeline/CoverageStrip.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type * as Cesium from "cesium";
+import { Icon } from "../normal/Icon.js";
+import { apiFetch } from "../transport/http.js";
+import { useTime } from "../state/stores.js";
+import { usePolReplay } from "../state/polReplayStore.js";
+import {
+  installHistoryPlayback,
+  type PlaybackController,
+  type PlaybackInfo,
+} from "../globe/HistoryPlayback.js";
+import { CoverageStrip, type Coverage } from "../timeline/CoverageStrip.js";
 
 // TimeDock — THE transport. Built from docs/mockups/console-2026-08
 // (`12-map-replay.html`) and fed by the same density/events endpoints the old
@@ -31,15 +35,15 @@ import { CoverageStrip, type Coverage } from '../timeline/CoverageStrip.js';
 //    mean loading multiple 9 MB chunks per second).
 
 const WINDOWS = [
-  { id: '1h', label: '1h', sec: 3_600 },
-  { id: '6h', label: '6h', sec: 21_600 },
-  { id: '24h', label: '24h', sec: 86_400 },
-  { id: '3d', label: '3d', sec: 259_200 },
-  { id: '7d', label: '7d', sec: 604_800 },
+  { id: "1h", label: "1h", sec: 3_600 },
+  { id: "6h", label: "6h", sec: 21_600 },
+  { id: "24h", label: "24h", sec: 86_400 },
+  { id: "3d", label: "3d", sec: 259_200 },
+  { id: "7d", label: "7d", sec: 604_800 },
 ] as const;
 
 const SPEEDS = [1, 10, 60, 600, 3600] as const;
-const FALLBACK_MIN_DAY = '2024-01-01';
+const FALLBACK_MIN_DAY = "2024-01-01";
 // Fallback retention until /api/history/stats answers — matches the config
 // default (history_retention_hours = 168 -> 7 days). Only used to bound
 // CoverageStrip's window; the day-picker's own min bound comes from the
@@ -66,7 +70,7 @@ interface Lane {
   events: LaneEvent[];
 }
 
-const pad = (n: number): string => String(n).padStart(2, '0');
+const pad = (n: number): string => String(n).padStart(2, "0");
 function stamp(ms: number): string {
   const d = new Date(ms);
   return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} Z`;
@@ -89,7 +93,11 @@ function retentionLabel(hours: number): string {
 // the caller), so JulianDate conversion is done by hand rather than via
 // Cesium.JulianDate — the same shape Timeline.tsx used to build.
 function jdToMs(jd: Cesium.JulianDate): number {
-  return (jd.dayNumber - 2440587) * 86400_000 + jd.secondsOfDay * 1000 - 0.5 * 86400_000;
+  return (
+    (jd.dayNumber - 2440587) * 86400_000 +
+    jd.secondsOfDay * 1000 -
+    0.5 * 86400_000
+  );
 }
 function msToJulian(ms: number): Cesium.JulianDate {
   const seconds = ms / 1000;
@@ -112,7 +120,15 @@ export function stepSpeed(current: number, dir: 1 | -1): number {
   return SPEEDS[next] ?? SPEEDS[0];
 }
 
-export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Element {
+// One shared empty series, so the memos below keep their inputs while no density
+// has loaded.
+const NO_BINS: never[] = [];
+
+export function TimeDock({
+  viewer,
+}: {
+  viewer?: Cesium.Viewer | null;
+}): JSX.Element {
   const playing = useTime((s) => s.playing);
   const togglePlay = useTime((s) => s.togglePlay);
   const multiplier = useTime((s) => s.multiplier);
@@ -134,19 +150,23 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
   const ctrlRef = useRef<PlaybackController | null>(null);
   const [playbackInfo, setPlaybackInfo] = useState<PlaybackInfo | null>(null);
   const [loading, setLoading] = useState(false);
-  const [replayDay, setReplayDay] = useState('');
-  const [replayTime, setReplayTime] = useState('00:00');
+  const [replayDay, setReplayDay] = useState("");
+  const [replayTime, setReplayTime] = useState("00:00");
   const [minDay, setMinDay] = useState(FALLBACK_MIN_DAY);
   const maxDay = isoDay(Date.now());
   // Own-archive coverage (recording_since / N GB / M fixes) + retention, for
   // the ownership chip and the "picked day precedes real depth" warning —
   // restored from timeline/Timeline.tsx (docs/replay-flagship-plan.md §3).
-  const [retentionHours, setRetentionHours] = useState<number>(DEFAULT_RETENTION_HOURS);
+  const [retentionHours, setRetentionHours] = useState<number>(
+    DEFAULT_RETENTION_HOURS,
+  );
   const [coverage, setCoverage] = useState<Coverage | null>(null);
   // Upstream (tar1090 heatmap) reachability by day, for the second coverage
   // row (here-is-some-feedback-cuddly-pond.md §1.2: "in a second row,
   // upstream availability").
-  const [upstreamDays, setUpstreamDays] = useState<{ day: string; hosts: string[] }[]>([]);
+  const [upstreamDays, setUpstreamDays] = useState<
+    { day: string; hosts: string[] }[]
+  >([]);
 
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
@@ -175,13 +195,23 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
     let cancelled = false;
     void (async () => {
       try {
-        const r = await apiFetch(`/api/history/upstream/coverage?from=${FALLBACK_MIN_DAY}&to=${maxDay}`);
+        const r = await apiFetch(
+          `/api/history/upstream/coverage?from=${FALLBACK_MIN_DAY}&to=${maxDay}`,
+        );
         if (!r.ok) return;
-        const j = (await r.json()) as { days?: { day: string; hosts?: string[] }[] };
-        const days = (j.days ?? []).map((d) => ({ day: d.day, hosts: d.hosts ?? [] }));
+        const j = (await r.json()) as {
+          days?: { day: string; hosts?: string[] }[];
+        };
+        const days = (j.days ?? []).map((d) => ({
+          day: d.day,
+          hosts: d.hosts ?? [],
+        }));
         if (cancelled) return;
         setUpstreamDays(days);
-        const reachable = days.filter((d) => d.hosts.length > 0).map((d) => d.day).sort();
+        const reachable = days
+          .filter((d) => d.hosts.length > 0)
+          .map((d) => d.day)
+          .sort();
         if (reachable.length > 0) setMinDay(reachable[0]!);
       } catch {
         /* keep the 2024-01-01 fallback; the second row renders "not yet known" */
@@ -200,10 +230,14 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
     let cancelled = false;
     void (async () => {
       try {
-        const r = await apiFetch('/api/history/stats');
+        const r = await apiFetch("/api/history/stats");
         if (!r.ok) return;
         const s = (await r.json()) as { retention_hours?: number };
-        if (!cancelled && typeof s.retention_hours === 'number' && s.retention_hours > 0) {
+        if (
+          !cancelled &&
+          typeof s.retention_hours === "number" &&
+          s.retention_hours > 0
+        ) {
           setRetentionHours(s.retention_hours);
         }
       } catch {
@@ -249,11 +283,18 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
       abort = new AbortController();
       try {
         const [d, e] = await Promise.all([
-          apiFetch(`/api/timeline/density?bins=240&window_sec=${windowSec}`, { signal: abort.signal }),
-          apiFetch(`/api/timeline/events?window_sec=${windowSec}`, { signal: abort.signal }),
+          apiFetch(`/api/timeline/density?bins=240&window_sec=${windowSec}`, {
+            signal: abort.signal,
+          }),
+          apiFetch(`/api/timeline/events?window_sec=${windowSec}`, {
+            signal: abort.signal,
+          }),
         ]);
         if (d.ok) setDensity((await d.json()) as Density);
-        if (e.ok) setLanes((((await e.json()) as { lanes?: Lane[] }).lanes ?? []) as Lane[]);
+        if (e.ok)
+          setLanes(
+            (((await e.json()) as { lanes?: Lane[] }).lanes ?? []) as Lane[],
+          );
       } catch {
         /* keep the last good series rather than blanking the strip */
       }
@@ -272,9 +313,15 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
       const id = window.setInterval(() => setClockMs(Date.now()), 250);
       return () => window.clearInterval(id);
     }
+    // Whole seconds: the readout shows seconds and the playhead moves a pixel
+    // every few of them, but the clock ticks every frame, and a fresh value
+    // each time re-rendered this whole dock (240 bars, every lane mark) sixty
+    // times a second: 13 % of the main thread while a Google 3D view loaded
+    // (profiled 2026-10-10). The same value is a no-op for React.
     const onTick = viewer.clock.onTick.addEventListener(() => {
       const jd = viewer.clock.currentTime;
-      setClockMs(jd ? Date.parse(jd.toString()) : Date.now());
+      const ms = jd ? Date.parse(jd.toString()) : Date.now();
+      setClockMs(Math.floor(ms / 1000) * 1000);
     });
     return () => onTick();
   }, [viewer]);
@@ -300,7 +347,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
   const goLive = useCallback(() => {
     ctrlRef.current?.clear();
     setPlaybackInfo(null);
-    setReplayDay('');
+    setReplayDay("");
     setLive(true);
     const now = Date.now();
     setClockMs(now);
@@ -317,18 +364,20 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
     (day: string, time: string) => {
       const ctrl = ctrlRef.current;
       if (!ctrl || !day) return;
-      const startMs = Date.parse(`${day}T${time || '00:00'}:00Z`);
+      const startMs = Date.parse(`${day}T${time || "00:00"}:00Z`);
       const endMs = Date.now();
       if (!Number.isFinite(startMs) || endMs - startMs < 60_000) return;
       setLive(false);
       setLoading(true);
-      void ctrl.loadAt(startMs, endMs, (info) => setPlaybackInfo(info)).then((info) => {
-        setPlaybackInfo(info);
-        setLoading(false);
-        if (viewer && !viewer.isDestroyed()) {
-          setClockMs(jdToMs(viewer.clock.currentTime));
-        }
-      });
+      void ctrl
+        .loadAt(startMs, endMs, (info) => setPlaybackInfo(info))
+        .then((info) => {
+          setPlaybackInfo(info);
+          setLoading(false);
+          if (viewer && !viewer.isDestroyed()) {
+            setClockMs(jdToMs(viewer.clock.currentTime));
+          }
+        });
     },
     [viewer],
   );
@@ -345,13 +394,79 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
 
   const ticks = useMemo(() => {
     const out: Array<{ pct: number; label: string }> = [];
-    for (let i = 0; i <= 6; i++) out.push({ pct: (i / 6) * 100, label: tickLabel(from + (span * i) / 6) });
+    for (let i = 0; i <= 6; i++)
+      out.push({ pct: (i / 6) * 100, label: tickLabel(from + (span * i) / 6) });
     return out;
   }, [from, span]);
 
-  const bars = density?.detections ?? [];
+  const bars = density?.detections ?? NO_BINS;
   const peak = Math.max(1, ...bars);
-  const alerts = density?.alerts ?? [];
+  const alerts = density?.alerts ?? NO_BINS;
+  // The lanes and density bars change when a poll lands (every 5 s), not when
+  // the clock moves, but the clock re-renders the dock: hundreds of marks
+  // rebuilt each time, the dock's whole render cost in a profile (2026-10-17).
+  // Only the playhead and its stamp depend on clockMs.
+  const laneRows = useMemo(
+    () =>
+      lanes.map((lane) => (
+        <div key={lane.id} className="relative h-[14px] border-t border-line">
+          {/* The label rides OVER the left of the track rather than taking a
+              gutter out of it, so a mark at 30% of the hour lines up with the
+              30% tick above it and the 30% density bar below it. */}
+          <span className="mono pointer-events-none absolute inset-y-0 left-0 z-1 flex items-center gap-[5px] bg-bg-1/90 pl-[10px] pr-[7px] text-[10px] uppercase tracking-[0.5px] text-txt-3">
+            <i
+              className="h-[6px] w-[6px] shrink-0 rounded-full"
+              style={{ background: lane.color || "var(--warn)" }}
+            />
+            {lane.label}
+          </span>
+          <span className="absolute inset-0">
+            {lane.events.map((ev, i) => {
+              const pct = ((ev.t - from) / span) * 100;
+              if (pct < 0 || pct > 100) return null;
+              return (
+                <button
+                  key={`${lane.id}-${i}`}
+                  type="button"
+                  title={`${lane.label}: ${ev.label}`}
+                  onClick={() => seek(ev.t)}
+                  className="absolute top-[3px] h-[8px] w-[2px]"
+                  style={{
+                    left: `${pct}%`,
+                    background: lane.color || "var(--warn)",
+                  }}
+                />
+              );
+            })}
+          </span>
+        </div>
+      )),
+    [lanes, from, span, seek],
+  );
+  const densityBars = useMemo(
+    () => (
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        className="block h-full w-full"
+      >
+        {bars.map((v, i) => {
+          const h = (v / peak) * 100;
+          return (
+            <rect
+              key={i}
+              x={(i / bars.length) * 100}
+              y={100 - h}
+              width={(100 / bars.length) * 0.74}
+              height={h}
+              fill={alerts[i] ? "var(--alert)" : "var(--ok)"}
+            />
+          );
+        })}
+      </svg>
+    ),
+    [bars, peak, alerts],
+  );
 
   // Ownership chip — "recording since <date> · <N> GB · <M> fixes", sourced
   // from the /api/history/coverage response CoverageStrip already fetches
@@ -368,7 +483,9 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
   // archive only, no upstream fallback) go missing. The warning is reworded
   // for that, not dropped: `oldest_ts` (the coverage endpoint's honest floor)
   // still tells the operator where the own archive actually starts.
-  const earliestAvailableDay = coverage?.oldest_ts ? isoDay(coverage.oldest_ts * 1000) : null;
+  const earliestAvailableDay = coverage?.oldest_ts
+    ? isoDay(coverage.oldest_ts * 1000)
+    : null;
   const replayDayBeforeAvailable = Boolean(
     replayDay && earliestAvailableDay && replayDay < earliestAvailableDay,
   );
@@ -388,35 +505,48 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
   useEffect(() => {
     const typing = (t: EventTarget | null): boolean => {
       const el = t as HTMLElement | null;
-      if (!el || typeof el.tagName !== 'string') return false;
+      if (!el || typeof el.tagName !== "string") return false;
       if (el.isContentEditable) return true;
-      return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+      return ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
     };
     const onKey = (e: KeyboardEvent): void => {
-      if (e.defaultPrevented || typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (
+        e.defaultPrevented ||
+        typing(e.target) ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey
+      )
+        return;
       switch (e.key) {
-        case ' ':
+        case " ":
           e.preventDefault();
           togglePlay();
           break;
-        case 'ArrowLeft':
+        case "ArrowLeft":
           e.preventDefault();
-          seek(clockMs - (e.shiftKey ? span / 20 : span / Math.max(1, bars.length || 240)));
+          seek(
+            clockMs -
+              (e.shiftKey ? span / 20 : span / Math.max(1, bars.length || 240)),
+          );
           break;
-        case 'ArrowRight':
+        case "ArrowRight":
           e.preventDefault();
-          seek(clockMs + (e.shiftKey ? span / 20 : span / Math.max(1, bars.length || 240)));
+          seek(
+            clockMs +
+              (e.shiftKey ? span / 20 : span / Math.max(1, bars.length || 240)),
+          );
           break;
-        case ',':
+        case ",":
           e.preventDefault();
           setMultiplier(Math.min(maxMultiplier, stepSpeed(multiplier, -1)));
           break;
-        case '.':
+        case ".":
           e.preventDefault();
           setMultiplier(Math.min(maxMultiplier, stepSpeed(multiplier, 1)));
           break;
-        case 'l':
-        case 'L':
+        case "l":
+        case "L":
           e.preventDefault();
           goLive();
           break;
@@ -424,9 +554,19 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           break;
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [togglePlay, seek, clockMs, span, bars.length, multiplier, maxMultiplier, setMultiplier, goLive]);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    togglePlay,
+    seek,
+    clockMs,
+    span,
+    bars.length,
+    multiplier,
+    maxMultiplier,
+    setMultiplier,
+    goLive,
+  ]);
 
   return (
     <div className="select-none text-[12px]">
@@ -440,7 +580,12 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
         <TBtn label="Jump to start" onClick={() => seek(from)}>
           <Icon name="step-b" className="h-3 w-3" />
         </TBtn>
-        <TBtn label="Rewind" onClick={() => setMultiplier(Math.max(1, Math.min(maxMultiplier, multiplier / 10)))}>
+        <TBtn
+          label="Rewind"
+          onClick={() =>
+            setMultiplier(Math.max(1, Math.min(maxMultiplier, multiplier / 10)))
+          }
+        >
           <Icon name="rewind" className="h-3 w-3" />
         </TBtn>
         <TBtn label="Back 15 seconds" onClick={() => seek(clockMs - 15_000)}>
@@ -456,8 +601,8 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           title="Play or pause (space)"
           className="mx-[2px] flex h-5 items-center gap-1 rounded-sm bg-accent px-3 text-[12px] text-(--on-accent) hover:brightness-110"
         >
-          <Icon name={playing ? 'pause' : 'play'} className="h-3 w-3" />
-          {playing ? 'Pause' : 'Play'}
+          <Icon name={playing ? "pause" : "play"} className="h-3 w-3" />
+          {playing ? "Pause" : "Play"}
         </button>
         <TBtn label="Step forward" onClick={() => seek(clockMs + span / 240)}>
           <Icon name="frame-f" className="h-3 w-3" />
@@ -466,7 +611,12 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           15s
           <Icon name="fwd-15" className="h-3 w-3" />
         </TBtn>
-        <TBtn label="Fast forward" onClick={() => setMultiplier(Math.min(maxMultiplier, multiplier * 10))}>
+        <TBtn
+          label="Fast forward"
+          onClick={() =>
+            setMultiplier(Math.min(maxMultiplier, multiplier * 10))
+          }
+        >
           <Icon name="fast-forward" className="h-3 w-3" />
         </TBtn>
         <button
@@ -475,7 +625,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           aria-pressed={live}
           title="Return to live (L)"
           className={`ml-[2px] h-5 rounded-sm px-[10px] text-[12px] ${
-            live ? 'bg-bg-3 text-txt-1' : 'bg-alert text-(--on-alert)'
+            live ? "bg-bg-3 text-txt-1" : "bg-alert text-(--on-alert)"
           }`}
         >
           Live
@@ -489,9 +639,15 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
               onClick={() => setMultiplier(Math.min(maxMultiplier, s))}
               disabled={s > maxMultiplier}
               aria-pressed={multiplier === s}
-              title={s > maxMultiplier ? `capped at ${maxMultiplier}x while replaying the upstream archive` : `${s}x`}
+              title={
+                s > maxMultiplier
+                  ? `capped at ${maxMultiplier}x while replaying the upstream archive`
+                  : `${s}x`
+              }
               className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 disabled:opacity-40 ${
-                multiplier === s ? 'bg-accent text-(--on-accent)' : 'text-txt-2 hover:bg-(--hover)'
+                multiplier === s
+                  ? "bg-accent text-(--on-accent)"
+                  : "text-txt-2 hover:bg-(--hover)"
               }`}
             >
               {s}x
@@ -506,7 +662,9 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
               onClick={() => setWindowSec(w.sec)}
               aria-pressed={windowSec === w.sec}
               className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 ${
-                windowSec === w.sec ? 'bg-accent text-(--on-accent)' : 'text-txt-2 hover:bg-(--hover)'
+                windowSec === w.sec
+                  ? "bg-accent text-(--on-accent)"
+                  : "text-txt-2 hover:bg-(--hover)"
               }`}
             >
               {w.label}
@@ -518,7 +676,9 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
       {/* Day/time replay — pick a UTC instant to run the world back from.
           Bounded by the earliest day the upstream heatmap actually covers. */}
       <div className="flex h-[26px] items-center gap-[6px] border-t border-line px-[10px]">
-        <span className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3">replay from</span>
+        <span className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3">
+          replay from
+        </span>
         <input
           type="date"
           value={replayDay}
@@ -547,8 +707,14 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-hidden focus:border-accent-line scheme-dark"
         />
         <span className="mono text-[10px] text-txt-4">
-          {loading ? 'loading…' : playbackInfo ? playbackInfo.label : `keyless back to ${minDay}`}
-          {ownershipChip ? ` · ${ownershipChip}` : ` · ${retentionLabel(retentionHours)} own-archive buffer`}
+          {loading
+            ? "loading…"
+            : playbackInfo
+              ? playbackInfo.label
+              : `keyless back to ${minDay}`}
+          {ownershipChip
+            ? ` · ${ownershipChip}`
+            : ` · ${retentionLabel(retentionHours)} own-archive buffer`}
         </span>
         {replayDayBeforeAvailable && (
           <span
@@ -574,7 +740,10 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
       <div className="relative h-[22px] border-t border-line">
         {ticks.map((t) => (
           <span key={t.pct}>
-            <i className="absolute top-0 h-[5px] w-px bg-bg-4" style={{ left: `${t.pct}%` }} />
+            <i
+              className="absolute top-0 h-[5px] w-px bg-bg-4"
+              style={{ left: `${t.pct}%` }}
+            />
             <span
               className="mono absolute top-[5px] translate-x-[3px] text-[10px] text-txt-3"
               style={{ left: `${t.pct}%` }}
@@ -589,36 +758,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
           lanes used to share a single 10px unlabelled band of 4px triangles:
           193 incidents and 200 signal events in the same hour drew as one
           undifferentiated sawtooth and nothing said which colour meant what. */}
-      {lanes.map((lane) => (
-        <div key={lane.id} className="relative h-[14px] border-t border-line">
-          {/* The label rides OVER the left of the track rather than taking a
-              gutter out of it, so a mark at 30% of the hour lines up with the
-              30% tick above it and the 30% density bar below it. */}
-          <span className="mono pointer-events-none absolute inset-y-0 left-0 z-1 flex items-center gap-[5px] bg-bg-1/90 pl-[10px] pr-[7px] text-[10px] uppercase tracking-[0.5px] text-txt-3">
-            <i
-              className="h-[6px] w-[6px] shrink-0 rounded-full"
-              style={{ background: lane.color || 'var(--warn)' }}
-            />
-            {lane.label}
-          </span>
-          <span className="absolute inset-0">
-            {lane.events.map((ev, i) => {
-              const pct = ((ev.t - from) / span) * 100;
-              if (pct < 0 || pct > 100) return null;
-              return (
-                <button
-                  key={`${lane.id}-${i}`}
-                  type="button"
-                  title={`${lane.label}: ${ev.label}`}
-                  onClick={() => seek(ev.t)}
-                  className="absolute top-[3px] h-[8px] w-[2px]"
-                  style={{ left: `${pct}%`, background: lane.color || 'var(--warn)' }}
-                />
-              );
-            })}
-          </span>
-        </div>
-      ))}
+      {laneRows}
 
       {/* Density is the drag surface. */}
       <div
@@ -638,21 +778,7 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
         }}
         className="relative h-[34px] cursor-ew-resize border-t border-line bg-bg-0"
       >
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="block h-full w-full">
-          {bars.map((v, i) => {
-            const h = (v / peak) * 100;
-            return (
-              <rect
-                key={i}
-                x={(i / bars.length) * 100}
-                y={100 - h}
-                width={(100 / bars.length) * 0.74}
-                height={h}
-                fill={alerts[i] ? 'var(--alert)' : 'var(--ok)'}
-              />
-            );
-          })}
-        </svg>
+        {densityBars}
         {/* The stamp hugs whichever side of the playhead has room. Centred on
             the line, it hung half outside the dock at the live end, which is
             where the playhead sits every time the console is opened. */}
@@ -662,7 +788,11 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
         >
           <span
             className={`mono absolute top-[2px] whitespace-nowrap rounded-[1px] bg-mag px-[5px] text-[10px] text-(--on-mag) ${
-              playPct > 88 ? 'right-[3px]' : playPct < 6 ? 'left-[3px]' : '-translate-x-1/2'
+              playPct > 88
+                ? "right-[3px]"
+                : playPct < 6
+                  ? "left-[3px]"
+                  : "-translate-x-1/2"
             }`}
           >
             {stamp(clockMs)}
@@ -673,7 +803,8 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
       <div className="flex h-5 items-center gap-3 border-t border-line px-[10px] text-[12px] text-txt-3">
         {/* States the range actually loaded, not `now − window`. */}
         <span>
-          {live ? 'Live' : 'Replay'} &middot; {tickLabel(from)} to {tickLabel(to)} Z
+          {live ? "Live" : "Replay"} &middot; {tickLabel(from)} to{" "}
+          {tickLabel(to)} Z
         </span>
         <span className="flex-1" />
         <span>{bars.length} bins</span>
@@ -687,10 +818,18 @@ export function TimeDock({ viewer }: { viewer?: Cesium.Viewer | null }): JSX.Ele
  *  (`FALLBACK_MIN_DAY`..today). "on" = at least one host reported that day —
  *  mirrors CoverageStrip's own "draw the gap, don't hide it" rule so a day
  *  nobody has archived reads as a stated gap, not empty background. */
-function UpstreamAvailabilityRow({ days }: { days: { day: string; hosts: string[] }[] }): JSX.Element {
+function UpstreamAvailabilityRow({
+  days,
+}: {
+  days: { day: string; hosts: string[] }[];
+}): JSX.Element {
   if (days.length === 0) {
     return (
-      <div className="mono text-[10px] text-txt-4" role="img" aria-label="Upstream archive availability: not yet known">
+      <div
+        className="mono text-[10px] text-txt-4"
+        role="img"
+        aria-label="Upstream archive availability: not yet known"
+      >
         upstream archive availability: not yet known
       </div>
     );
@@ -704,7 +843,12 @@ function UpstreamAvailabilityRow({ days }: { days: { day: string; hosts: string[
       aria-label={label}
       title={label}
     >
-      <svg width="100%" height="100%" preserveAspectRatio="none" viewBox={`0 0 ${days.length} 100`}>
+      <svg
+        width="100%"
+        height="100%"
+        preserveAspectRatio="none"
+        viewBox={`0 0 ${days.length} 100`}
+      >
         {days.map((d, i) => (
           <rect
             key={d.day}
@@ -712,7 +856,7 @@ function UpstreamAvailabilityRow({ days }: { days: { day: string; hosts: string[
             y={0}
             width={1}
             height={100}
-            fill={d.hosts.length > 0 ? 'var(--accent)' : 'var(--alert)'}
+            fill={d.hosts.length > 0 ? "var(--accent)" : "var(--alert)"}
             opacity={d.hosts.length > 0 ? 0.7 : 0.22}
           />
         ))}

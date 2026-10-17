@@ -1,17 +1,17 @@
 // Zustand stores — one per domain per frontend.md §1.
 // Stores hold UI state. Cross-store side effects live in adapters, not here.
 
-import { create } from 'zustand';
-import type { Alert } from '@osint/shared';
+import { create } from "zustand";
+import type { Alert } from "@osint/shared";
 
-export type FeedStatus = 'green' | 'amber' | 'red' | 'unknown';
+export type FeedStatus = "green" | "amber" | "red" | "unknown";
 
 export interface FeedHealth {
   id: string;
   label: string;
   status: FeedStatus;
   lastSeen?: number; // epoch ms
-  note?: string;     // reason when non-green (no key, rate limited, transport error)
+  note?: string; // reason when non-green (no key, rate limited, transport error)
 }
 
 interface FeedsState {
@@ -36,7 +36,7 @@ export function feedStatusSignature(feeds: Record<string, FeedHealth>): string {
   return Object.entries(feeds)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([k, f]) => `${k}:${f.status}`)
-    .join('|');
+    .join("|");
 }
 
 interface SelectionState {
@@ -72,11 +72,13 @@ export const useSearchTarget = create<SearchTargetState>((set) => ({
   setTarget: (t) => set({ target: t }),
 }));
 
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useSelection: typeof useSelection }).__useSelection = useSelection;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (
+    window as unknown as { __useSelection: typeof useSelection }
+  ).__useSelection = useSelection;
 }
 
-export type SceneMode = '3D' | '2.5D' | '2D';
+export type SceneMode = "3D" | "2.5D" | "2D";
 
 interface TimeState {
   playing: boolean;
@@ -95,10 +97,11 @@ export const useTime = create<TimeState>((set) => ({
   playing: true,
   multiplier: 1,
   currentTime: Date.now(),
-  sceneMode: '3D',
+  sceneMode: "3D",
   togglePlay: () => set((s) => ({ playing: !s.playing })),
   setMultiplier: (m) => {
-    if (m < 1 || m > 3600) throw new RangeError(`multiplier must be in [1,3600], got ${m}`);
+    if (m < 1 || m > 3600)
+      throw new RangeError(`multiplier must be in [1,3600], got ${m}`);
     set({ multiplier: m });
   },
   setCurrentTime: (t) => set({ currentTime: t }),
@@ -111,20 +114,20 @@ export const useTime = create<TimeState>((set) => ({
 // 2026-07 — see docs/places-airspace-plan.md §6 for the tile URLs + why each
 // exists (topo/dark/imagery variety + an EOX Sentinel-2 alternative).
 export type ImageryMode =
-  | '2d-dark'
-  | '3d-sat'
+  | "2d-dark"
+  | "3d-sat"
   // '3d-sat' plus Google Earth's photoreal mesh, served keyless by the backend
   // (app/rocktree.py). Only where the operator set GOOGLE_3D_KEYLESS.
-  | 'google-3d'
+  | "google-3d"
   // Apple Maps satellite, proxied + cached by the backend like '3d-sat'
   // (app/apple_maps.py holds the signed-session protocol). Non-commercial.
-  | 'apple-sat'
-  | 'esri-imagery'
-  | 'esri-topo'
-  | 'esri-dark'
-  | 'opentopo'
-  | 'usgs-imagery'
-  | 'eox-s2';
+  | "apple-sat"
+  | "esri-imagery"
+  | "esri-topo"
+  | "esri-dark"
+  | "opentopo"
+  | "usgs-imagery"
+  | "eox-s2";
 
 // Date-templated imagery overlay drawn on top of the base layer.
 // null = off; else a provider + layer id + UTC date (YYYY-MM-DD) + max zoom.
@@ -194,12 +197,13 @@ interface ImageryState {
 // Community tier). Implemented as a runtime swap inside the existing
 // viewer so the toggle does NOT remount Cesium.
 export const useImagery = create<ImageryState>((set) => ({
-  mode: '2d-dark',
+  mode: "2d-dark",
   setMode: (m) => set({ mode: m }),
   overlay: null,
   setOverlay: (o) => set({ overlay: o }),
   overlayOpacity: 1,
-  setOverlayOpacity: (a) => set({ overlayOpacity: Math.min(1, Math.max(0, a)) }),
+  setOverlayOpacity: (a) =>
+    set({ overlayOpacity: Math.min(1, Math.max(0, a)) }),
   lod1Aoi: null,
   setLod1Aoi: (a) => set({ lod1Aoi: a }),
   lod1Here: false,
@@ -210,7 +214,8 @@ export const useImagery = create<ImageryState>((set) => ({
   eventsLocation: null,
   eventsRadiusKm: 500,
   setEventsLocation: (l) => set({ eventsLocation: l }),
-  setEventsRadiusKm: (km) => set({ eventsRadiusKm: Math.min(20000, Math.max(1, km)) }),
+  setEventsRadiusKm: (km) =>
+    set({ eventsRadiusKm: Math.min(20000, Math.max(1, km)) }),
   flyTo: null,
   requestFlyTo: (lat, lon, altMeters) =>
     set((s) => ({
@@ -226,11 +231,12 @@ export const useImagery = create<ImageryState>((set) => ({
 
 // DEV-only handle so the imagery/3D-buildings state is drivable from the console
 // and E2E (mirrors __useSelection / __useAlerts / __useFilters above).
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useImagery: typeof useImagery }).__useImagery = useImagery;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (window as unknown as { __useImagery: typeof useImagery }).__useImagery =
+    useImagery;
 }
 
-export type WsStatus = 'connecting' | 'open' | 'closed';
+export type WsStatus = "connecting" | "open" | "closed";
 
 interface ConnectionState {
   ws: WsStatus;
@@ -241,7 +247,7 @@ interface ConnectionState {
 // command bar so operators can immediately see whether incoming alerts
 // reflect reality or a stale buffer.
 export const useConnection = create<ConnectionState>((set) => ({
-  ws: 'connecting',
+  ws: "connecting",
   setWs: (s) => set({ ws: s }),
 }));
 
@@ -263,8 +269,9 @@ export const useAlerts = create<AlertsState>((set) => ({
     }),
   clear: () => set({ alerts: [] }),
 }));
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useAlerts: typeof useAlerts }).__useAlerts = useAlerts;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (window as unknown as { __useAlerts: typeof useAlerts }).__useAlerts =
+    useAlerts;
 }
 
 // Simulation mode — a browser-side war-game overlay drawn on its own Cesium
@@ -297,18 +304,18 @@ export const useSim = create<SimState>((set) => ({
 // ADS-B / AIS feeds emit). Kept as a string union so a clause is serialisable
 // and cheap to compare.
 export type FilterFacet =
-  | 'altBucket' // altitude band id, e.g. 'fl000_100'
-  | 'aircraftCategory' // airliner | private | helicopter | glider | military | emergency
-  | 'vesselType' // cargo | tanker | fishing | passenger | military | sailing | pleasure | tug | sar | generic
-  | 'flag' // ISO-ish country/flag code derived client-side (ICAO24 block / MMSI MID)
-  | 'squawk' // 4-digit Mode-A code (or an 'emergency' bucket)
-  | 'tier'; // provenance: sensor | registry | filing | claim
+  | "altBucket" // altitude band id, e.g. 'fl000_100'
+  | "aircraftCategory" // airliner | private | helicopter | glider | military | emergency
+  | "vesselType" // cargo | tanker | fishing | passenger | military | sailing | pleasure | tug | sar | generic
+  | "flag" // ISO-ish country/flag code derived client-side (ICAO24 block / MMSI MID)
+  | "squawk" // 4-digit Mode-A code (or an 'emergency' bucket)
+  | "tier"; // provenance: sensor | registry | filing | claim
 
 // One filter clause. `mode:'only'` = an entity must match this value to pass;
 // `mode:'not'` = an entity matching this value fails. Multiple clauses combine
 // with AND, but clauses on the SAME facet in `only` mode combine with OR (so
 // "only airliner OR military" is expressible by clicking two category bars).
-export type FilterMode = 'only' | 'not';
+export type FilterMode = "only" | "not";
 export interface FilterClause {
   facet: FilterFacet;
   value: string;
@@ -341,13 +348,13 @@ export function matchesFilterClauses(
   if (clauses.length === 0) return true;
   // Hard excludes first — cheapest rejection.
   for (const c of clauses) {
-    if (c.mode !== 'not') continue;
+    if (c.mode !== "not") continue;
     if (resolve(c.facet).includes(c.value)) return false;
   }
   // Group the `only` clauses by facet, then require each group be satisfied.
   const onlyByFacet = new Map<FilterFacet, Set<string>>();
   for (const c of clauses) {
-    if (c.mode !== 'only') continue;
+    if (c.mode !== "only") continue;
     const set = onlyByFacet.get(c.facet) ?? new Set<string>();
     set.add(c.value);
     onlyByFacet.set(c.facet, set);
@@ -379,7 +386,12 @@ interface FiltersState {
   isActive: (facet: FilterFacet, value: string, mode: FilterMode) => boolean;
 }
 
-function sameClause(a: FilterClause, facet: FilterFacet, value: string, mode: FilterMode): boolean {
+function sameClause(
+  a: FilterClause,
+  facet: FilterFacet,
+  value: string,
+  mode: FilterMode,
+): boolean {
   return a.facet === facet && a.value === value && a.mode === mode;
 }
 
@@ -396,7 +408,7 @@ export const useFilters = create<FiltersState>((set, get) => ({
       } else {
         // Drop the opposite mode for this exact facet+value (can't be both
         // "only X" and "not X"), then add the requested clause.
-        const opposite: FilterMode = mode === 'only' ? 'not' : 'only';
+        const opposite: FilterMode = mode === "only" ? "not" : "only";
         next = s.clauses.filter((c) => !sameClause(c, facet, value, opposite));
         next.push({ facet, value, mode });
       }
@@ -408,10 +420,18 @@ export const useFilters = create<FiltersState>((set, get) => ({
       epoch: s.epoch + 1,
     })),
   clearFacet: (facet) =>
-    set((s) => ({ clauses: s.clauses.filter((c) => c.facet !== facet), epoch: s.epoch + 1 })),
-  clear: () => set((s) => (s.clauses.length === 0 ? s : { clauses: [], epoch: s.epoch + 1 })),
-  isActive: (facet, value, mode) => get().clauses.some((c) => sameClause(c, facet, value, mode)),
+    set((s) => ({
+      clauses: s.clauses.filter((c) => c.facet !== facet),
+      epoch: s.epoch + 1,
+    })),
+  clear: () =>
+    set((s) =>
+      s.clauses.length === 0 ? s : { clauses: [], epoch: s.epoch + 1 },
+    ),
+  isActive: (facet, value, mode) =>
+    get().clauses.some((c) => sameClause(c, facet, value, mode)),
 }));
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  (window as unknown as { __useFilters: typeof useFilters }).__useFilters = useFilters;
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  (window as unknown as { __useFilters: typeof useFilters }).__useFilters =
+    useFilters;
 }

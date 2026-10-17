@@ -1,8 +1,12 @@
-import { useEffect } from 'react';
-import { useAlerts, useConnection } from '../state/stores.js';
-import type { Alert } from '@osint/shared';
-import { apiFetch, hasStaticApiKey, openAuthedWebSocket } from '../transport/http.js';
-import { useAuth } from '../auth/AuthContext.js';
+import { useEffect } from "react";
+import { useAlerts, useConnection } from "../state/stores.js";
+import type { Alert } from "@osint/shared";
+import {
+  apiFetch,
+  hasStaticApiKey,
+  openAuthedWebSocket,
+} from "../transport/http.js";
+import { useAuth } from "../auth/AuthContext.js";
 
 // How often we re-POST /api/alerts/watch-session. The backend geofence
 // evaluator (intel.watch) reads the caller's RLS-scoped rules with whatever
@@ -29,7 +33,7 @@ export function AlertSubscriber(): null {
     // with a settled credential. (Without this, mounting before the session
     // resolved showed a permanent "down" pill even for logged-in operators.)
     if (loading) {
-      setWs('connecting');
+      setWs("connecting");
       return () => {};
     }
     // Settled and keyless: an open-mode backend (ALLOW_UNAUTHENTICATED) accepts
@@ -48,17 +52,17 @@ export function AlertSubscriber(): null {
 
     const connect = () => {
       if (stopped) return;
-      setWs('connecting');
-      ws = openAuthedWebSocket('/ws/alerts');
+      setWs("connecting");
+      ws = openAuthedWebSocket("/ws/alerts");
       ws.onopen = () => {
         backoff = 1000;
         everOpened = true;
-        setWs('open');
+        setWs("open");
       };
       ws.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data as string);
-          if (data && (data.kind === 'heartbeat' || !data.id)) return;
+          if (data && (data.kind === "heartbeat" || !data.id)) return;
           push(data as Alert);
         } catch {
           /* drop bad frame */
@@ -66,7 +70,7 @@ export function AlertSubscriber(): null {
       };
       ws.onclose = () => {
         if (stopped) return;
-        setWs('closed');
+        setWs("closed");
         // Keyless probe rejected before it ever opened: enforcing backend,
         // nothing to reconnect to. One attempt, no backoff spam.
         if (keylessProbe && !everOpened) {
@@ -77,7 +81,7 @@ export function AlertSubscriber(): null {
         backoff = Math.min(backoff * 2, 15_000);
       };
       ws.onerror = () => {
-        setWs('closed');
+        setWs("closed");
         ws?.close();
       };
     };
@@ -107,7 +111,7 @@ export function AlertSubscriber(): null {
     const register = () => {
       // Fire-and-forget: a failed registration just means the evaluator won't
       // read this user's rules until the next tick — it must not break alerts.
-      void apiFetch('/api/alerts/watch-session', { method: 'POST' }).catch(
+      void apiFetch("/api/alerts/watch-session", { method: "POST" }).catch(
         () => {},
       );
     };
@@ -119,8 +123,8 @@ export function AlertSubscriber(): null {
       cancelled = true;
       window.clearInterval(timer);
       // Best-effort de-registration. keepalive lets it survive a tab close.
-      void apiFetch('/api/alerts/watch-session', {
-        method: 'DELETE',
+      void apiFetch("/api/alerts/watch-session", {
+        method: "DELETE",
         keepalive: true,
       }).catch(() => {});
       void cancelled;

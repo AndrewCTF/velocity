@@ -1,18 +1,20 @@
-import * as Cesium from 'cesium';
-import type { LayerAdapter, AdapterCtx } from './types.js';
-import { vesselStyle } from './styles.js';
-import { labelFor, vesselLabelText } from './labelStyle.js';
-import { intel } from '../../intel/registry.js';
-import { tracks } from '../../intel/tracks.js';
-import { useSelection } from '../../state/stores.js';
-import { openAuthedWebSocket } from '../../transport/http.js';
-import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
-import { refreshBagInPlace } from './PollGeoJsonAdapter.js';
-import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
-
+import * as Cesium from "cesium";
+import type { LayerAdapter, AdapterCtx } from "./types.js";
+import { vesselStyle } from "./styles.js";
+import { labelFor, vesselLabelText } from "./labelStyle.js";
+import { intel } from "../../intel/registry.js";
+import { tracks } from "../../intel/tracks.js";
+import { useSelection } from "../../state/stores.js";
+import { openAuthedWebSocket } from "../../transport/http.js";
+import { frameBudgetRemaining, recordFrameSpend } from "../frameBudget.js";
+import { refreshBagInPlace } from "./PollGeoJsonAdapter.js";
+import {
+  PrimitiveEntityLayer,
+  dropVisualizers,
+} from "./PrimitiveEntityLayer.js";
 
 interface VesselMsg {
-  kind: 'vessel' | 'info';
+  kind: "vessel" | "info";
   id?: string;
   mmsi?: number;
   name?: string | null;
@@ -57,7 +59,10 @@ export class AisWsAdapter implements LayerAdapter {
   // of vessels in seconds). Upserting synchronously per message froze the main
   // thread, so messages queue here latest-wins-per-id and a frame-budgeted rAF
   // drain applies them — the same shape as the poll adapter's drain.
-  private pending = new Map<string, VesselMsg & { id: string; lat: number; lon: number }>();
+  private pending = new Map<
+    string,
+    VesselMsg & { id: string; lat: number; lon: number }
+  >();
   private drainHandle: number | null = null;
 
   /** Batched renderer. AISStream's ~6 000 vessels were the last big layer on the
@@ -75,12 +80,17 @@ export class AisWsAdapter implements LayerAdapter {
 
   async attach(viewer: Cesium.Viewer): Promise<void> {
     await viewer.dataSources.add(this.ds);
+    dropVisualizers(this.ds);
     this.prim = new PrimitiveEntityLayer(viewer.scene, {
       styleFn: (props) => {
         const st = vesselStyle(props);
-        return { imageUri: st.imageUri, scale: st.scale, rotationRad: st.rotationRad };
+        return {
+          imageUri: st.imageUri,
+          scale: st.scale,
+          rotationRad: st.rotationRad,
+        };
       },
-      poolKey: 'vessel', // ticks with the other vessel layers, never with static markers
+      poolKey: "vessel", // ticks with the other vessel layers, never with static markers
       labelFn: vesselLabelText,
       billboardBase: () => ({
         alignedAxis: Cesium.Cartesian3.UNIT_Z,
@@ -88,11 +98,20 @@ export class AisWsAdapter implements LayerAdapter {
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         heightReference: Cesium.HeightReference.NONE,
         // Unchanged from the entity billboard this replaces.
-        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 600_000),
-        translucencyByDistance: new Cesium.NearFarScalar(150_000, 1.0, 600_000, 0.0),
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+          0,
+          600_000,
+        ),
+        translucencyByDistance: new Cesium.NearFarScalar(
+          150_000,
+          1.0,
+          600_000,
+          0.0,
+        ),
         scaleByDistance: new Cesium.NearFarScalar(5_000, 1.7, 400_000, 0.6),
       }),
-      labelBase: (text) => labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
+      labelBase: (text) =>
+        labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
       getClock: () => viewer.clock.currentTime,
       shouldAnimate: () => false,
     });
@@ -126,24 +145,32 @@ export class AisWsAdapter implements LayerAdapter {
     if (this.destroyed) return;
     const ws = openAuthedWebSocket(this.props.url);
     this.ws = ws;
-    this.props.ctx.reportStatus({ status: 'amber', note: 'connecting' });
+    this.props.ctx.reportStatus({ status: "amber", note: "connecting" });
 
     ws.onopen = () => {
       this.reconnectDelay = 1000;
-      this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
+      this.props.ctx.reportStatus({ status: "green", lastSeen: Date.now() });
     };
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data as string) as VesselMsg;
-        if (msg.kind === 'info') {
+        if (msg.kind === "info") {
           this.props.ctx.reportStatus({
-            status: 'amber',
-            note: msg.message ?? 'upstream signalled no data',
+            status: "amber",
+            note: msg.message ?? "upstream signalled no data",
           });
           return;
         }
-        if (msg.kind === 'vessel' && msg.id && msg.lat != null && msg.lon != null) {
-          this.pending.set(msg.id, msg as Required<Pick<VesselMsg, 'id' | 'lat' | 'lon'>> & VesselMsg);
+        if (
+          msg.kind === "vessel" &&
+          msg.id &&
+          msg.lat != null &&
+          msg.lon != null
+        ) {
+          this.pending.set(
+            msg.id,
+            msg as Required<Pick<VesselMsg, "id" | "lat" | "lon">> & VesselMsg,
+          );
           this.scheduleDrain();
         }
       } catch {
@@ -151,11 +178,11 @@ export class AisWsAdapter implements LayerAdapter {
       }
     };
     ws.onclose = () => {
-      this.props.ctx.reportStatus({ status: 'red', note: 'websocket closed' });
+      this.props.ctx.reportStatus({ status: "red", note: "websocket closed" });
       this.scheduleReconnect();
     };
     ws.onerror = () => {
-      this.props.ctx.reportStatus({ status: 'red', note: 'websocket error' });
+      this.props.ctx.reportStatus({ status: "red", note: "websocket error" });
       // A half-open error may never emit a close event on its own, leaving the
       // feed dead with no retry. Force close(); onclose then schedules the
       // reconnect (browsers fire at most one close, so no double-scheduling).
@@ -192,7 +219,9 @@ export class AisWsAdapter implements LayerAdapter {
     if (this.pending.size > 0) this.scheduleDrain();
   }
 
-  private upsert(m: VesselMsg & { id: string; lat: number; lon: number }): void {
+  private upsert(
+    m: VesselMsg & { id: string; lat: number; lon: number },
+  ): void {
     const now = Date.now();
     const entities = this.ds.entities;
     let e = entities.getById(m.id);
@@ -205,7 +234,7 @@ export class AisWsAdapter implements LayerAdapter {
       heading: m.heading,
       shipType: m.shipType ?? null,
       source: m.source,
-      kind: 'vessel',
+      kind: "vessel",
     };
     const s = vesselStyle(props);
     if (!s.imageUri) {
@@ -239,7 +268,14 @@ export class AisWsAdapter implements LayerAdapter {
     if (labelText) e.name = labelText;
     this.lastSeen.set(m.id, now);
     // feed the intel tracker
-    const fix: { mmsi: string; lat: number; lon: number; t: number; name?: string | null; sog?: number | null } = {
+    const fix: {
+      mmsi: string;
+      lat: number;
+      lon: number;
+      t: number;
+      name?: string | null;
+      sog?: number | null;
+    } = {
       mmsi: String(m.mmsi ?? m.id),
       lat: m.lat,
       lon: m.lon,
@@ -248,7 +284,14 @@ export class AisWsAdapter implements LayerAdapter {
     if (m.name != null) fix.name = m.name;
     if (m.sog != null) fix.sog = m.sog;
     intel.darkVessels.observe(fix);
-    const tp: { t: number; lon: number; lat: number; alt: number; sog?: number; track?: number } = {
+    const tp: {
+      t: number;
+      lon: number;
+      lat: number;
+      alt: number;
+      sog?: number;
+      track?: number;
+    } = {
       t: now,
       lon: m.lon,
       lat: m.lat,
@@ -302,10 +345,14 @@ export class AisWsAdapter implements LayerAdapter {
       if (movedM < 50) return;
     }
     sampled.addSample(tNow, newPos);
-    const cutoff = Cesium.JulianDate.addSeconds(tNow, -300, new Cesium.JulianDate());
+    const cutoff = Cesium.JulianDate.addSeconds(
+      tNow,
+      -300,
+      new Cesium.JulianDate(),
+    );
     sampled.removeSamples(
       new Cesium.TimeInterval({
-        start: Cesium.JulianDate.fromIso8601('1970-01-01T00:00:00Z'),
+        start: Cesium.JulianDate.fromIso8601("1970-01-01T00:00:00Z"),
         stop: cutoff,
         isStartIncluded: true,
         isStopIncluded: false,

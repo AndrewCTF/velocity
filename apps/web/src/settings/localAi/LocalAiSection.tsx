@@ -4,15 +4,20 @@
 // presets row and selection-inference block. Rendered inside SettingsModal
 // underneath the existing "Run AI locally (GPU)" toggle (LocalAiToggle),
 // which keeps owning the separate narrative/agent/sim routing switch.
-import { useCallback, useEffect, useState } from 'react';
-import { apiFetch } from '../../transport/http.js';
-import { SectionLabel } from '../../shell/instruments.js';
-import { EnginePicker } from './EnginePicker.js';
-import { ModelsTable } from './ModelsTable.js';
-import { CatalogBrowser } from './CatalogBrowser.js';
-import { PresetsRow } from './PresetsRow.js';
-import { SelectionInferenceBlock } from './SelectionInferenceBlock.js';
-import type { EngineId, HardwareResponse, LocalAiConfig, ModelsResponse } from './types.js';
+import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "../../transport/http.js";
+import { SectionLabel } from "../../shell/instruments.js";
+import { EnginePicker } from "./EnginePicker.js";
+import { ModelsTable } from "./ModelsTable.js";
+import { CatalogBrowser } from "./CatalogBrowser.js";
+import { PresetsRow } from "./PresetsRow.js";
+import { SelectionInferenceBlock } from "./SelectionInferenceBlock.js";
+import type {
+  EngineId,
+  HardwareResponse,
+  LocalAiConfig,
+  ModelsResponse,
+} from "./types.js";
 
 export function LocalAiSection(): JSX.Element {
   const [models, setModels] = useState<ModelsResponse | null>(null);
@@ -22,7 +27,7 @@ export function LocalAiSection(): JSX.Element {
 
   const loadModels = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/ai/models');
+      const r = await apiFetch("/api/ai/models");
       if (r.ok) setModels((await r.json()) as ModelsResponse);
     } catch {
       /* non-fatal — the section degrades to "unavailable" below */
@@ -31,7 +36,7 @@ export function LocalAiSection(): JSX.Element {
 
   const loadLocal = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/ai/local');
+      const r = await apiFetch("/api/ai/local");
       if (r.ok) setLocal((await r.json()) as LocalAiConfig);
     } catch {
       /* non-fatal */
@@ -42,10 +47,10 @@ export function LocalAiSection(): JSX.Element {
     let live = true;
     void (async () => {
       try {
-        const r = await apiFetch('/api/ai/hardware');
+        const r = await apiFetch("/api/ai/hardware");
         if (live && r.ok) setHardware((await r.json()) as HardwareResponse);
       } catch {
-        if (live) setError('Hardware probe unavailable.');
+        if (live) setError("Hardware probe unavailable.");
       }
     })();
     void loadModels();
@@ -56,13 +61,17 @@ export function LocalAiSection(): JSX.Element {
   }, [loadModels, loadLocal]);
 
   if (!models) {
-    return <p className="mono text-[10px] text-txt-3">{error ?? 'loading engine + model catalog…'}</p>;
+    return (
+      <p className="mono text-[10px] text-txt-3">
+        {error ?? "loading engine + model catalog…"}
+      </p>
+    );
   }
 
   const download = async (repoId: string, quant: string): Promise<void> => {
-    await apiFetch('/api/ai/models/download', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+    await apiFetch("/api/ai/models/download", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ repo_id: repoId, quant }),
     }).catch(() => undefined);
     // Downloads run async server-side; the catalog card polls its own job —
@@ -76,7 +85,7 @@ export function LocalAiSection(): JSX.Element {
       <div>
         <SectionLabel title="Engine" className="mb-1.5" />
         <EnginePicker
-          engine={local?.engine ?? 'auto'}
+          engine={local?.engine ?? "auto"}
           engines={models.engines}
           onChanged={() => void loadLocal()}
         />
@@ -85,13 +94,25 @@ export function LocalAiSection(): JSX.Element {
       {hardware && (
         <div>
           <SectionLabel title="Presets" className="mb-1.5" />
-          <PresetsRow hardware={hardware} installed={models.installed} onDownload={(r, q) => void download(r, q)} />
+          <PresetsRow
+            hardware={hardware}
+            installed={models.installed}
+            onDownload={(r, q) => void download(r, q)}
+          />
         </div>
       )}
 
       <div>
-        <SectionLabel title="Installed models" count={models.installed.length} className="mb-1.5" />
-        <ModelsTable installed={models.installed} active={models.active} onChanged={() => void loadModels()} />
+        <SectionLabel
+          title="Installed models"
+          count={models.installed.length}
+          className="mb-1.5"
+        />
+        <ModelsTable
+          installed={models.installed}
+          active={models.active}
+          onChanged={() => void loadModels()}
+        />
       </div>
 
       <div>
@@ -126,7 +147,7 @@ export function LocalAiSection(): JSX.Element {
 // show at all without re-implementing the "no models yet" probe.
 export async function fetchModelsOnce(): Promise<ModelsResponse | null> {
   try {
-    const r = await apiFetch('/api/ai/models');
+    const r = await apiFetch("/api/ai/models");
     if (!r.ok) return null;
     return (await r.json()) as ModelsResponse;
   } catch {

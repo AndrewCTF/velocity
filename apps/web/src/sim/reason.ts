@@ -3,7 +3,7 @@
 // numbers. Returns null on transport failure; the route itself returns
 // { ok:false, error } when the model is unavailable.
 
-import { apiFetch } from '../transport/http.js';
+import { apiFetch } from "../transport/http.js";
 
 export interface SimOutcome {
   description: string;
@@ -33,10 +33,14 @@ export async function reasonSim(
   question?: string,
   signal?: AbortSignal,
 ): Promise<SimReasonResult | null> {
-  const r = await apiFetch('/api/sim/reason', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scenario, outcome, ...(question ? { question } : {}) }),
+  const r = await apiFetch("/api/sim/reason", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      scenario,
+      outcome,
+      ...(question ? { question } : {}),
+    }),
     ...(signal ? { signal } : {}),
   });
   if (!r.ok) return null;

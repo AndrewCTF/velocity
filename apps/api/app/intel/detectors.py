@@ -86,8 +86,10 @@ def proximity(
     (sustained closeness over Y minutes) is a refinement layered in the evaluator
     using its enter/exit state.
 
-    # ponytail: O(n^2) over tracks; callers bound it to an AOI. Add a spatial
-    # grid only if a watch AOI ever holds thousands of simultaneous tracks.
+    Sorted by latitude, a fix is only measured against the ones within
+    ``max_nm`` of it north to south: a great circle is never shorter than its
+    change in latitude. Measuring every pair was 4.5 million distances for the
+    watch officer's 3 000 vessels, seconds of event loop every 15 s (2026-10-10).
     """
     recent: list[tuple[str, float, float]] = []
     for trk in tracks:
@@ -98,15 +100,21 @@ def proximity(
         if _in_bbox(lon, lat, aoi):
             recent.append((trk.get("id"), lon, lat))
 
-    hits: list[dict[str, Any]] = []
-    for i in range(len(recent)):
-        id_a, lon_a, lat_a = recent[i]
-        for j in range(i + 1, len(recent)):
-            id_b, lon_b, lat_b = recent[j]
-            nm = haversine_nm(lon_a, lat_a, lon_b, lat_b)
+    band = math.degrees(max_nm * 1852.0 / 6_371_000.0) * (1 + 1e-9)
+    order = sorted(range(len(recent)), key=lambda i: recent[i][2])
+    pairs: list[tuple[int, int, float]] = []
+    for n, i in enumerate(order):
+        for m in range(n + 1, len(order)):
+            j = order[m]
+            if recent[j][2] - recent[i][2] > band:
+                break
+            a, b = (i, j) if i < j else (j, i)
+            nm = haversine_nm(recent[a][1], recent[a][2], recent[b][1], recent[b][2])
             if nm <= max_nm:
-                hits.append({"a": id_a, "b": id_b, "nm": round(nm, 3)})
-    return hits
+                pairs.append((a, b, nm))
+    # In track order, as when every pair was walked: callers keep the first hit.
+    pairs.sort()
+    return [{"a": recent[a][0], "b": recent[b][0], "nm": round(nm, 3)} for a, b, nm in pairs]
 
 
 def loiter(

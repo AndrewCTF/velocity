@@ -1,37 +1,57 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { App } from './App.js';
-import { AuthProvider, useAuth } from './auth/AuthContext.js';
-import { SettingsModal } from './settings/SettingsModal.js';
-import { useSettings } from './state/settings.js';
-import { Onboarding, hasOnboarded } from './onboarding/Onboarding.js';
-import { isSupabaseConfigured } from './transport/supabase.js';
-import { AiSetupWizard } from './settings/localAi/AiSetupWizard.js';
-import { hasSeenAiSetup } from './settings/localAi/aiSetupSeen.js';
-import { fetchModelsOnce } from './settings/localAi/LocalAiSection.js';
-import { ToastHost } from './shell/toast.js';
-import { LowEndBanner } from './globe/LowEndBanner.js';
-import { DegradedBanner } from './globe/DegradedBanner.js';
-import { readMfaStep, useMfaNeeded, type MfaStep } from './auth/mfa.js';
-import { supabase } from './transport/supabase.js';
+import { Suspense, lazy, useEffect, useState } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Link,
+  useLocation,
+} from "react-router-dom";
+import { App } from "./App.js";
+import { AuthProvider, useAuth } from "./auth/AuthContext.js";
+import { SettingsModal } from "./settings/SettingsModal.js";
+import { useSettings } from "./state/settings.js";
+import { Onboarding, hasOnboarded } from "./onboarding/Onboarding.js";
+import { isSupabaseConfigured } from "./transport/supabase.js";
+import { AiSetupWizard } from "./settings/localAi/AiSetupWizard.js";
+import { hasSeenAiSetup } from "./settings/localAi/aiSetupSeen.js";
+import { fetchModelsOnce } from "./settings/localAi/LocalAiSection.js";
+import { ToastHost } from "./shell/toast.js";
+import { LowEndBanner } from "./globe/LowEndBanner.js";
+import { DegradedBanner } from "./globe/DegradedBanner.js";
+import { readMfaStep, useMfaNeeded, type MfaStep } from "./auth/mfa.js";
+import { supabase } from "./transport/supabase.js";
 
 // Served under the Vite base path (e.g. "/app" in production, "/" in dev), so
 // the router's basename tracks it — keeps client routes correct behind /app.
-const BASENAME = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/';
+const BASENAME = (import.meta.env.BASE_URL || "/").replace(/\/$/, "") || "/";
 
 // Secondary routes are code-split so "/" (the console everyone lands on) does
 // not pay for their heavy deps: App2D pulls maplibre-gl, StudioPage pulls
 // three + the splat viewer. The console route (App) stays eager — it IS the
 // product; lazy-loading it would only add a loading seam to every visit.
-const App2D = lazy(() => import('./App2D.js').then((m) => ({ default: m.App2D })));
-const StudioPage = lazy(() => import('./studio/StudioPage.js').then((m) => ({ default: m.StudioPage })));
-const VelocityNewsPage = lazy(() =>
-  import('./news/VelocityNewsPage.js').then((m) => ({ default: m.VelocityNewsPage })),
+const App2D = lazy(() =>
+  import("./App2D.js").then((m) => ({ default: m.App2D })),
 );
-const StoryView = lazy(() => import('./news/StoryView.js').then((m) => ({ default: m.StoryView })));
-const LoginPage = lazy(() => import('./auth/LoginPage.js').then((m) => ({ default: m.LoginPage })));
-const SignupPage = lazy(() => import('./auth/SignupPage.js').then((m) => ({ default: m.SignupPage })));
-const AuthForm = lazy(() => import('./auth/AuthForm.js').then((m) => ({ default: m.AuthForm })));
+const StudioPage = lazy(() =>
+  import("./studio/StudioPage.js").then((m) => ({ default: m.StudioPage })),
+);
+const VelocityNewsPage = lazy(() =>
+  import("./news/VelocityNewsPage.js").then((m) => ({
+    default: m.VelocityNewsPage,
+  })),
+);
+const StoryView = lazy(() =>
+  import("./news/StoryView.js").then((m) => ({ default: m.StoryView })),
+);
+const LoginPage = lazy(() =>
+  import("./auth/LoginPage.js").then((m) => ({ default: m.LoginPage })),
+);
+const SignupPage = lazy(() =>
+  import("./auth/SignupPage.js").then((m) => ({ default: m.SignupPage })),
+);
+const AuthForm = lazy(() =>
+  import("./auth/AuthForm.js").then((m) => ({ default: m.AuthForm })),
+);
 
 function RouteLoading(): JSX.Element {
   return (
@@ -83,12 +103,13 @@ function TopBar(): JSX.Element | null {
   const loc = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The auth pages are full-screen cards — no overlay chrome on them.
-  if (['/login', '/signup', '/forgot', '/reset'].includes(loc.pathname)) return null;
-  if (loc.pathname.startsWith('/news')) return null;
+  if (["/login", "/signup", "/forgot", "/reset"].includes(loc.pathname))
+    return null;
+  if (loc.pathname.startsWith("/news")) return null;
   // The console has a title bar; these controls live in it, not over it.
-  if (loc.pathname === '/') return null;
-  const is2D = loc.pathname.startsWith('/2d');
-  const isStudio = loc.pathname.startsWith('/studio');
+  if (loc.pathname === "/") return null;
+  const is2D = loc.pathname.startsWith("/2d");
+  const isStudio = loc.pathname.startsWith("/studio");
   return (
     <div className="absolute top-1 right-2 z-(--z-dock) flex items-center gap-2">
       <button
@@ -104,19 +125,19 @@ function TopBar(): JSX.Element | null {
       <div className="flex gap-1">
         <Link
           to="/"
-          className={`mono text-[10px] px-2 py-0.5 border border-line rounded-sm ${!is2D && !isStudio ? 'text-accent border-accent-line' : 'text-txt-2 hover:border-accent-line'}`}
+          className={`mono text-[10px] px-2 py-0.5 border border-line rounded-sm ${!is2D && !isStudio ? "text-accent border-accent-line" : "text-txt-2 hover:border-accent-line"}`}
         >
           3D
         </Link>
         <Link
           to="/2d"
-          className={`mono text-[10px] px-2 py-0.5 border border-line rounded-sm ${is2D ? 'text-accent border-accent-line' : 'text-txt-2 hover:border-accent-line'}`}
+          className={`mono text-[10px] px-2 py-0.5 border border-line rounded-sm ${is2D ? "text-accent border-accent-line" : "text-txt-2 hover:border-accent-line"}`}
         >
           2D
         </Link>
         <Link
           to="/studio"
-          className={`mono text-[10px] px-2 py-0.5 border border-line rounded-sm ${isStudio ? 'text-accent border-accent-line' : 'text-txt-2 hover:border-accent-line'}`}
+          className={`mono text-[10px] px-2 py-0.5 border border-line rounded-sm ${isStudio ? "text-accent border-accent-line" : "text-txt-2 hover:border-accent-line"}`}
         >
           STUDIO
         </Link>
@@ -136,7 +157,7 @@ function PredictedMotionBadge(): JSX.Element | null {
   // bottom-right status cluster with the other map readouts. Only the 2D
   // route, which has no status footer, gets a floating chip — bottom-right,
   // clear of the top-right Settings/3D/2D cluster.
-  if (!loc.pathname.startsWith('/2d')) return null;
+  if (!loc.pathname.startsWith("/2d")) return null;
   return (
     <div
       className="absolute bottom-2 right-2 z-(--z-dock) mono text-[10px] px-2 py-1 rounded-sm border border-accent-line bg-bg-1/90 text-accent pointer-events-none flex items-center gap-1.5"
@@ -153,7 +174,7 @@ function PredictedMotionBadge(): JSX.Element | null {
 function OnboardingGate(): JSX.Element | null {
   const loc = useLocation();
   const [show, setShow] = useState(() => !hasOnboarded());
-  const onMap = loc.pathname === '/' || loc.pathname.startsWith('/2d');
+  const onMap = loc.pathname === "/" || loc.pathname.startsWith("/2d");
   if (!show || !onMap) return null;
   return <Onboarding onClose={() => setShow(false)} />;
 }
@@ -165,7 +186,7 @@ function OnboardingGate(): JSX.Element | null {
 // doesn't need the wizard nagging them).
 function AiSetupGate(): JSX.Element | null {
   const loc = useLocation();
-  const onMap = loc.pathname === '/' || loc.pathname.startsWith('/2d');
+  const onMap = loc.pathname === "/" || loc.pathname.startsWith("/2d");
   const [show, setShow] = useState(false);
   const [checked, setChecked] = useState(false);
 
@@ -204,15 +225,16 @@ function MfaBanner(): JSX.Element | null {
     let live = true;
     void readMfaStep(supabase)
       .then((s) => live && setStep(s))
-      .catch(() => live && setStep('enrol'));
+      .catch(() => live && setStep("enrol"));
     return () => {
       live = false;
     };
   }, [needed]);
 
   if (!isSupabaseConfigured || !needed) return null;
-  if (['/login', '/signup', '/forgot', '/reset'].includes(loc.pathname)) return null;
-  const action = step === 'verify' ? 'Enter your code' : 'Set up two-factor';
+  if (["/login", "/signup", "/forgot", "/reset"].includes(loc.pathname))
+    return null;
+  const action = step === "verify" ? "Enter your code" : "Set up two-factor";
   return (
     <>
       <div
@@ -220,9 +242,9 @@ function MfaBanner(): JSX.Element | null {
         className="fixed left-1/2 top-10 z-(--z-dock) flex max-w-[92vw] -translate-x-1/2 items-center gap-2.5 rounded-sm border border-warn-line bg-bg-1 px-3 py-1.5 mono text-[11px] text-warn-fg shadow-lg"
       >
         <span>
-          {step === 'verify'
-            ? 'Operator actions need the code from your authenticator app.'
-            : 'Operator actions need two-factor sign-in on this deployment.'}
+          {step === "verify"
+            ? "Operator actions need the code from your authenticator app."
+            : "Operator actions need two-factor sign-in on this deployment."}
           {detail ? <span className="text-txt-2"> · {detail}</span> : null}
         </span>
         <button
@@ -232,7 +254,11 @@ function MfaBanner(): JSX.Element | null {
         >
           {action}
         </button>
-        <button type="button" onClick={clear} className="text-txt-3 hover:text-txt-1">
+        <button
+          type="button"
+          onClick={clear}
+          className="text-txt-3 hover:text-txt-1"
+        >
           dismiss
         </button>
       </div>
@@ -259,7 +285,10 @@ function AccountChip(): JSX.Element | null {
   }
   return (
     <div className="flex items-center gap-1.5">
-      <span className="mono text-[10px] text-txt-2" title={user.email ?? user.id}>
+      <span
+        className="mono text-[10px] text-txt-2"
+        title={user.email ?? user.id}
+      >
         {user.email ?? user.id.slice(0, 8)}
       </span>
       <button

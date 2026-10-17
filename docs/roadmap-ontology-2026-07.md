@@ -9,7 +9,7 @@ impact, not fastest win**. Read `CLAUDE.md` and
 
 ---
 
-## 1. Identity — what makes us *us*
+## 1. Identity — what makes us _us_
 
 Velocity is a **personal, keyless, live-world intelligence console**. Its
 unfakeable assets, measured live on 2026-07-07:
@@ -33,7 +33,7 @@ unfakeable assets, measured live on 2026-07-07:
 
 What we are NOT: a commercial SaaS, a data-integration business, or a
 Palantir competitor. We have no customers whose data we integrate — and that
-is a *feature*: our data is the open world, already flowing.
+is a _feature_: our data is the open world, already flowing.
 
 ## 2. What Palantir actually is — and the lesson
 
@@ -42,13 +42,13 @@ framing error: Gotham's map is a **minor surface**. Palantir's actual product:
 
 1. **The ontology as operating picture.** Customer data → persistent objects,
    typed links, properties, **actions**. Every application (map, graph,
-   table, timeline, dossier, video) is a *lens over the same schema*.
+   table, timeline, dossier, video) is a _lens over the same schema_.
    Semantics (types) + kinetics (actions) + interfaces + applications.
-2. **Closed decision loops.** Analysts act *through* the platform (task,
+2. **Closed decision loops.** Analysts act _through_ the platform (task,
    approve, write back), every action governed and audited. Perceive → decide
    → act → record. Dashboards are what you build when you can't close the loop.
 3. **Trust as UI.** Classification, need-to-know, lineage and audit are
-   *visible*, not back-office. That's why governments pay.
+   _visible_, not back-office. That's why governments pay.
 4. **AIP (2024-26):** LLM agents that operate on the ontology with transparent
    derivation chains — AI inside the governed loop, not a chatbot beside it.
 
@@ -66,8 +66,8 @@ Professional-grade, across Lattice / Windward / Kpler / BlackSky / Dataminr /
 Maltego / FR24:
 
 - **Map-centric but not map-only**; playback/replay is table stakes.
-- **Identity fused with position** — *who operates this hull/airframe* is as
-  valuable as *where it is* (Windward's ownership screening is the moat).
+- **Identity fused with position** — _who operates this hull/airframe_ is as
+  valuable as _where it is_ (Windward's ownership screening is the moat).
 - **Push, not pull**: AI-triaged alerts surface to the analyst; the analyst
   doesn't hunt (Dataminr's whole business is a 45-min lead time).
 - **Evidence-grade output**: exports with provenance that survive scrutiny
@@ -85,7 +85,7 @@ Maltego / FR24:
 - `hero-selected-track.png` — click-to-dossier: German Police EC145
   (D-HHEA) near Frankfurt, magenta track, populated inspector (identity,
   kinematics, freshness, ACARS check, actions, analytic assessment). This is
-  a Gotham-class object view *for the two feed-native kinds*.
+  a Gotham-class object view _for the two feed-native kinds_.
 - `hero-europe-density.png`, `hero-us-east.png`, `hero-middle-east.png` —
   regional density; `ui-explorer.png` — 69k-row live object store with facets
   and CSV export; `ui-command-bar.png` — omnibar with workspace jumps.
@@ -100,7 +100,7 @@ Maltego / FR24:
 - `ui-graph.png` — the GRAPH surface boots to an empty "No investigation
   open" page, and the alerts panel showed "No alerts in buffer". **The
   sense-making surfaces are hollow by default** while the map brims. A
-  populated graph shot proved *uncapturable*: both Search-around and Seed
+  populated graph shot proved _uncapturable_: both Search-around and Seed
   render "COULD NOT LOAD GRAPH" because `/api/ontology/search-around/*`
   requires a signed-in Supabase user (`routes/ontology.py:79`) and
   `traverse()` reads only that user's RLS-scoped persisted links
@@ -117,13 +117,13 @@ Maltego / FR24:
 - The ontology store is **remote-only**: `OntologyRegistry` is a per-user
   PostgREST client over Supabase; without Supabase configured every call
   503s (`apps/api/app/intel/ontology.py:190-199`). On a keyless/local boot —
-  our core identity — the ontology is *dead weight*, which is exactly why the
+  our core identity — the ontology is _dead weight_, which is exactly why the
   GRAPH page is empty.
-- **Upsert replaces props wholesale** — "Callers that want to *extend*
+- **Upsert replaces props wholesale** — "Callers that want to _extend_
   `props` should `get` first and merge in Python"
   (`ontology.py:216-223`). No per-property history, no observed-at intervals,
-  no confidence, no provenance. A Palantir-class object is a *time series of
-  evidenced assertions*; ours is a mutable JSON blob.
+  no confidence, no provenance. A Palantir-class object is a _time series of
+  evidenced assertions_; ours is a mutable JSON blob.
 - **The live world never mints objects.** Feeds render entities on the map
   and rows in Explorer, but an aircraft only becomes an ontology object when
   an analyst or a playbook explicitly writes it. The map and the ontology are
@@ -133,8 +133,8 @@ Maltego / FR24:
 - Kinds and relations are healthy and already ours: 15 kinds incl. person/
   username/org (`ontology.py:45-50`), 10 canonical verbs incl. `operates`,
   `evidence_of`, `promoted_to` (`ontology.py:64-77`), classification +
-  compartments ACL on every row (`ontology.py:107-112`) — the *schema spine
-  exists*; it is starving for data and for a home surface.
+  compartments ACL on every row (`ontology.py:107-112`) — the _schema spine
+  exists_; it is starving for data and for a home surface.
 
 ## 5. The plan — ontology-first, in phases
 
@@ -183,9 +183,9 @@ The store must work on a keyless local boot, hold time, and hold provenance.
   optional sync/remote backend behind the same interface. Acceptance: every
   `/api/ontology/*` route returns data with no Supabase configured.
 - **Assertions, not blobs.** New table `assertions(object_id, prop, value,
-  source, confidence, observed_at, valid_until, derivation)` feeding a
-  materialized `props` view for compatibility. Every property answers *who
-  said this, when, how sure*. This single schema decision unlocks: history
+source, confidence, observed_at, valid_until, derivation)` feeding a
+  materialized `props` view for compatibility. Every property answers _who
+  said this, when, how sure_. This single schema decision unlocks: history
   tabs, derivation chains, deception scoring, diffing, and honest LLM
   grounding — all downstream phases read it.
 - **Links get the same treatment** (source + confidence + time bounds in
@@ -229,7 +229,7 @@ CREATE TABLE links (
   Supabase rows → local store (props become single assertions with
   `source='migrated'`).
 - **Budgets (pin after measuring, these are the starting caps):** assertions
-  written only on value *change* (dedup identical latest value); per-object
+  written only on value _change_ (dedup identical latest value); per-object
   cap ~2,000 assertions with oldest-first compaction to daily summaries;
   whole store soft cap ~2 GB — same bounding philosophy as history.db
   ([[storage-bounding-and-ondemand-imagery]]).
@@ -241,7 +241,7 @@ CREATE TABLE links (
 Kill the hollow-graph problem at the source: the ontology fills itself.
 
 - **A promotion pipeline, not a firehose.** Do NOT mint 69k objects/cycle.
-  Mint on *significance*: any entity that (a) trips a detector, (b) is
+  Mint on _significance_: any entity that (a) trips a detector, (b) is
   selected/flagged/watched by the analyst, (c) appears in an incident,
   brief, or correlation, or (d) matches a standing watch — becomes/updates an
   object with `evidence_of` links to the incident and assertions carrying the
@@ -253,11 +253,11 @@ Kill the hollow-graph problem at the source: the ontology fills itself.
   assertions instead of ad-hoc payloads; `operates` links for airline/fleet
   from callsign+registration prefixes (keyless reference data).
 - **Backfill from history:** a one-shot job walks history.db + incident
-  store and mints the graph the platform *should* have had. Day one the
+  store and mints the graph the platform _should_ have had. Day one the
   GRAPH page opens onto months of real structure.
 - **Minting budget (prevents both starvation and junk):** target order
   1,000-5,000 objects after the first week, not 69k mirrored rows. Every mint
-  must carry a *reason* link or assertion (`evidence_of` an incident,
+  must carry a _reason_ link or assertion (`evidence_of` an incident,
   `watched_by` a rule, analyst selection…). Pruning: objects with zero
   analyst interaction, zero incident links, and no assertion younger than
   30 d are compacted to a tombstone summary. Log mint/prune counts per cycle.
@@ -324,7 +324,7 @@ Layout (single screen, 2560-wide reference):
   activity feed on the Home (who/what/when — even single-operator, this is
   the trust surface and the replay of your own tradecraft).
 - Watch-officer briefs become objects (`incident` kind) with `evidence_of`
-  links — approving a brief *is* an ontology write, so the Home triage strip,
+  links — approving a brief _is_ an ontology write, so the Home triage strip,
   the graph, and the audit feed are automatically consistent.
 - Guard: action → `action_log` row → visible in activity feed, one test.
 
@@ -342,8 +342,8 @@ Only after 1-4: the agent is only as good as the graph it stands on.
   assertion trail (source, confidence, time) it stands on — the Phase-1
   schema makes this nearly free.
 - Extend watch-officer playbooks to propose ontology writes (new links,
-  promotions) through the same HITL queue — the agent becomes a *governed
-  contributor to the graph*, not an oracle.
+  promotions) through the same HITL queue — the agent becomes a _governed
+  contributor to the graph_, not an oracle.
 
 - **Effort:** ~1 week for a grounded first cut (planner prompt + typed query
   executors + the results-as-selection plumbing), then iterative.
@@ -377,14 +377,14 @@ Only after 1-4: the agent is only as good as the graph it stands on.
 
 ## 5b. Where the previous roadmap's items land (nothing silently dropped)
 
-| Old item (roadmap-2026-07 / skill references/roadmap.md) | New home |
-|---|---|
-| Commit dirty work (old Tier 0) | Phase 0, expanded — guards are untracked |
-| Watch-officer extensions (old 1A) | Phase 4 (briefs as objects) + Phase 5 (playbooks propose writes) |
-| Person/identity OSINT (old 1B) | Phase 2 enrichment — outputs land as assertions + `operates`/`member_of` links; the person/username/email kinds already exist (`ontology.py:45-50`) |
-| NL query over the world (old 1C) | Phase 5, strictly after the graph is populated |
-| Imagery CV, SAR chokepoints, news depth (old Tier 2) | Unchanged as capability work, but their outputs must mint evidence into the ontology (each detection = object + `evidence_of`) |
-| FMV/3DGS/PPTX big bets (old Tier 3) | Unchanged — after everything above |
+| Old item (roadmap-2026-07 / skill references/roadmap.md) | New home                                                                                                                                            |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Commit dirty work (old Tier 0)                           | Phase 0, expanded — guards are untracked                                                                                                            |
+| Watch-officer extensions (old 1A)                        | Phase 4 (briefs as objects) + Phase 5 (playbooks propose writes)                                                                                    |
+| Person/identity OSINT (old 1B)                           | Phase 2 enrichment — outputs land as assertions + `operates`/`member_of` links; the person/username/email kinds already exist (`ontology.py:45-50`) |
+| NL query over the world (old 1C)                         | Phase 5, strictly after the graph is populated                                                                                                      |
+| Imagery CV, SAR chokepoints, news depth (old Tier 2)     | Unchanged as capability work, but their outputs must mint evidence into the ontology (each detection = object + `evidence_of`)                      |
+| FMV/3DGS/PPTX big bets (old Tier 3)                      | Unchanged — after everything above                                                                                                                  |
 
 ## 5c. Risks and kill criteria
 
@@ -395,7 +395,7 @@ Only after 1-4: the agent is only as good as the graph it stands on.
 - **Graph junk** (Phase 2 over-minting): the budget + reason-link rule above;
   if pruning fights the minter, tighten significance, don't raise caps.
 - **Home-surface rejection**: the operator may keep living on the map. Ship
-  Phase 3 as a *tab first* (EXPLORER promoted), only flip the default route
+  Phase 3 as a _tab first_ (EXPLORER promoted), only flip the default route
   after a week of real use says it earns it. Reversible one-liner.
 - **Assertion-table growth**: measured cap + compaction from day one; if the
   write rate exceeds ~10 assertions/s sustained, the significance filter is
@@ -421,7 +421,7 @@ Only after 1-4: the agent is only as good as the graph it stands on.
 
 - One phase = one cycle: explore → spec in `docs/<feature>-plan.md` with real
   file:line integration points → minimum vertical slice → `bash
-  scripts/verify.sh` green → screenshots → memory entry. The watch-officer
+scripts/verify.sh` green → screenshots → memory entry. The watch-officer
   build (`references/worked-example.md`) is the template.
 - Never commit below 715 passed backend tests; `pnpm -r typecheck` green at
   every boundary; guarded files (`styles.ts`, `PollGeoJsonAdapter`,
@@ -434,23 +434,23 @@ Only after 1-4: the agent is only as good as the graph it stands on.
 
 ## Appendix — media inventory (2026-07-07, 2560×1440)
 
-| file | shows | verdict |
-|---|---|---|
-| `docs/media/hero-world.png` | full-disc globe, global traffic, chrome | strong — lead image |
-| `docs/media/hero-europe-density.png` | continental icon density + layers | strong (label collision visible) |
-| `docs/media/hero-us-east.png` | US East Coast density | strong |
-| `docs/media/hero-middle-east.png` | Gulf/Hormuz + AOI box | good, sparser |
-| `docs/media/hero-selected-track.png` | click-to-dossier, EC145 + magenta track | strong — best workflow image |
-| `docs/media/ui-explorer.png` | 69,065-object live store, facets, export | strong — scale proof |
-| `docs/media/ui-command-bar.png` | omnibar workspace jumps | usable |
-| `docs/media/ui-briefs.png` | fused incident brief, 25 incidents + change diff | strong — sense-making proof |
-| `docs/media/ui-graph.png` | empty investigation canvas | kept as the honest "before" |
-| `docs/media/ui-graph-local-spine.png` | GRAPH with a saved investigation, keyless local store | the Phase-1 "after" (2026-07-07) |
-| `docs/media/ui-entity-panel.png` | aircraft inspector, magenta track (D-EUMI) | strong |
-| `docs/media/hero-channel-vessels.png` | Dover strait, hundreds of labeled vessels + AOI box | strong — best maritime image |
-| `docs/media/hero-baltic-vessels.png` | Øresund/Danish straits vessel lanes | good |
-| `docs/media/hero-singapore-strait.png` | Singapore anchorage cluster | good |
-| `docs/media/hero-satellites.png` | orbital catalogue shell (SPACE 4/4), full disc | good |
+| file                                   | shows                                                 | verdict                          |
+| -------------------------------------- | ----------------------------------------------------- | -------------------------------- |
+| `docs/media/hero-world.png`            | full-disc globe, global traffic, chrome               | strong — lead image              |
+| `docs/media/hero-europe-density.png`   | continental icon density + layers                     | strong (label collision visible) |
+| `docs/media/hero-us-east.png`          | US East Coast density                                 | strong                           |
+| `docs/media/hero-middle-east.png`      | Gulf/Hormuz + AOI box                                 | good, sparser                    |
+| `docs/media/hero-selected-track.png`   | click-to-dossier, EC145 + magenta track               | strong — best workflow image     |
+| `docs/media/ui-explorer.png`           | 69,065-object live store, facets, export              | strong — scale proof             |
+| `docs/media/ui-command-bar.png`        | omnibar workspace jumps                               | usable                           |
+| `docs/media/ui-briefs.png`             | fused incident brief, 25 incidents + change diff      | strong — sense-making proof      |
+| `docs/media/ui-graph.png`              | empty investigation canvas                            | kept as the honest "before"      |
+| `docs/media/ui-graph-local-spine.png`  | GRAPH with a saved investigation, keyless local store | the Phase-1 "after" (2026-07-07) |
+| `docs/media/ui-entity-panel.png`       | aircraft inspector, magenta track (D-EUMI)            | strong                           |
+| `docs/media/hero-channel-vessels.png`  | Dover strait, hundreds of labeled vessels + AOI box   | strong — best maritime image     |
+| `docs/media/hero-baltic-vessels.png`   | Øresund/Danish straits vessel lanes                   | good                             |
+| `docs/media/hero-singapore-strait.png` | Singapore anchorage cluster                           | good                             |
+| `docs/media/hero-satellites.png`       | orbital catalogue shell (SPACE 4/4), full disc        | good                             |
 
 Capture method (persist): suppress onboarding via localStorage
 `velocity.onboarded.v1=1` in `addInitScript`; toggle layers programmatically

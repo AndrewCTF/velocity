@@ -11,20 +11,20 @@ import {
   type FetchState,
   type ProfileResponse,
   type WorldBankResponse,
-} from './shared.js';
+} from "./shared.js";
 
 // WB military indicator ids, in display order (see routes/country_stats.py).
 const MIL_IDS = [
-  'MS.MIL.XPND.GD.ZS',
-  'MS.MIL.XPND.CD',
-  'MS.MIL.XPND.ZS',
-  'MS.MIL.TOTL.P1',
-  'MS.MIL.MPRT.KD',
-  'MS.MIL.XPRT.KD',
+  "MS.MIL.XPND.GD.ZS",
+  "MS.MIL.XPND.CD",
+  "MS.MIL.XPND.ZS",
+  "MS.MIL.TOTL.P1",
+  "MS.MIL.MPRT.KD",
+  "MS.MIL.XPRT.KD",
 ];
 
 export function isMilitaryIndicator(id: string): boolean {
-  return id.startsWith('MS.MIL.');
+  return id.startsWith("MS.MIL.");
 }
 
 export function MilitaryCard({
@@ -40,12 +40,19 @@ export function MilitaryCard({
     .sort((a, b) => {
       const ai = MIL_IDS.indexOf(a.id);
       const bi = MIL_IDS.indexOf(b.id);
-      return (ai === -1 ? MIL_IDS.length : ai) - (bi === -1 ? MIL_IDS.length : bi);
+      return (
+        (ai === -1 ? MIL_IDS.length : ai) - (bi === -1 ? MIL_IDS.length : bi)
+      );
     });
   return (
-    <Card title="Military posture" meta={wb.data ? 'worldbank + wikidata' : undefined}>
+    <Card
+      title="Military posture"
+      meta={wb.data ? "worldbank + wikidata" : undefined}
+    >
       <div className="mb-2">
-        <div className="text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1">Service branches</div>
+        <div className="text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1">
+          Service branches
+        </div>
         {profile.loading && (
           <div className="flex gap-1.5">
             <Skeleton className="h-5 w-24" />
@@ -54,11 +61,15 @@ export function MilitaryCard({
           </div>
         )}
         {!profile.loading && profile.error && (
-          <div className="mono text-[10px] text-alert-fg">Failed: {profile.error}</div>
+          <div className="mono text-[10px] text-alert-fg">
+            Failed: {profile.error}
+          </div>
         )}
         {!profile.loading && !profile.error && branches.length === 0 && (
           <div className="mono text-[10px] text-txt-4">
-            {profile.data?.unavailable ? 'Wikidata unavailable.' : 'No service-branch structure on Wikidata.'}
+            {profile.data?.unavailable
+              ? "Wikidata unavailable."
+              : "No service-branch structure on Wikidata."}
           </div>
         )}
         {branches.length > 0 && (
@@ -75,7 +86,9 @@ export function MilitaryCard({
         )}
       </div>
       <div>
-        <div className="text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1">Indicators</div>
+        <div className="text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1">
+          Indicators
+        </div>
         {wb.loading && (
           <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(170px,1fr))]">
             {[0, 1, 2, 3].map((i) => (
@@ -83,9 +96,15 @@ export function MilitaryCard({
             ))}
           </div>
         )}
-        {!wb.loading && wb.error && <div className="mono text-[10px] text-alert-fg">Failed: {wb.error}</div>}
+        {!wb.loading && wb.error && (
+          <div className="mono text-[10px] text-alert-fg">
+            Failed: {wb.error}
+          </div>
+        )}
         {!wb.loading && !wb.error && wb.data && milInds.length === 0 && (
-          <div className="mono text-[10px] text-txt-4">No military indicators in the World Bank data.</div>
+          <div className="mono text-[10px] text-txt-4">
+            No military indicators in the World Bank data.
+          </div>
         )}
         {milInds.length > 0 && (
           <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(170px,1fr))]">

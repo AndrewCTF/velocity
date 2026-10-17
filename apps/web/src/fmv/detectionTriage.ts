@@ -7,7 +7,7 @@
 // ponytail: two id-sets + a coarse count grid. Feedback is session-scoped (the
 // notional detection ids regenerate anyway); a real detector would key on a durable
 // track id and POST the confirm/dismiss to the model-feedback endpoint.
-import { create } from 'zustand';
+import { create } from "zustand";
 
 const SOAK_CELLS = 24; // grid resolution across the frame (both axes)
 
@@ -30,7 +30,7 @@ interface TriageState {
   confirm: (id: string, cx: number, cy: number) => void;
   dismiss: (id: string) => void;
   reset: (id: string) => void;
-  status: (id: string) => 'confirmed' | 'dismissed' | 'pending';
+  status: (id: string) => "confirmed" | "dismissed" | "pending";
   soakCells: () => SoakCell[];
   clearSoak: () => void;
 }
@@ -65,10 +65,15 @@ export const useDetectionTriage = create<TriageState>((set, get) => ({
       dismissed.delete(id);
       return { confirmed, dismissed };
     }),
-  status: (id) => (get().confirmed.has(id) ? 'confirmed' : get().dismissed.has(id) ? 'dismissed' : 'pending'),
+  status: (id) =>
+    get().confirmed.has(id)
+      ? "confirmed"
+      : get().dismissed.has(id)
+        ? "dismissed"
+        : "pending",
   soakCells: () =>
     [...get().soak.entries()].map(([k, n]) => {
-      const [cx, cy] = k.split(',').map(Number);
+      const [cx, cy] = k.split(",").map(Number);
       return { cx: cx ?? 0, cy: cy ?? 0, n };
     }),
   clearSoak: () => set({ soak: new Map() }),

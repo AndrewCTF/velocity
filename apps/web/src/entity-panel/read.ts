@@ -1,10 +1,13 @@
-import * as Cesium from 'cesium';
+import * as Cesium from "cesium";
 
 // Reading a live entity off the viewer. Extracted from EntityPanel so the
 // rebuilt Selection panel reads the SAME source rather than growing a second,
 // slightly-different copy of these three functions.
 
-export function findEntity(viewer: Cesium.Viewer, id: string): Cesium.Entity | undefined {
+export function findEntity(
+  viewer: Cesium.Viewer,
+  id: string,
+): Cesium.Entity | undefined {
   for (let i = 0; i < viewer.dataSources.length; i++) {
     const e = viewer.dataSources.get(i).entities.getById(id);
     if (e) return e;
@@ -20,7 +23,9 @@ export function readProperties(e: Cesium.Entity): Record<string, unknown> {
   if (!names) return out;
   const now = Cesium.JulianDate.now();
   for (const n of names) {
-    const p = (props as unknown as Record<string, Cesium.Property | undefined>)[n];
+    const p = (props as unknown as Record<string, Cesium.Property | undefined>)[
+      n
+    ];
     if (!p) continue;
     try {
       out[n] = p.getValue(now);

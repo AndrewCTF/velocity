@@ -10,8 +10,8 @@ function dataUri(svg: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-const OUT = '#05070b'; // near-black outline halo (matches label pill background)
-const GLYPH_FG = '#ffffff'; // white foreground drawn on the colored tile
+const OUT = "#05070b"; // near-black outline halo (matches label pill background)
+const GLYPH_FG = "#ffffff"; // white foreground drawn on the colored tile
 
 // FR24-style solid tile backing for the HIGH-INTENSITY conflict glyphs (blast,
 // airstrike, artillery, clash, gunfire, drone, naval). A filled rounded square in
@@ -146,17 +146,17 @@ function incidentSvg(color: string): string {
 }
 
 export type EventGlyph =
-  | 'blast'
-  | 'airstrike'
-  | 'artillery'
-  | 'clash'
-  | 'gunfire'
-  | 'protest'
-  | 'drone'
-  | 'naval'
-  | 'outage'
-  | 'jamming'
-  | 'incident';
+  | "blast"
+  | "airstrike"
+  | "artillery"
+  | "clash"
+  | "gunfire"
+  | "protest"
+  | "drone"
+  | "naval"
+  | "outage"
+  | "jamming"
+  | "incident";
 
 const BUILDERS: Record<EventGlyph, (color: string) => string> = {
   blast: blastSvg,

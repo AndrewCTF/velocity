@@ -1,5 +1,5 @@
-import type * as Cesium from 'cesium';
-import { TimeDock } from '../shell/TimeDock.js';
+import type * as Cesium from "cesium";
+import { TimeDock } from "../shell/TimeDock.js";
 
 // Timeline — now a thin wrapper. The real transport (the clock-driving,
 // chunked-replay one) lives in shell/TimeDock.tsx: "one address per surface"
@@ -15,7 +15,7 @@ import { TimeDock } from '../shell/TimeDock.js';
 // `stepSpeed` moved to shell/TimeDock.tsx with the rest of the keyboard
 // transport; re-exported here because timeline/transport.test.ts (not owned
 // by this change) imports it from this path.
-export { stepSpeed } from '../shell/TimeDock.js';
+export { stepSpeed } from "../shell/TimeDock.js";
 
 interface Props {
   viewer?: Cesium.Viewer | null;

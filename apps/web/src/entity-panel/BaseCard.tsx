@@ -1,13 +1,13 @@
-import { Widget, Badge, KV, KVRow, Caveat } from '../shell/instruments.js';
+import { Widget, Badge, KV, KVRow, Caveat } from "../shell/instruments.js";
 
 // Military-base layer (`app/data/bases.json`, Wikidata SPARQL) has no backend
 // enrichment endpoint (docs/places-airspace-plan.md §5) — this card is filled
 // entirely from the live property bag already on the map entity: name,
 // branch, and position. No fabricated capability/garrison data.
 const BRANCH_LABEL: Record<string, string> = {
-  air: 'Air',
-  naval: 'Naval',
-  army: 'Army',
+  air: "Air",
+  naval: "Naval",
+  army: "Army",
 };
 
 export function BaseCard({
@@ -29,8 +29,8 @@ export function BaseCard({
           {branchLabel && <Badge tone="warn">{branchLabel}</Badge>}
         </div>
         <KV>
-          <KVRow k="Name" v={name || '—'} />
-          {typeof lat === 'number' && typeof lon === 'number' && (
+          <KVRow k="Name" v={name || "—"} />
+          {typeof lat === "number" && typeof lon === "number" && (
             <KVRow k="Position" v={`${lat.toFixed(4)}, ${lon.toFixed(4)}`} />
           )}
         </KV>

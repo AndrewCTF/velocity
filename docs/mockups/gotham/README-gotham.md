@@ -5,15 +5,15 @@ mockups; `00-index.html` and the three direction pages are untouched.
 
 ## Open these
 
-| File | What |
-|---|---|
-| `gotham-console.html` | **The console.** Direction A rebuilt with Gotham's structural grammar. |
-| `gotham-compare.html` | **The four-axis comparison.** Pixel, language, design, professionalism, each with its evidence. |
-| `gotham-loading/empty/error/degraded.html` | The four states, same console with one region swapped. |
+| File                                       | What                                                                                            |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `gotham-console.html`                      | **The console.** Direction A rebuilt with Gotham's structural grammar.                          |
+| `gotham-compare.html`                      | **The four-axis comparison.** Pixel, language, design, professionalism, each with its evidence. |
+| `gotham-loading/empty/error/degraded.html` | The four states, same console with one region swapped.                                          |
 
 ## Why this exists
 
-The earlier mockups matched Gotham's *palette* exactly (Blueprint 5.1.16,
+The earlier mockups matched Gotham's _palette_ exactly (Blueprint 5.1.16,
 verified, 0 tokens outside the published ramp) and still read as a web app,
 because the gap was never colour. It was structure: no menu bar, no window
 chrome, no count badges, no sentence-form action bar, no status strip, and rows

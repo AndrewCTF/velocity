@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import { useContextMenu } from './contextMenuStore.js';
-import { pointActions } from './mapActions.js';
+import { useEffect } from "react";
+import { useContextMenu } from "./contextMenuStore.js";
+import { pointActions } from "./mapActions.js";
 
 // Unified map right-click menu. Pure wiring — every action dispatches to an
 // existing store/feature at the clicked ground point (shared with the AREA-box
@@ -14,14 +14,14 @@ export function ContextMenu(): JSX.Element | null {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') close();
+      if (e.key === "Escape") close();
     };
     const onClick = (): void => close();
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('click', onClick);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("click", onClick);
     return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('click', onClick);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("click", onClick);
     };
   }, [open, close]);
 

@@ -1,7 +1,14 @@
-import { useCallback, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
-import { X, GripVertical } from 'lucide-react';
-import { Icon, type IconName } from '../normal/Icon.js';
-import { useFloatingPanels, type FloatingRect } from '../state/floatingPanels.js';
+import {
+  useCallback,
+  type ReactNode,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import { X, GripVertical } from "lucide-react";
+import { Icon, type IconName } from "../normal/Icon.js";
+import {
+  useFloatingPanels,
+  type FloatingRect,
+} from "../state/floatingPanels.js";
 
 // A free-floating, draggable + resizable window over the globe. Position/size
 // live in the floatingPanels store (keyed by id) so a detach → drag → redock →
@@ -12,7 +19,8 @@ import { useFloatingPanels, type FloatingRect } from '../state/floatingPanels.js
 const MIN_W = 240;
 const MIN_H = 180;
 const DEFAULT_RECT: FloatingRect = { x: 120, y: 96, w: 320, h: 460 };
-const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
+const clamp = (n: number, lo: number, hi: number): number =>
+  Math.max(lo, Math.min(hi, n));
 
 export function FloatingPanel({
   id,
@@ -33,7 +41,7 @@ export function FloatingPanel({
   const onDragDown = useCallback(
     (e: ReactPointerEvent): void => {
       // Ignore drags that start on a header button (close/redock).
-      if ((e.target as HTMLElement).closest('button')) return;
+      if ((e.target as HTMLElement).closest("button")) return;
       e.preventDefault();
       const cur = useFloatingPanels.getState().panels[id] ?? DEFAULT_RECT;
       const start = { px: e.clientX, py: e.clientY, rect: { ...cur } };
@@ -49,22 +57,34 @@ export function FloatingPanel({
         const maxX = window.innerWidth - 80;
         const maxY = window.innerHeight - 40;
         setRect(id, {
-          x: clamp(start.rect.x + (ev.clientX - start.px), -start.rect.w + 120, maxX),
+          x: clamp(
+            start.rect.x + (ev.clientX - start.px),
+            -start.rect.w + 120,
+            maxX,
+          ),
           y: clamp(start.rect.y + (ev.clientY - start.py), 28, maxY),
         });
       };
       const up = (): void => {
-        el.removeEventListener('pointermove', move);
-        el.removeEventListener('pointerup', up);
-        el.removeEventListener('pointercancel', up);
-        try { el.releasePointerCapture(pid); } catch { /* already released */ }
-        document.body.style.userSelect = '';
+        el.removeEventListener("pointermove", move);
+        el.removeEventListener("pointerup", up);
+        el.removeEventListener("pointercancel", up);
+        try {
+          el.releasePointerCapture(pid);
+        } catch {
+          /* already released */
+        }
+        document.body.style.userSelect = "";
       };
-      try { el.setPointerCapture(pid); } catch { /* jsdom/no-capture env */ }
-      document.body.style.userSelect = 'none';
-      el.addEventListener('pointermove', move);
-      el.addEventListener('pointerup', up);
-      el.addEventListener('pointercancel', up);
+      try {
+        el.setPointerCapture(pid);
+      } catch {
+        /* jsdom/no-capture env */
+      }
+      document.body.style.userSelect = "none";
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("pointercancel", up);
     },
     [id, setRect],
   );
@@ -79,22 +99,38 @@ export function FloatingPanel({
       const pid = e.pointerId;
       const move = (ev: PointerEvent): void => {
         setRect(id, {
-          w: clamp(start.rect.w + (ev.clientX - start.px), MIN_W, window.innerWidth - start.rect.x - 8),
-          h: clamp(start.rect.h + (ev.clientY - start.py), MIN_H, window.innerHeight - start.rect.y - 8),
+          w: clamp(
+            start.rect.w + (ev.clientX - start.px),
+            MIN_W,
+            window.innerWidth - start.rect.x - 8,
+          ),
+          h: clamp(
+            start.rect.h + (ev.clientY - start.py),
+            MIN_H,
+            window.innerHeight - start.rect.y - 8,
+          ),
         });
       };
       const up = (): void => {
-        el.removeEventListener('pointermove', move);
-        el.removeEventListener('pointerup', up);
-        el.removeEventListener('pointercancel', up);
-        try { el.releasePointerCapture(pid); } catch { /* already released */ }
-        document.body.style.userSelect = '';
+        el.removeEventListener("pointermove", move);
+        el.removeEventListener("pointerup", up);
+        el.removeEventListener("pointercancel", up);
+        try {
+          el.releasePointerCapture(pid);
+        } catch {
+          /* already released */
+        }
+        document.body.style.userSelect = "";
       };
-      try { el.setPointerCapture(pid); } catch { /* jsdom/no-capture env */ }
-      document.body.style.userSelect = 'none';
-      el.addEventListener('pointermove', move);
-      el.addEventListener('pointerup', up);
-      el.addEventListener('pointercancel', up);
+      try {
+        el.setPointerCapture(pid);
+      } catch {
+        /* jsdom/no-capture env */
+      }
+      document.body.style.userSelect = "none";
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("pointercancel", up);
     },
     [id, setRect],
   );
@@ -102,7 +138,13 @@ export function FloatingPanel({
   return (
     <div
       className="absolute z-(--z-overlay) pointer-events-auto flex flex-col rounded-md border border-line-2 overflow-hidden shadow-2xl"
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, background: 'rgba(9,12,18,0.97)' }}
+      style={{
+        left: rect.x,
+        top: rect.y,
+        width: rect.w,
+        height: rect.h,
+        background: "rgba(9,12,18,0.97)",
+      }}
       role="dialog"
       aria-label={title}
     >
@@ -110,9 +152,16 @@ export function FloatingPanel({
         onPointerDown={onDragDown}
         className="flex items-center gap-1.5 px-2 h-8 shrink-0 border-b border-line-2 bg-bg-1 cursor-grab active:cursor-grabbing select-none"
       >
-        <GripVertical size={13} strokeWidth={1.75} className="text-txt-3" aria-hidden />
+        <GripVertical
+          size={13}
+          strokeWidth={1.75}
+          className="text-txt-3"
+          aria-hidden
+        />
         {icon && <Icon name={icon} className="w-3.5 h-3.5 text-txt-2" />}
-        <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-1 flex-1 truncate">{title}</span>
+        <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-1 flex-1 truncate">
+          {title}
+        </span>
         <button
           type="button"
           onClick={onClose}
@@ -130,7 +179,7 @@ export function FloatingPanel({
         className="absolute bottom-0 right-0 w-3.5 h-3.5 cursor-nwse-resize"
         style={{
           background:
-            'linear-gradient(135deg, transparent 0 50%, var(--line, #2a3140) 50% 60%, transparent 60% 70%, var(--line, #2a3140) 70% 80%, transparent 80%)',
+            "linear-gradient(135deg, transparent 0 50%, var(--line, #2a3140) 50% 60%, transparent 60% 70%, var(--line, #2a3140) 70% 80%, transparent 80%)",
         }}
         aria-hidden
       />

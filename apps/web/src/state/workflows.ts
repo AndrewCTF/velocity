@@ -10,12 +10,13 @@
 //     edges:[{from,to}]}; preview_workflow's {blocks: {id: {type, rows_in,
 //     rows_out, sample, error}}} response.
 
-import { create } from 'zustand';
-import { apiFetch } from '../transport/http.js';
+import { create } from "zustand";
+import { apiFetch } from "../transport/http.js";
 
 // ── block catalog (GET /api/workflows/blocks) ───────────────────────────────
 
-export type ConfigFieldType = 'string' | 'int' | 'float' | 'bool' | 'text' | 'select' | 'json';
+export type ConfigFieldType =
+  "string" | "int" | "float" | "bool" | "text" | "select" | "json";
 
 export interface ConfigFieldSpec {
   key: string;
@@ -28,7 +29,7 @@ export interface ConfigFieldSpec {
   help?: string;
 }
 
-export type BlockCategory = 'source' | 'op' | 'sink' | 'control';
+export type BlockCategory = "source" | "op" | "sink" | "control";
 
 export interface BlockCatalogEntry {
   type: string;
@@ -70,8 +71,8 @@ export interface Workflow {
 
 // ── runs ─────────────────────────────────────────────────────────────────────
 
-export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed';
-export type RunTrigger = 'manual' | 'schedule';
+export type RunStatus = "queued" | "running" | "succeeded" | "failed";
+export type RunTrigger = "manual" | "schedule";
 
 export interface Run {
   id: string;
@@ -115,9 +116,10 @@ export interface PreviewResult {
 // Discriminated result for mutations whose validation error (name conflict
 // 409, DAG-validation 422) the editor renders inline instead of into the
 // shared global `error` string — same contract as state/foundry.ts::MutResult.
-export type MutResult<T> = { ok: true; value: T } | { ok: false; error: string };
+export type MutResult<T> =
+  { ok: true; value: T } | { ok: false; error: string };
 
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
+const JSON_HEADERS = { "Content-Type": "application/json" };
 
 async function readJson<T>(r: Response): Promise<T> {
   return (await r.json()) as T;
@@ -167,7 +169,11 @@ interface WorkflowsState {
   getRun: (runId: string) => Promise<Run | null>;
 
   loadSchedules: (workflowId?: string) => Promise<void>;
-  createSchedule: (workflowId: string, intervalS: number, enabled?: boolean) => Promise<Schedule | null>;
+  createSchedule: (
+    workflowId: string,
+    intervalS: number,
+    enabled?: boolean,
+  ) => Promise<Schedule | null>;
   updateSchedule: (
     id: string,
     workflowId: string,
@@ -177,7 +183,10 @@ interface WorkflowsState {
   deleteSchedule: (id: string) => Promise<boolean>;
 
   getMemory: (workflowId: string) => Promise<Record<string, unknown> | null>;
-  putMemory: (workflowId: string, memory: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
+  putMemory: (
+    workflowId: string,
+    memory: Record<string, unknown>,
+  ) => Promise<Record<string, unknown> | null>;
 }
 
 export const useWorkflows = create<WorkflowsState>((set, get) => ({
@@ -189,11 +198,11 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
 
   loadWorkflows: async () => {
     try {
-      const r = await apiFetch('/api/workflows');
+      const r = await apiFetch("/api/workflows");
       if (r.ok) set({ workflows: await readJson<Workflow[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'workflows: request failed' });
+      set({ error: "workflows: request failed" });
     }
   },
 
@@ -204,15 +213,15 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'workflow: request failed' });
+      set({ error: "workflow: request failed" });
       return null;
     }
   },
 
   createWorkflow: async (name, description, spec, enabled = true) => {
     try {
-      const r = await apiFetch('/api/workflows', {
-        method: 'POST',
+      const r = await apiFetch("/api/workflows", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({ name, description, spec, enabled }),
       });
@@ -223,14 +232,14 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
       }
       return { ok: false, error: await detailOf(r) };
     } catch {
-      return { ok: false, error: 'create workflow: request failed' };
+      return { ok: false, error: "create workflow: request failed" };
     }
   },
 
   updateWorkflow: async (id, name, description, spec, enabled) => {
     try {
       const r = await apiFetch(`/api/workflows/${id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: JSON_HEADERS,
         body: JSON.stringify({ name, description, spec, enabled }),
       });
@@ -241,21 +250,24 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
       }
       return { ok: false, error: await detailOf(r) };
     } catch {
-      return { ok: false, error: 'update workflow: request failed' };
+      return { ok: false, error: "update workflow: request failed" };
     }
   },
 
   deleteWorkflow: async (id) => {
     try {
-      const r = await apiFetch(`/api/workflows/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/workflows/${id}`, { method: "DELETE" });
       if (r.ok) {
-        set((s) => ({ workflows: s.workflows.filter((w) => w.id !== id), error: null }));
+        set((s) => ({
+          workflows: s.workflows.filter((w) => w.id !== id),
+          error: null,
+        }));
         return true;
       }
       set({ error: await detailOf(r) });
       return false;
     } catch {
-      set({ error: 'delete workflow: request failed' });
+      set({ error: "delete workflow: request failed" });
       return false;
     }
   },
@@ -263,47 +275,50 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
   loadBlocks: async () => {
     if (get().blocks.length) return; // static catalog — fetch once per session
     try {
-      const r = await apiFetch('/api/workflows/blocks');
-      if (r.ok) set({ blocks: await readJson<BlockCatalogEntry[]>(r), error: null });
+      const r = await apiFetch("/api/workflows/blocks");
+      if (r.ok)
+        set({ blocks: await readJson<BlockCatalogEntry[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'blocks: request failed' });
+      set({ error: "blocks: request failed" });
     }
   },
 
   previewWorkflow: async (spec) => {
     try {
-      const r = await apiFetch('/api/workflows/preview', {
-        method: 'POST',
+      const r = await apiFetch("/api/workflows/preview", {
+        method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify({ blocks: spec.blocks, edges: spec.edges }),
       });
       if (r.ok) return { ok: true, value: await readJson<PreviewResult>(r) };
       return { ok: false, error: await detailOf(r) };
     } catch {
-      return { ok: false, error: 'preview: request failed' };
+      return { ok: false, error: "preview: request failed" };
     }
   },
 
   runWorkflow: async (id) => {
     try {
-      const r = await apiFetch(`/api/workflows/${id}/run`, { method: 'POST' });
+      const r = await apiFetch(`/api/workflows/${id}/run`, { method: "POST" });
       if (r.ok) return readJson<Run>(r);
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'run: request failed' });
+      set({ error: "run: request failed" });
       return null;
     }
   },
 
   loadRuns: async (workflowId, limit = 50) => {
     try {
-      const r = await apiFetch(`/api/workflows/${workflowId}/runs?limit=${limit}`);
+      const r = await apiFetch(
+        `/api/workflows/${workflowId}/runs?limit=${limit}`,
+      );
       if (r.ok) set({ runs: await readJson<Run[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'runs: request failed' });
+      set({ error: "runs: request failed" });
     }
   },
 
@@ -314,28 +329,32 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'run: request failed' });
+      set({ error: "run: request failed" });
       return null;
     }
   },
 
   loadSchedules: async (workflowId) => {
     try {
-      const params = workflowId ? `?workflow_id=${workflowId}` : '';
+      const params = workflowId ? `?workflow_id=${workflowId}` : "";
       const r = await apiFetch(`/api/workflows/schedules${params}`);
       if (r.ok) set({ schedules: await readJson<Schedule[]>(r), error: null });
       else set({ error: await detailOf(r) });
     } catch {
-      set({ error: 'schedules: request failed' });
+      set({ error: "schedules: request failed" });
     }
   },
 
   createSchedule: async (workflowId, intervalS, enabled = true) => {
     try {
-      const r = await apiFetch('/api/workflows/schedules', {
-        method: 'POST',
+      const r = await apiFetch("/api/workflows/schedules", {
+        method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ workflow_id: workflowId, interval_s: intervalS, enabled }),
+        body: JSON.stringify({
+          workflow_id: workflowId,
+          interval_s: intervalS,
+          enabled,
+        }),
       });
       if (r.ok) {
         const s = await readJson<Schedule>(r);
@@ -345,7 +364,7 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'create schedule: request failed' });
+      set({ error: "create schedule: request failed" });
       return null;
     }
   },
@@ -354,9 +373,13 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
     try {
       // ScheduleIn requires workflow_id on every write, including update.
       const r = await apiFetch(`/api/workflows/schedules/${id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ workflow_id: workflowId, interval_s: intervalS, enabled }),
+        body: JSON.stringify({
+          workflow_id: workflowId,
+          interval_s: intervalS,
+          enabled,
+        }),
       });
       if (r.ok) {
         const s = await readJson<Schedule>(r);
@@ -366,22 +389,27 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'update schedule: request failed' });
+      set({ error: "update schedule: request failed" });
       return null;
     }
   },
 
   deleteSchedule: async (id) => {
     try {
-      const r = await apiFetch(`/api/workflows/schedules/${id}`, { method: 'DELETE' });
+      const r = await apiFetch(`/api/workflows/schedules/${id}`, {
+        method: "DELETE",
+      });
       if (r.ok) {
-        set((s) => ({ schedules: s.schedules.filter((sc) => sc.id !== id), error: null }));
+        set((s) => ({
+          schedules: s.schedules.filter((sc) => sc.id !== id),
+          error: null,
+        }));
         return true;
       }
       set({ error: await detailOf(r) });
       return false;
     } catch {
-      set({ error: 'delete schedule: request failed' });
+      set({ error: "delete schedule: request failed" });
       return false;
     }
   },
@@ -389,11 +417,12 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
   getMemory: async (workflowId) => {
     try {
       const r = await apiFetch(`/api/workflows/${workflowId}/memory`);
-      if (r.ok) return (await readJson<{ memory: Record<string, unknown> }>(r)).memory;
+      if (r.ok)
+        return (await readJson<{ memory: Record<string, unknown> }>(r)).memory;
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'memory: request failed' });
+      set({ error: "memory: request failed" });
       return null;
     }
   },
@@ -401,15 +430,16 @@ export const useWorkflows = create<WorkflowsState>((set, get) => ({
   putMemory: async (workflowId, memory) => {
     try {
       const r = await apiFetch(`/api/workflows/${workflowId}/memory`, {
-        method: 'PUT',
+        method: "PUT",
         headers: JSON_HEADERS,
         body: JSON.stringify({ memory }),
       });
-      if (r.ok) return (await readJson<{ memory: Record<string, unknown> }>(r)).memory;
+      if (r.ok)
+        return (await readJson<{ memory: Record<string, unknown> }>(r)).memory;
       set({ error: await detailOf(r) });
       return null;
     } catch {
-      set({ error: 'memory: request failed' });
+      set({ error: "memory: request failed" });
       return null;
     }
   },

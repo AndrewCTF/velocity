@@ -116,7 +116,11 @@ def test_mcp_http_handshake_lists_all_tools(keyed: str) -> None:
         #   list_proposals, approve_proposal, reject_proposal — the first tools
         #   on this server that change anything, and they change it only by
         #   putting a proposal in front of a human.
-        assert len(names) == 89, sorted(names)
+        # + 5 AIS pipeline tools (2026-10-04): maritime_pipeline_stats,
+        #   maritime_coverage, maritime_vessels_bbox, sar_scenes,
+        #   maritime_satellite_positions — the pipeline's own store, the
+        #   Sentinel-1 scan and the unidentified open-ocean positions.
+        assert len(names) == 94, sorted(names)
         assert {"get_situation", "intel_brief", "query_aircraft", "deep_analyze"} <= names
         assert {"disaster_alerts", "maritime_chokepoints", "space_weather"} <= names
         assert "radio_reports" in names

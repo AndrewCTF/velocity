@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from "react";
 
 // Panel-level error boundary. A single panel that throws during render (e.g. a
 // gated API returns 401/500 and a consumer assumed an array) must NOT take down
@@ -21,7 +21,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     // Keep it in the console for debugging; don't crash the tree.
-    console.error('[panel error]', this.props.label ?? '', error, info.componentStack);
+    console.error(
+      "[panel error]",
+      this.props.label ?? "",
+      error,
+      info.componentStack,
+    );
   }
 
   render(): ReactNode {
@@ -30,7 +35,9 @@ export class ErrorBoundary extends Component<Props, State> {
       // The raw exception message is a stack-trace fragment, not copy (see the
       // Copy / voice rule in apps/web/CLAUDE.md). The user gets a sentence; the
       // detail stays one click and one console.error away.
-      const label = this.props.label ? `The ${this.props.label} panel` : 'This panel';
+      const label = this.props.label
+        ? `The ${this.props.label} panel`
+        : "This panel";
       return (
         <div className="p-3">
           <div className="micro text-alert">panel error</div>
@@ -43,7 +50,7 @@ export class ErrorBoundary extends Component<Props, State> {
             className="micro text-txt-3 hover:text-accent mt-2"
             onClick={() => {
               void navigator.clipboard?.writeText(
-                `${this.props.label ?? 'panel'}: ${err.message}`,
+                `${this.props.label ?? "panel"}: ${err.message}`,
               );
             }}
           >

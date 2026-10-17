@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
-import type { LayerAdapter, AdapterCtx } from './types.js';
+import * as Cesium from "cesium";
+import type { LayerAdapter, AdapterCtx } from "./types.js";
 import {
   aircraftStyle,
   airportStyle,
@@ -15,7 +15,7 @@ import {
   tfrPolygonStyle,
   vesselStyle,
   warningStyle,
-} from './styles.js';
+} from "./styles.js";
 import {
   labelFor,
   aircraftLabelText,
@@ -26,30 +26,38 @@ import {
   tfrLabelText,
   vesselLabelText,
   warningLabelText,
-} from './labelStyle.js';
-import { withStaleness } from './freshness.js';
+} from "./labelStyle.js";
+import { withStaleness } from "./freshness.js";
 import {
   resolveAircraftFamily,
   aircraftSilhouette,
   vesselSilhouette,
-} from '../../entity-panel/silhouettes.js';
-import { PrimitiveEntityLayer } from './PrimitiveEntityLayer.js';
-import { ingestFix, projectAt, type DrFix, type DrState } from './deadReckon.js';
-import { frameBudgetRemaining, recordFrameSpend } from '../frameBudget.js';
-import { perfSetDrain } from '../perf.js';
-import { onMoveSettle, cancelMoveSettle } from '../pollGate.js';
-import { isCameraMoving, cameraMovingForMs } from '../cameraMotion.js';
-import { VesselClusterPrimitive } from './VesselClusterPrimitive.js';
-import { tracks } from '../../intel/tracks.js';
-import { aircraftDedup } from '../../intel/registry.js';
-import { isMobileDevice } from '../../shell/device.js';
-import { presetKnobs } from '../qualityPresets.js';
-import { useSelection, useFilters } from '../../state/stores.js';
-import { useSettings } from '../../state/settings.js';
-import { entityPassesFilter } from '../../explorer/HistogramPanel.js';
-import { apiFetch, openAuthedWebSocket } from '../../transport/http.js';
-import { tierOf } from '../../registry/provenance.js';
-import { isUnsafeKey } from '../../shell/safeKeys.js';
+} from "../../entity-panel/silhouettes.js";
+import {
+  PrimitiveEntityLayer,
+  dropVisualizers,
+} from "./PrimitiveEntityLayer.js";
+import {
+  ingestFix,
+  projectAt,
+  type DrFix,
+  type DrState,
+} from "./deadReckon.js";
+import { frameBudgetRemaining, recordFrameSpend } from "../frameBudget.js";
+import { perfSetDrain } from "../perf.js";
+import { onMoveSettle, cancelMoveSettle } from "../pollGate.js";
+import { isCameraMoving, cameraMovingForMs } from "../cameraMotion.js";
+import { VesselClusterPrimitive } from "./VesselClusterPrimitive.js";
+import { tracks } from "../../intel/tracks.js";
+import { aircraftDedup } from "../../intel/registry.js";
+import { isMobileDevice } from "../../shell/device.js";
+import { presetKnobs } from "../qualityPresets.js";
+import { useSelection, useFilters } from "../../state/stores.js";
+import { useSettings } from "../../state/settings.js";
+import { entityPassesFilter } from "../../explorer/HistogramPanel.js";
+import { apiFetch, openAuthedWebSocket } from "../../transport/http.js";
+import { tierOf } from "../../registry/provenance.js";
+import { isUnsafeKey } from "../../shell/safeKeys.js";
 
 // Alpha applied to a billboard the active map-side filter (useFilters /
 // HistogramPanel) excludes. The icon stays DRAWN (same SVG image, same
@@ -190,7 +198,6 @@ const VESSEL_FREEZE_HYSTERESIS_M = 250_000; // 250 km
 // operator minimum exists for vessels (unlike the ≥8000 aircraft invariant), so
 // this is safe to cap.
 
-
 // Initial great-circle bearing (deg, 0=N) from point 1 to point 2. Used as a
 // heading fallback so an icon whose feed omits track/cog still points the way
 // it's actually moving instead of freezing pointing north.
@@ -199,7 +206,10 @@ const VESSEL_FREEZE_HYSTERESIS_M = 250_000; // 250 km
 // swaps the backing field and raises definitionChanged, so getValue()/facets/
 // EntityPanel stay live. Exported so the freshness invariant the 2026-06-30
 // guardrail depends on can be unit-tested (propertyBagRefresh.test.ts).
-export function refreshBagInPlace(bag: Cesium.PropertyBag, props: Record<string, unknown>): void {
+export function refreshBagInPlace(
+  bag: Cesium.PropertyBag,
+  props: Record<string, unknown>,
+): void {
   const raw = bag as unknown as Record<string, unknown>;
   for (const key in props) {
     // A feed-supplied `__proto__` / `constructor` key would re-point or shadow
@@ -221,8 +231,10 @@ export function refreshBagInPlace(bag: Cesium.PropertyBag, props: Record<string,
       // wrapper to a primitive and is true every single time — the guard would
       // read correctly and do nothing. ConstantProperty.getValue ignores its
       // time argument, so this is a field read, not an interpolation.
-      const cur = raw[key] as { getValue?: (t: unknown) => unknown } | undefined;
-      const curVal = typeof cur?.getValue === 'function' ? cur.getValue(undefined) : cur;
+      const cur = raw[key] as
+        { getValue?: (t: unknown) => unknown } | undefined;
+      const curVal =
+        typeof cur?.getValue === "function" ? cur.getValue(undefined) : cur;
       // Strict equality: the properties that actually move are primitives
       // (lat/lon/alt/speed/track/seen). An object-valued prop rebuilt per poll
       // still writes, which is correct — knowing it is unchanged would need a
@@ -234,12 +246,19 @@ export function refreshBagInPlace(bag: Cesium.PropertyBag, props: Record<string,
   }
 }
 
-function bearingDeg(lon1: number, lat1: number, lon2: number, lat2: number): number {
+function bearingDeg(
+  lon1: number,
+  lat1: number,
+  lon2: number,
+  lat2: number,
+): number {
   const phi1 = Cesium.Math.toRadians(lat1);
   const phi2 = Cesium.Math.toRadians(lat2);
   const dLambda = Cesium.Math.toRadians(lon2 - lon1);
   const y = Math.sin(dLambda) * Math.cos(phi2);
-  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+  const x =
+    Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
   return (Cesium.Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
 }
 
@@ -260,30 +279,30 @@ function currentValue<T>(prop: Cesium.Property | undefined): T | undefined {
 // gunzip loop. Supported in all current evergreen browsers.
 async function gunzipToText(buf: ArrayBuffer): Promise<string> {
   const stream = new Response(buf).body;
-  if (!stream || typeof DecompressionStream === 'undefined') {
+  if (!stream || typeof DecompressionStream === "undefined") {
     // ponytail: no DecompressionStream → caller can still handle a text frame.
-    throw new Error('gzip inflate unavailable');
+    throw new Error("gzip inflate unavailable");
   }
-  const inflated = stream.pipeThrough(new DecompressionStream('gzip'));
+  const inflated = stream.pipeThrough(new DecompressionStream("gzip"));
   return await new Response(inflated).text();
 }
 
 export type StyleKind =
-  | 'quake'
-  | 'aircraft'
-  | 'fire'
-  | 'vessel'
-  | 'jamming'
-  | 'camera'
-  | 'airport'
-  | 'port'
-  | 'tfr'
-  | 'base'
-  | 'warning'
-  | 'facility'
-  | 'hazard'
-  | 'hazardpoly'
-  | 'generic';
+  | "quake"
+  | "aircraft"
+  | "fire"
+  | "vessel"
+  | "jamming"
+  | "camera"
+  | "airport"
+  | "port"
+  | "tfr"
+  | "base"
+  | "warning"
+  | "facility"
+  | "hazard"
+  | "hazardpoly"
+  | "generic";
 
 interface Props {
   ctx: AdapterCtx;
@@ -306,25 +325,25 @@ interface Props {
 }
 
 interface PointGeometry {
-  type: 'Point';
+  type: "Point";
   coordinates: [number, number] | [number, number, number];
 }
 
 interface PolygonGeometry {
-  type: 'Polygon';
+  type: "Polygon";
   /** Outer ring first. Each position is [lon, lat] or [lon, lat, alt]. */
   coordinates: Array<Array<[number, number] | [number, number, number]>>;
 }
 
 interface Feature {
-  type: 'Feature';
+  type: "Feature";
   id?: string | number;
   geometry: PointGeometry | PolygonGeometry;
   properties: Record<string, unknown>;
 }
 
 interface FeatureCollection {
-  type: 'FeatureCollection';
+  type: "FeatureCollection";
   features: Feature[];
   // The backend uses this field to signal "no data, not no contacts":
   // - missing API key
@@ -378,10 +397,15 @@ const MOBILE_LAYER_CAP = isMobileDevice() ? 2000 : Number.POSITIVE_INFINITY;
 // slowdown. 1500/layer stays far above what a metro view usefully shows;
 // decimation past the cap is the sanctioned stableSubset.
 const REFERENCE_LAYER_CAP = 1500;
-const REFERENCE_KINDS: ReadonlySet<string> = new Set(['facility', 'airport', 'port', 'base']);
+const REFERENCE_KINDS: ReadonlySet<string> = new Set([
+  "facility",
+  "airport",
+  "port",
+  "base",
+]);
 
 function effectiveLayerCap(styleKind: string, declared?: number): number {
-  const isAircraft = styleKind === 'aircraft' && !isMobileDevice();
+  const isAircraft = styleKind === "aircraft" && !isMobileDevice();
   const presetLayer = isAircraft
     ? Number.POSITIVE_INFINITY
     : presetKnobs(useSettings.getState().mapQuality).layerCap;
@@ -405,7 +429,7 @@ function stableSubset(feats: Feature[], cap: number): Feature[] {
   if (feats.length <= cap) return feats;
   const scored = feats.map((f) => {
     const p = (f.properties ?? {}) as Record<string, unknown>;
-    const key = String(f.id ?? p['icao24'] ?? p['mmsi'] ?? p['id'] ?? '');
+    const key = String(f.id ?? p["icao24"] ?? p["mmsi"] ?? p["id"] ?? "");
     return { h: djb2(key), f };
   });
   // djb2 returns a base-36 string; lexical sort is deterministic → stable subset.
@@ -419,15 +443,17 @@ function stableSubset(feats: Feature[], cap: number): Feature[] {
 // identifying is present, in which case the caller falls back to coords.
 function identityKey(props: Record<string, unknown>): string | null {
   const parts: string[] = [];
-  const callsign = props['callsign'];
-  const icao24 = props['icao24'];
-  const mmsi = props['mmsi'];
-  const src = props['source'];
-  if (typeof callsign === 'string' && callsign.length > 0) parts.push(`cs:${callsign}`);
-  if (typeof icao24 === 'string' && icao24.length > 0) parts.push(`ic:${icao24}`);
+  const callsign = props["callsign"];
+  const icao24 = props["icao24"];
+  const mmsi = props["mmsi"];
+  const src = props["source"];
+  if (typeof callsign === "string" && callsign.length > 0)
+    parts.push(`cs:${callsign}`);
+  if (typeof icao24 === "string" && icao24.length > 0)
+    parts.push(`ic:${icao24}`);
   if (mmsi != null) parts.push(`mm:${mmsi}`);
-  if (typeof src === 'string' && src.length > 0) parts.push(`sr:${src}`);
-  return parts.length > 0 ? parts.join('|') : null;
+  if (typeof src === "string" && src.length > 0) parts.push(`sr:${src}`);
+  return parts.length > 0 ? parts.join("|") : null;
 }
 
 // Polls a GeoJSON endpoint and upserts entities by id. Old entities that
@@ -523,7 +549,13 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         const s = this.drState.get(id);
         if (!s || !time) return undefined;
         const p = projectAt(s, this.drSecs(time));
-        return Cesium.Cartesian3.fromRadians(p.lonRad, p.latRad, s.altM, undefined, result);
+        return Cesium.Cartesian3.fromRadians(
+          p.lonRad,
+          p.latRad,
+          s.altM,
+          undefined,
+          result,
+        );
       }, false) as Cesium.CallbackPositionProperty;
       this.drProp.set(id, prop);
     }
@@ -531,22 +563,31 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   }
 
   /** Build a motion-model fix from a feed feature's property bag. */
-  private drFixFrom(props: Record<string, unknown>, lon: number, lat: number, alt: number): DrFix {
+  private drFixFrom(
+    props: Record<string, unknown>,
+    lon: number,
+    lat: number,
+    alt: number,
+  ): DrFix {
     // Position age = now - (seen_at - seen_pos_s). seen_at is when the BACKEND
     // received the body; seen_pos_s is how old the position already was inside
     // it. Same derivation the track-trail push uses.
-    const seenAt = props['seen_at'];
-    const seenPos = props['seen_pos_s'];
+    const seenAt = props["seen_at"];
+    const seenPos = props["seen_pos_s"];
     const obsSec =
-      typeof seenAt === 'number' ? seenAt - (typeof seenPos === 'number' ? seenPos : 0) : null;
+      typeof seenAt === "number"
+        ? seenAt - (typeof seenPos === "number" ? seenPos : 0)
+        : null;
     return {
       lonDeg: lon,
       latDeg: lat,
       altM: alt,
-      trackDeg: typeof props['track_deg'] === 'number' ? props['track_deg'] : null,
-      speedMs: typeof props['velocity_ms'] === 'number' ? props['velocity_ms'] : null,
+      trackDeg:
+        typeof props["track_deg"] === "number" ? props["track_deg"] : null,
+      speedMs:
+        typeof props["velocity_ms"] === "number" ? props["velocity_ms"] : null,
       ageS: obsSec != null ? Math.max(0, Date.now() / 1000 - obsSec) : 0,
-      onGround: props['on_ground'] === true,
+      onGround: props["on_ground"] === true,
     };
   }
 
@@ -619,14 +660,17 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // maxAlt mirrors the distanceDisplayCondition each kind used as an entity,
     // so nothing starts painting at a zoom it did not before.
     const nameOf = (props: Record<string, unknown>): string | null => {
-      const n = props['name'];
-      return typeof n === 'string' && n.length > 0 ? n : null;
+      const n = props["name"];
+      return typeof n === "string" && n.length > 0 ? n : null;
     };
     const BATCHED: Partial<
       Record<
         StyleKind,
         {
-          style: (p: Record<string, unknown>) => { imageUri: string; scale: number };
+          style: (p: Record<string, unknown>) => {
+            imageUri: string;
+            scale: number;
+          };
           label: (p: Record<string, unknown>) => string | null;
           maxAlt: number;
           vertical?: Cesium.VerticalOrigin;
@@ -642,38 +686,78 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // maxAlt mirrors each kind's previous distanceDisplayCondition exactly, so
       // nothing starts painting at a zoom it did not before. 0 = no gate; the
       // global layers (warning/hazard) had none.
-      fire: { style: fireStyle, label: () => null, maxAlt: 8_000_000, vertical: Cesium.VerticalOrigin.BOTTOM },
-      camera: { static: true, style: () => cameraStyle(), label: nameOf, maxAlt: 4_000_000 },
-      facility: { static: true, style: facilityStyle, label: facilityLabelText, maxAlt: 1_500_000 },
+      fire: {
+        style: fireStyle,
+        label: () => null,
+        maxAlt: 8_000_000,
+        vertical: Cesium.VerticalOrigin.BOTTOM,
+      },
+      camera: {
+        static: true,
+        style: () => cameraStyle(),
+        label: nameOf,
+        maxAlt: 4_000_000,
+      },
+      facility: {
+        static: true,
+        style: facilityStyle,
+        label: facilityLabelText,
+        maxAlt: 1_500_000,
+      },
       warning: { style: warningStyle, label: warningLabelText, maxAlt: 0 },
       hazard: { style: hazardStyle, label: nameOf, maxAlt: 0 },
       // Static reference markers. Zoom-gating already happens upstream in the
       // compositor's placesBboxQuery (world view returns an empty payload); the
       // maxAlt here is the same belt-and-braces DDC they carried as entities.
-      airport: { static: true, style: airportStyle, label: airportLabelText, maxAlt: 1_500_000 },
-      port: { static: true, style: () => portStyle(), label: portLabelText, maxAlt: 1_500_000 },
-      base: { static: true, style: baseStyle, label: baseLabelText, maxAlt: 1_500_000 },
+      airport: {
+        static: true,
+        style: airportStyle,
+        label: airportLabelText,
+        maxAlt: 1_500_000,
+      },
+      port: {
+        static: true,
+        style: () => portStyle(),
+        label: portLabelText,
+        maxAlt: 1_500_000,
+      },
+      base: {
+        static: true,
+        style: baseStyle,
+        label: baseLabelText,
+        maxAlt: 1_500_000,
+      },
     };
 
-    if (this.props.styleKind === 'aircraft') {
+    if (this.props.styleKind === "aircraft") {
       this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
         styleFn: (props) => {
           const s = aircraftStyle(props);
           // No color → white tint (the SVG already carries the category colour;
           // dim/pulse own the alpha). emergency drives the red pulse.
-          return { imageUri: s.imageUri, scale: s.scale, rotationRad: s.rotationRad, emergency: s.emergency };
+          return {
+            imageUri: s.imageUri,
+            scale: s.scale,
+            rotationRad: s.rotationRad,
+            emergency: s.emergency,
+          };
         },
         // Tilt the camera toward the horizon → swap to the airframe side profile,
         // tinted the SAME category colour as the top-down icon (yellow airliner,
         // orange military …) so the side view stays as readable as the top view.
         sideStyleFn: (props) => {
           const fam = resolveAircraftFamily(
-            (typeof props['type'] === 'string' ? props['type'] : null) ??
-              (typeof props['icao_type'] === 'string' ? props['icao_type'] : null),
-            typeof props['category'] === 'string' ? props['category'] : null,
+            (typeof props["type"] === "string" ? props["type"] : null) ??
+              (typeof props["icao_type"] === "string"
+                ? props["icao_type"]
+                : null),
+            typeof props["category"] === "string" ? props["category"] : null,
           );
           const hex = aircraftStyle(props).color.toCssHexString().slice(0, 7);
-          return { imageUri: aircraftSilhouette(fam ?? 'narrowbody', hex), scale: 0.62 };
+          return {
+            imageUri: aircraftSilhouette(fam ?? "narrowbody", hex),
+            scale: 0.62,
+          };
         },
         // Identifier plus, when the fix is old, its real age ("DAL123 · 6h ago").
         // aircraftLabelText stays a pure callsign→registration→ICAO24 resolver
@@ -684,10 +768,19 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           heightReference: Cesium.HeightReference.NONE,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 80_000_000),
-          scaleByDistance: new Cesium.NearFarScalar(10_000, 1.7, 5_000_000, 0.5),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+            0,
+            80_000_000,
+          ),
+          scaleByDistance: new Cesium.NearFarScalar(
+            10_000,
+            1.7,
+            5_000_000,
+            0.5,
+          ),
         }),
-        labelBase: (text) => labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
+        labelBase: (text) =>
+          labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
         getClock: () => viewer.clock.currentTime,
         shouldAnimate: () => useSettings.getState().aircraftDeadReckon,
         pulse: true,
@@ -697,14 +790,18 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // measured worse (renderMs p95 44-46 ms against 31-36): a
         // BillboardCollection rebuilds its whole vertex buffer when any member
         // is dirty, so a per-tick layer must not share with static ones.
-        poolKey: 'aircraft',
+        poolKey: "aircraft",
       });
-    } else if (this.props.styleKind === 'vessel') {
+    } else if (this.props.styleKind === "vessel") {
       this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
         styleFn: (props) => {
           const s = vesselStyle(props);
           // No color → white tint (the SVG carries the category / dark-vessel red).
-          return { imageUri: s.imageUri, scale: s.scale, rotationRad: s.rotationRad };
+          return {
+            imageUri: s.imageUri,
+            scale: s.scale,
+            rotationRad: s.rotationRad,
+          };
         },
         // Tilt the camera toward the horizon → swap to the hull side profile,
         // tinted the vessel's category colour (cargo teal, tanker amber …).
@@ -720,19 +817,29 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           // Same fade as the old vesselBillboard: individual icons live 0→600 km
           // (culled above), translucency 150→600 km — the world-view handoff to
           // the count bubbles (VesselClusterPrimitive).
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 600_000),
-          translucencyByDistance: new Cesium.NearFarScalar(150_000, 1.0, 600_000, 0.0),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+            0,
+            600_000,
+          ),
+          translucencyByDistance: new Cesium.NearFarScalar(
+            150_000,
+            1.0,
+            600_000,
+            0.0,
+          ),
           scaleByDistance: new Cesium.NearFarScalar(5_000, 1.7, 400_000, 0.6),
         }),
-        labelBase: (text) => labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
+        labelBase: (text) =>
+          labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
         getClock: () => viewer.clock.currentTime,
         // Vessels glide below the freeze altitude → mirror each frame; above it
         // they teleport-freeze (constant position) so the mirror idles.
         shouldAnimate: () =>
-          viewer.camera.positionCartographic.height <= VESSEL_GLIDE_FREEZE_ALTITUDE_M,
+          viewer.camera.positionCartographic.height <=
+          VESSEL_GLIDE_FREEZE_ALTITUDE_M,
         pulse: false,
         filter: true,
-        poolKey: 'vessel', // ticks with the other vessel layers, not with static markers
+        poolKey: "vessel", // ticks with the other vessel layers, not with static markers
       });
       this.vesselCluster = new VesselClusterPrimitive(viewer, () => {
         const t = viewer.clock.currentTime;
@@ -741,7 +848,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           const p = e.position?.getValue(t) as Cesium.Cartesian3 | undefined;
           if (!p) continue;
           const c = Cesium.Cartographic.fromCartesian(p);
-          out.push({ lon: Cesium.Math.toDegrees(c.longitude), lat: Cesium.Math.toDegrees(c.latitude) });
+          out.push({
+            lon: Cesium.Math.toDegrees(c.longitude),
+            lat: Cesium.Math.toDegrees(c.latitude),
+          });
         }
         return out;
       });
@@ -756,14 +866,24 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           heightReference: Cesium.HeightReference.NONE,
           ...(cfg.maxAlt > 0
-            ? { distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, cfg.maxAlt) }
+            ? {
+                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+                  0,
+                  cfg.maxAlt,
+                ),
+              }
             : {}),
         }),
-        labelBase: (text) => labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
+        labelBase: (text) =>
+          labelFor(text) as unknown as Cesium.Label.ConstructorOptions,
         getClock: () => viewer.clock.currentTime,
         shouldAnimate: () => false,
       });
     }
+    // Every branch above paints this layer's pixels itself, and its entities are
+    // graphics-less (applyStyle sets polygon/point/label only for the Entity-API
+    // kinds), so the data source's visualizers would walk nothing every frame.
+    if (this.primRenderer) dropVisualizers(this.ds);
     if (this.props.refreshOnMove) {
       // ONE settle timer for the whole map, with a concurrency cap, instead of a
       // private 200 ms debounce per adapter. Sixteen layers register for
@@ -775,7 +895,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // Skip the moveEnd re-poll when the WS push owns this view and a frame
         // landed <1 s ago — it is already fresher than an HTTP poll. Zoomed-in
         // (bbox) views still poll: WS is suppressed there and the bbox changed.
-        if (this.wsActive && this.isWorldView() && Date.now() - this.lastWsMs < 1000) return;
+        if (
+          this.wsActive &&
+          this.isWorldView() &&
+          Date.now() - this.lastWsMs < 1000
+        )
+          return;
         // A move-refresh exists to fetch a DIFFERENT viewport. If the URL this
         // layer would request is the one it already fetched, the camera moved
         // but this layer's request did not change, and the scheduled poll on
@@ -787,11 +912,13 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (url === this.lastFetchedUrl) return;
         this.refresh();
       };
-      const onMove = (): void => onMoveSettle(this.props.ctx.descriptor.id, release);
+      const onMove = (): void =>
+        onMoveSettle(this.props.ctx.descriptor.id, release);
       viewer.camera.moveEnd.addEventListener(onMove);
       this.detachMove = () => {
         cancelMoveSettle(release);
-        if (!viewer.isDestroyed()) viewer.camera.moveEnd.removeEventListener(onMove);
+        if (!viewer.isDestroyed())
+          viewer.camera.moveEnd.removeEventListener(onMove);
       };
     }
     // Vessel layers: on camera moveEnd, if we just crossed ABOVE the glide-freeze
@@ -799,11 +926,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // wait for the next poll) so the per-frame SampledPosition re-eval — the
     // world-view lag — stops the instant the user finishes zooming out. The snap
     // is sub-pixel at this altitude, so the operator never sees a jump.
-    if (this.props.styleKind === 'vessel') {
+    if (this.props.styleKind === "vessel") {
       const onZoom = (): void => this.reconcileGlideForZoom();
       viewer.camera.moveEnd.addEventListener(onZoom);
       this.detachZoom = () => {
-        if (!viewer.isDestroyed()) viewer.camera.moveEnd.removeEventListener(onZoom);
+        if (!viewer.isDestroyed())
+          viewer.camera.moveEnd.removeEventListener(onZoom);
       };
     }
     // Tab refocus: a backgrounded tab freezes rAF (drain never paints) and
@@ -822,8 +950,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       }
       this.refresh();
     };
-    document.addEventListener('visibilitychange', onVisible);
-    this.detachVis = () => document.removeEventListener('visibilitychange', onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    this.detachVis = () =>
+      document.removeEventListener("visibilitychange", onVisible);
     // Server push (ADS-B): connect the socket for steady world-view updates. The
     // poll loop still starts — it gives instant first paint before the socket
     // opens and is the fallback while the socket is down / when zoomed in.
@@ -941,7 +1070,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // the frames the drain produces are thrown away. Re-anchor the grid and
       // wait — `visibilitychange` already forces one immediate catch-up refresh
       // when the tab comes back, so nothing is lost by not polling meanwhile.
-      if (typeof document !== 'undefined' && document.hidden) {
+      if (typeof document !== "undefined" && document.hidden) {
         this.nextAt = Date.now();
         this.scheduleNext(this.props.intervalSec * 1000);
         return;
@@ -958,12 +1087,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   }
 
   /** URL of the most recent poll — lets a move-refresh skip an unchanged viewport. */
-  private lastFetchedUrl = '';
+  private lastFetchedUrl = "";
 
   private buildUrl(): string {
     const bbox = this.props.bboxQuery?.();
     if (!bbox) return this.props.endpoint;
-    const sep = this.props.endpoint.includes('?') ? '&' : '?';
+    const sep = this.props.endpoint.includes("?") ? "&" : "?";
     return `${this.props.endpoint}${sep}${bbox}`;
   }
 
@@ -978,8 +1107,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // with the socket open. Freshness guard: if the socket has gone quiet for
     // WS_STALE_MS (backgrounded/zombie), stop suppressing and let the poll refetch
     // so the map recovers without a manual refresh.
-    if (this.wsActive && this.isWorldView() && Date.now() - this.lastWsMs < WS_STALE_MS) {
-      this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
+    if (
+      this.wsActive &&
+      this.isWorldView() &&
+      Date.now() - this.lastWsMs < WS_STALE_MS
+    ) {
+      this.props.ctx.reportStatus({ status: "green", lastSeen: Date.now() });
       return;
     }
     this.aborter?.abort();
@@ -992,31 +1125,34 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // Conditional request only at world view (the only response carrying an
       // ETag): an unchanged blob returns 304 and we skip the parse + entity walk
       // entirely. The bbox path has no ETag, so it always renders.
-      if (worldView && this.lastEtag) headers['If-None-Match'] = this.lastEtag;
+      if (worldView && this.lastEtag) headers["If-None-Match"] = this.lastEtag;
       const url = this.buildUrl();
       this.lastFetchedUrl = url;
       const r = await apiFetch(url, { signal: this.aborter.signal, headers });
       if (r.status === 304) {
-        this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
+        this.props.ctx.reportStatus({ status: "green", lastSeen: Date.now() });
         return;
       }
       if (!r.ok) {
-        this.props.ctx.reportStatus({ status: 'red', note: `upstream ${r.status}` });
+        this.props.ctx.reportStatus({
+          status: "red",
+          note: `upstream ${r.status}`,
+        });
         return;
       }
-      this.lastEtag = worldView ? r.headers.get('etag') : null;
+      this.lastEtag = worldView ? r.headers.get("etag") : null;
       const data = (await r.json()) as FeatureCollection;
       this.render(data);
       const note = data.note;
       if (note) {
         // Backend explicitly said it cannot deliver — that's "no data".
-        this.props.ctx.reportStatus({ status: 'amber', note });
+        this.props.ctx.reportStatus({ status: "amber", note });
       } else {
-        this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
+        this.props.ctx.reportStatus({ status: "green", lastSeen: Date.now() });
       }
     } catch (e) {
-      if ((e as DOMException)?.name === 'AbortError') return;
-      this.props.ctx.reportStatus({ status: 'red', note: 'transport error' });
+      if ((e as DOMException)?.name === "AbortError") return;
+      this.props.ctx.reportStatus({ status: "red", note: "transport error" });
     } finally {
       clearTimeout(watchdog);
     }
@@ -1027,7 +1163,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   // poll owns the entities. No coupling to the literal world cap value.
   private isWorldView(): boolean {
     const q = this.props.bboxQuery?.();
-    return !q || !q.includes('lamin');
+    return !q || !q.includes("lamin");
   }
 
   // On a zoom-out crossing ABOVE VESSEL_GLIDE_FREEZE_ALTITUDE_M, convert every
@@ -1037,9 +1173,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   // crossing. Zoom IN does nothing here: the next poll's glide branch re-seeds
   // SampledPositionProperty below the altitude.
   private reconcileGlideForZoom(): void {
-    if (this.props.styleKind !== 'vessel' || this.detached) return;
+    if (this.props.styleKind !== "vessel" || this.detached) return;
     const frozen =
-      this.props.ctx.viewer.camera.positionCartographic.height > VESSEL_GLIDE_FREEZE_ALTITUDE_M;
+      this.props.ctx.viewer.camera.positionCartographic.height >
+      VESSEL_GLIDE_FREEZE_ALTITUDE_M;
     if (frozen === this.lastFreezeState) return;
     this.lastFreezeState = frozen;
     if (!frozen) return; // zoom IN: glide resumes on the next poll
@@ -1067,7 +1204,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       this.scheduleWsReconnect();
       return;
     }
-    ws.binaryType = 'arraybuffer';
+    ws.binaryType = "arraybuffer";
     this.wsConn = ws;
     ws.onopen = () => {
       this.wsReconnectDelay = 1000;
@@ -1106,7 +1243,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       let text: string;
       if (data instanceof ArrayBuffer) {
         text = await gunzipToText(data);
-      } else if (typeof data === 'string') {
+      } else if (typeof data === "string") {
         text = data; // ponytail: text-frame fallback if the push is ever uncompressed
       } else {
         return;
@@ -1114,7 +1251,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       const fc = JSON.parse(text) as FeatureCollection;
       this.render(fc);
       this.lastWsMs = Date.now();
-      this.props.ctx.reportStatus({ status: 'green', lastSeen: Date.now() });
+      this.props.ctx.reportStatus({ status: "green", lastSeen: Date.now() });
     } catch {
       /* drop a bad/partial frame; the next push or the poll fallback recovers */
     }
@@ -1134,12 +1271,17 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       this.props.ctx.descriptor.maxEntities,
     );
     if (
-      this.props.styleKind === 'vessel' &&
-      this.props.ctx.viewer.camera.positionCartographic.height > VESSEL_GLIDE_FREEZE_ALTITUDE_M
+      this.props.styleKind === "vessel" &&
+      this.props.ctx.viewer.camera.positionCartographic.height >
+        VESSEL_GLIDE_FREEZE_ALTITUDE_M
     ) {
-      cap = Math.min(cap, presetKnobs(useSettings.getState().mapQuality).vesselCap);
+      cap = Math.min(
+        cap,
+        presetKnobs(useSettings.getState().mapQuality).vesselCap,
+      );
     }
-    this.pendingFeats = incoming.length > cap ? stableSubset(incoming, cap) : incoming;
+    this.pendingFeats =
+      incoming.length > cap ? stableSubset(incoming, cap) : incoming;
     this.pendingIds = new Set<string>();
     this.pendingIdx = 0;
     if (this.drainHandle == null) {
@@ -1158,7 +1300,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // only (vessels are already budget-sliced); guarded to the START of a drain
     // (pendingIdx 0) so we never stall a slice mid-flight.
     if (
-      this.props.styleKind === 'aircraft' &&
+      this.props.styleKind === "aircraft" &&
       !this.firstDrain &&
       this.pendingIdx === 0 &&
       isCameraMoving() &&
@@ -1173,21 +1315,23 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // Aircraft (after the first load) apply the WHOLE payload this frame so every
     // moved icon teleports in sync — not in a ~300ms ripple. The unchanged-skip
     // below keeps that one frame cheap. Vessels + the first load stay budget-sliced.
-    const syncAll = this.props.styleKind === 'aircraft' && !this.firstDrain;
+    const syncAll = this.props.styleKind === "aircraft" && !this.firstDrain;
     // FR24-style dead-reckoning opt-in (off by default). Read once per drain so
     // a mid-flight toggle takes effect on the next poll. Aircraft only.
     const deadReckon =
-      this.props.styleKind === 'aircraft' && useSettings.getState().aircraftDeadReckon;
+      this.props.styleKind === "aircraft" &&
+      useSettings.getState().aircraftDeadReckon;
     // World-view vessels TELEPORT (snap to each real fix) instead of gliding, so
     // the per-frame SampledPositionProperty re-eval that pinned world view to
     // ~9 FPS stops. Hysteresis around the altitude threshold (frozen until the
     // camera drops clearly below it) keeps a pan that grazes the boundary from
     // flip-flopping ~6k vessels between teleport and glide every poll.
     let vesselFreeze = false;
-    if (this.props.styleKind === 'vessel') {
+    if (this.props.styleKind === "vessel") {
       const h = this.props.ctx.viewer.camera.positionCartographic.height;
       if (this.vesselFreezeHyst) {
-        if (h < VESSEL_GLIDE_FREEZE_ALTITUDE_M - VESSEL_FREEZE_HYSTERESIS_M) this.vesselFreezeHyst = false;
+        if (h < VESSEL_GLIDE_FREEZE_ALTITUDE_M - VESSEL_FREEZE_HYSTERESIS_M)
+          this.vesselFreezeHyst = false;
       } else if (h > VESSEL_GLIDE_FREEZE_ALTITUDE_M) {
         this.vesselFreezeHyst = true;
       }
@@ -1206,7 +1350,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // instead of freezing (see SYNC_ALL_CEILING_MS).
       budgetMs = SYNC_ALL_CEILING_MS;
     } else if (!this.firstDrain) {
-      budgetMs = Math.min(budgetMs, Math.max(DRAIN_MIN_SLICE_MS, frameBudgetRemaining(ts)));
+      budgetMs = Math.min(
+        budgetMs,
+        Math.max(DRAIN_MIN_SLICE_MS, frameBudgetRemaining(ts)),
+      );
     }
     const deadline = startMs + budgetMs;
     entities.suspendEvents();
@@ -1216,7 +1363,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       const props = f.properties as Record<string, unknown>;
 
       // --- Polygon path (e.g. jamming hexagons) ---
-      if (f.geometry.type === 'Polygon') {
+      if (f.geometry.type === "Polygon") {
         let id: string;
         if (f.id != null) {
           id = String(f.id);
@@ -1233,7 +1380,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           this.refreshBag(existing, props);
           this.refreshStyle(existing, props);
         } else {
-          const opts: Cesium.Entity.ConstructorOptions = { id, properties: props };
+          const opts: Cesium.Entity.ConstructorOptions = {
+            id,
+            properties: props,
+          };
           this.applyStyle(opts, props, f.geometry as PolygonGeometry);
           entities.add(opts);
         }
@@ -1267,8 +1417,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // they were holding for this aircraft so the icon disappears from the
       // loser-layer immediately.
       const layerId = this.props.ctx.descriptor.id;
-      const icao24 = props['icao24'];
-      if (this.props.styleKind === 'aircraft' && typeof icao24 === 'string' && icao24.length > 0) {
+      const icao24 = props["icao24"];
+      if (
+        this.props.styleKind === "aircraft" &&
+        typeof icao24 === "string" &&
+        icao24.length > 0
+      ) {
         const key = icao24.toLowerCase();
         const owner = aircraftDedup.claim(key, layerId);
         if (owner !== layerId) {
@@ -1298,11 +1452,18 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // (reading lastPos BEFORE the set below) and reused by both the heading
       // fallback and the §5.3.2 track-push gate. ~1e-4° ≈ 10 m.
       let movedTrk = true;
-      if (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel') {
-        const hdgKey = this.props.styleKind === 'aircraft' ? 'track_deg' : 'cog';
+      if (
+        this.props.styleKind === "aircraft" ||
+        this.props.styleKind === "vessel"
+      ) {
+        const hdgKey =
+          this.props.styleKind === "aircraft" ? "track_deg" : "cog";
         const prev = this.lastPos.get(id);
-        movedTrk = !prev || Math.abs(prev[0] - lon) > 1e-4 || Math.abs(prev[1] - lat) > 1e-4;
-        if (typeof props[hdgKey] !== 'number' && prev) {
+        movedTrk =
+          !prev ||
+          Math.abs(prev[0] - lon) > 1e-4 ||
+          Math.abs(prev[1] - lat) > 1e-4;
+        if (typeof props[hdgKey] !== "number" && prev) {
           const [plon, plat] = prev;
           if (Math.abs(plon - lon) > 1e-6 || Math.abs(plat - lat) > 1e-6) {
             props[hdgKey] = bearingDeg(plon, plat, lon, lat);
@@ -1317,9 +1478,11 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // lands occasional history. The SELECTED entity always pushes (force=true),
       // so the ≥2-points-in-~5-8s selection-polyline guarantee is untouched.
       const trackSelected = useSelection.getState().selectedEntityId === id;
-      const trackHeartbeat = Date.now() - (this.lastTrackPushMs.get(id) ?? 0) > 30_000;
+      const trackHeartbeat =
+        Date.now() - (this.lastTrackPushMs.get(id) ?? 0) > 30_000;
       if (
-        (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel') &&
+        (this.props.styleKind === "aircraft" ||
+          this.props.styleKind === "vessel") &&
         (trackSelected || movedTrk || trackHeartbeat)
       ) {
         // Track points are stamped with the fix's true OBSERVATION time, not
@@ -1329,13 +1492,20 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // source that wins a poll lands at its real (earlier) time and the
         // trail's time-regression guard drops it instead of drawing a backward
         // spike.
-        const seenAtProp = props['seen_at'];
-        const seenPosProp = props['seen_pos_s'];
+        const seenAtProp = props["seen_at"];
+        const seenPosProp = props["seen_pos_s"];
         const obsSec =
-          typeof seenAtProp === 'number'
-            ? seenAtProp - (typeof seenPosProp === 'number' ? seenPosProp : 0)
+          typeof seenAtProp === "number"
+            ? seenAtProp - (typeof seenPosProp === "number" ? seenPosProp : 0)
             : null;
-        const tp: { t: number; lon: number; lat: number; alt: number; sog?: number; track?: number } = {
+        const tp: {
+          t: number;
+          lon: number;
+          lat: number;
+          alt: number;
+          sog?: number;
+          track?: number;
+        } = {
           t: obsSec != null ? obsSec * 1000 : Date.now(),
           lon,
           lat,
@@ -1346,11 +1516,11 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // entity-panel sparkline shows real speed+heading for vessels too —
         // before this, every Digitraffic ship plotted as a flat-zero spark.
         const sog =
-          (props['velocity_ms'] as number | null | undefined) ??
-          (props['sog'] as number | null | undefined);
+          (props["velocity_ms"] as number | null | undefined) ??
+          (props["sog"] as number | null | undefined);
         const trk =
-          (props['track_deg'] as number | null | undefined) ??
-          (props['cog'] as number | null | undefined);
+          (props["track_deg"] as number | null | undefined) ??
+          (props["cog"] as number | null | undefined);
         if (sog != null) tp.sog = sog;
         if (trk != null) tp.track = trk;
         // The currently-selected entity bypasses dedup so the magenta
@@ -1362,9 +1532,11 @@ export class PollGeoJsonAdapter implements LayerAdapter {
 
       const existing = entities.getById(id);
       const newPos = Cesium.Cartesian3.fromDegrees(lon, lat, alt ?? 0);
-      const isTrackable = this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel';
+      const isTrackable =
+        this.props.styleKind === "aircraft" ||
+        this.props.styleKind === "vessel";
       if (existing) {
-        if (this.props.styleKind === 'aircraft') {
+        if (this.props.styleKind === "aircraft") {
           if (deadReckon) {
             // Dead-reckon: add a sample ONLY for a genuinely fresh fix (moved
             // ≥ epsilon vs the last REAL fix). A resend (the feed repeats the
@@ -1373,7 +1545,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
             // would zero the velocity and snap the icon back (the reverse bug).
             const lastReal = this.drLastReal.get(id);
             const fresh =
-              !lastReal || Cesium.Cartesian3.distance(lastReal, newPos) >= AIRCRAFT_POS_EPSILON_M;
+              !lastReal ||
+              Cesium.Cartesian3.distance(lastReal, newPos) >=
+                AIRCRAFT_POS_EPSILON_M;
             if (!fresh) {
               // No new position — let the dead-reckon glide keep extrapolating, but
               // STILL refresh the property bag so freshness counters (seen_pos_s/
@@ -1397,7 +1571,10 @@ export class PollGeoJsonAdapter implements LayerAdapter {
             // no interpolation — so the icon shows the latest reported position
             // instantly, like a raw ADS-B map.
             const prev = currentValue<Cesium.Cartesian3>(existing.position);
-            if (prev && Cesium.Cartesian3.distance(prev, newPos) < AIRCRAFT_POS_EPSILON_M) {
+            if (
+              prev &&
+              Cesium.Cartesian3.distance(prev, newPos) < AIRCRAFT_POS_EPSILON_M
+            ) {
               // Position unchanged (cached/slow/parked contact). STILL refresh the
               // property bag so freshness counters (seen_pos_s/seen_at/last_contact)
               // and facet fields stay LIVE for the entity panel, histogram and
@@ -1420,7 +1597,11 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           // camera drops below VESSEL_GLIDE_FREEZE_ALTITUDE_M (the next poll, or
           // immediately via reconcileGlideForZoom on zoom-out).
           const prev = currentValue<Cesium.Cartesian3>(existing.position);
-          if (prev && Cesium.Cartesian3.distance(prev, newPos) < VESSEL_FREEZE_POS_EPSILON_M) {
+          if (
+            prev &&
+            Cesium.Cartesian3.distance(prev, newPos) <
+              VESSEL_FREEZE_POS_EPSILON_M
+          ) {
             // Position unchanged (anchored/moored/re-reporting vessel). Mirror the
             // aircraft teleport skip: STILL refresh the property bag so freshness
             // counters + facet fields stay LIVE, but skip the EXPENSIVE restyle
@@ -1438,7 +1619,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           // so the interpolator doesn't allocate samples for entities that
           // aren't moving.
           const t0 = this.props.ctx.viewer.clock.currentTime;
-          const prevPos = existing.position?.getValue(t0) as Cesium.Cartesian3 | undefined;
+          const prevPos = existing.position?.getValue(t0) as
+            Cesium.Cartesian3 | undefined;
           if (
             prevPos &&
             Cesium.Cartesian3.distance(prevPos, newPos) < 100 &&
@@ -1454,7 +1636,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
             // a linear interp shows visible "kinks" at each fix. Vessels
             // stay on Linear because their motion is slow enough that a
             // higher-order interp would overshoot into bizarre wakes.
-            let sampled = existing.position as Cesium.SampledPositionProperty | undefined;
+            let sampled = existing.position as
+              Cesium.SampledPositionProperty | undefined;
             if (!(sampled instanceof Cesium.SampledPositionProperty)) {
               sampled = new Cesium.SampledPositionProperty();
               // Vessels stay on Linear — slow movers; a higher-order interp
@@ -1482,11 +1665,17 @@ export class PollGeoJsonAdapter implements LayerAdapter {
             // cadence accumulates ~1 sample/poll forever — SampledPosition-
             // Property's internal arrays grow without bound and the
             // interpolator slows linearly.
-            const prevForDecimation = sampled.getValue(t0) as Cesium.Cartesian3 | undefined;
+            const prevForDecimation = sampled.getValue(t0) as
+              Cesium.Cartesian3 | undefined;
             let skip = false;
             if (prevForDecimation) {
-              const movedM = Cesium.Cartesian3.distance(prevForDecimation, newPos);
-              const elapsedSec = Math.abs(Cesium.JulianDate.secondsDifference(tNow, t0));
+              const movedM = Cesium.Cartesian3.distance(
+                prevForDecimation,
+                newPos,
+              );
+              const elapsedSec = Math.abs(
+                Cesium.JulianDate.secondsDifference(tNow, t0),
+              );
               if (movedM < 50 && elapsedSec < 60) skip = true;
             }
             if (!skip) {
@@ -1494,10 +1683,14 @@ export class PollGeoJsonAdapter implements LayerAdapter {
               // Prune anything older than 5 minutes. Very aggressive memory
               // management: keeps only recent history for sparklines while
               // staying responsive at 10k+ entity scale.
-              const cutoff = Cesium.JulianDate.addSeconds(tNow, -300, new Cesium.JulianDate());
+              const cutoff = Cesium.JulianDate.addSeconds(
+                tNow,
+                -300,
+                new Cesium.JulianDate(),
+              );
               sampled.removeSamples(
                 new Cesium.TimeInterval({
-                  start: Cesium.JulianDate.fromIso8601('1970-01-01T00:00:00Z'),
+                  start: Cesium.JulianDate.fromIso8601("1970-01-01T00:00:00Z"),
                   stop: cutoff,
                   isStartIncluded: true,
                   isStopIncluded: false,
@@ -1553,7 +1746,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // this is the whole push-application (drain) cost. A bulk change that spilled
     // across frames reports only the FINAL slice here — the earlier slices already
     // painted, which is the point (no single blocking frame).
-    if (this.props.styleKind === 'aircraft') perfSetDrain(performance.now() - startMs);
+    if (this.props.styleKind === "aircraft")
+      perfSetDrain(performance.now() - startMs);
 
     // Payload fully applied: prune entities absent from it and release their
     // dedup claims. Full scan of the datasource (not a seenIds diff) so a pass
@@ -1596,21 +1790,23 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // Polygon geometry path: jamming cells + TFR airspace restrictions.
     if (
       polygon &&
-      (this.props.styleKind === 'jamming' ||
-        this.props.styleKind === 'tfr' ||
-        this.props.styleKind === 'hazardpoly')
+      (this.props.styleKind === "jamming" ||
+        this.props.styleKind === "tfr" ||
+        this.props.styleKind === "hazardpoly")
     ) {
       const { fillColor, outlineColor, alpha } =
-        this.props.styleKind === 'tfr'
+        this.props.styleKind === "tfr"
           ? tfrPolygonStyle(props)
-          : this.props.styleKind === 'hazardpoly'
+          : this.props.styleKind === "hazardpoly"
             ? hazardPolygonStyle(props)
             : jammingPolygonStyle(props);
       const outerRing = polygon.coordinates[0] ?? [];
       // Flatten [lon, lat] pairs into the flat array Cesium.Cartesian3.fromDegreesArray expects.
       const flat = outerRing.flatMap(([pLon, pLat]) => [pLon, pLat]);
       opts.polygon = {
-        hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(flat)),
+        hierarchy: new Cesium.PolygonHierarchy(
+          Cesium.Cartesian3.fromDegreesArray(flat),
+        ),
         material: Cesium.Color.fromCssColorString(fillColor).withAlpha(alpha),
         outline: true,
         outlineColor: Cesium.Color.fromCssColorString(outlineColor),
@@ -1622,22 +1818,23 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       // soup). `kind: 'tfr'` already rides along in `properties: props` above
       // (the backend stamps it), so the entity stays clickable/identifiable in
       // the EntityPanel exactly like every other layer.
-      if (this.props.styleKind === 'tfr') {
+      if (this.props.styleKind === "tfr") {
         const labelText = tfrLabelText(props);
         if (labelText) {
           opts.label = labelFor(labelText);
           opts.name = labelText;
         }
-      } else if (this.props.styleKind === 'hazardpoly') {
+      } else if (this.props.styleKind === "hazardpoly") {
         const labelText =
-          (props['name'] as string | undefined) ?? (props['hazard'] as string | undefined);
+          (props["name"] as string | undefined) ??
+          (props["hazard"] as string | undefined);
         if (labelText) opts.name = labelText;
       }
       return;
     }
 
     switch (this.props.styleKind) {
-      case 'aircraft': {
+      case "aircraft": {
         // Aircraft entities are intentionally GRAPHICS-LESS: the SVG icon + the
         // callsign label are painted by PrimitiveEntityLayer (batched
         // BillboardCollection/LabelCollection), called from the point path right
@@ -1650,7 +1847,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText) opts.name = labelText;
         break;
       }
-      case 'vessel': {
+      case "vessel": {
         // Graphics-less, like aircraft: the SVG icon + name label are painted by
         // the batched primitive layer (synced right after entities.add). Keep
         // name on the entity so the watchbox evaluator (reads e.name) and the
@@ -1659,25 +1856,30 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText) opts.name = labelText;
         break;
       }
-      case 'fire':
+      case "fire":
         // Graphics-less: the icon is painted by the batched primitive layer
         // (BATCHED above). FIRMS was the single largest layer on the globe at
         // 14 818 entities, and every one of them was a Cesium billboard that
         // DataSourceDisplay walked per frame.
         break;
-      case 'quake': {
-        const mag = (props['mag'] as number | null) ?? null;
+      case "quake": {
+        const mag = (props["mag"] as number | null) ?? null;
         const { color, pixelSize } = quakeStyle(mag);
         opts.point = {
           color,
           pixelSize,
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 1,
-          translucencyByDistance: new Cesium.NearFarScalar(1.5e6, 1.0, 4.0e7, 0.35),
+          translucencyByDistance: new Cesium.NearFarScalar(
+            1.5e6,
+            1.0,
+            4.0e7,
+            0.35,
+          ),
         };
         break;
       }
-      case 'jamming': {
+      case "jamming": {
         // GPS jamming cell — translucent red point sized by aircraft count,
         // alpha by percent_bad. Severity tints the hue between warn and alert
         // so a quick visual scan reads "this cell is bad". 1° cells render
@@ -1689,18 +1891,23 @@ export class PollGeoJsonAdapter implements LayerAdapter {
           pixelSize,
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 1,
-          translucencyByDistance: new Cesium.NearFarScalar(1.5e6, 1.0, 4.0e7, 0.35),
+          translucencyByDistance: new Cesium.NearFarScalar(
+            1.5e6,
+            1.0,
+            4.0e7,
+            0.35,
+          ),
         };
         break;
       }
-      case 'camera': {
+      case "camera": {
         // Graphics-less — pixels come from the batched layer. e.name stays so
         // selection, the watchbox evaluator and the facet counts still read it.
-        const name = props['name'];
-        if (typeof name === 'string' && name.length > 0) opts.name = name;
+        const name = props["name"];
+        if (typeof name === "string" && name.length > 0) opts.name = name;
         break;
       }
-      case 'airport': {
+      case "airport": {
         // FR24-style airport tile. Static reference marker (no rotation, no
         // per-poll restyle — see refreshStyle). Zoom-gating is enforced in the
         // compositor's placesBboxQuery (world/continental view → empty payload);
@@ -1711,7 +1918,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText) opts.name = labelText;
         break;
       }
-      case 'port': {
+      case "port": {
         // FR24/marine-style port tile. Static reference marker (same zoom-gate +
         // belt DDC as airport). No rotation, no per-poll restyle.
         // Graphics-less — painted by the batched primitive layer.
@@ -1719,7 +1926,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText) opts.name = labelText;
         break;
       }
-      case 'base': {
+      case "base": {
         // Military base — category SVG by branch (air/naval/army), same
         // zoom-gated static-reference-marker treatment as airport/port.
         // Graphics-less — painted by the batched primitive layer.
@@ -1727,7 +1934,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText) opts.name = labelText;
         break;
       }
-      case 'facility': {
+      case "facility": {
         // Critical-infrastructure / military-installation facility — category
         // SVG dispatched on props.category (power/nuclear/water/datacenter/
         // telecom/ground_station/telescope/launch/military_*), same zoom-gated
@@ -1738,7 +1945,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText) opts.name = labelText;
         break;
       }
-      case 'warning': {
+      case "warning": {
         // NGA naval broadcast warning — triangle glyph, distinct red mine
         // glyph when props.mine is true. Global layer (no zoom-gate DDC —
         // 386 active warnings worldwide is cheap to keep resident).
@@ -1746,13 +1953,13 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText) opts.name = labelText;
         break;
       }
-      case 'hazard': {
+      case "hazard": {
         // 2026-07-14 keyless data-layers wave — disaster/cyclone/volcano/
         // radiation/relief/chokepoint/buoy/airquality/aurora. Category tile SVG
         // dispatched on props.kind. Global layers (no zoom-gate DDC): counts are
         // in the hundreds, cheap to keep resident.
-        const name = props['name'];
-        if (typeof name === 'string' && name.length > 0) opts.name = name;
+        const name = props["name"];
+        if (typeof name === "string" && name.length > 0) opts.name = name;
         break;
       }
       default:
@@ -1766,17 +1973,16 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // untouched, so the entity still renders its SVG, just translucent.
     if (
       opts.billboard &&
-      (this.props.styleKind === 'aircraft' || this.props.styleKind === 'vessel')
+      (this.props.styleKind === "aircraft" || this.props.styleKind === "vessel")
     ) {
       const clauses = activeFilterClauses();
       // The provenance tier belongs to the LAYER, not to any feature, so it is
       // not in the property bag and never will be. Injecting it here is what
       // lets a `tier` clause dim contacts the same way a category clause does;
       // without it the Provenance facet would be a histogram nobody could act on.
-      const withTier =
-        clauses.some((c) => c.facet === 'tier')
-          ? { ...props, tier: tierOf(this.props.ctx.descriptor.id) }
-          : props;
+      const withTier = clauses.some((c) => c.facet === "tier")
+        ? { ...props, tier: tierOf(this.props.ctx.descriptor.id) }
+        : props;
       if (clauses.length > 0 && !entityPassesFilter(withTier, clauses)) {
         const base =
           opts.billboard.color instanceof Cesium.Color
@@ -1814,8 +2020,8 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // changes category, a hazard whose kind is upgraded).
     if (
       this.primRenderer &&
-      this.props.styleKind !== 'aircraft' &&
-      this.props.styleKind !== 'vessel'
+      this.props.styleKind !== "aircraft" &&
+      this.props.styleKind !== "vessel"
     ) {
       // A static reference marker was already painted when its entity was added
       // and cannot have changed, so re-syncing it re-runs styleFn, rebuilds its
@@ -1827,7 +2033,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       return;
     }
     switch (this.props.styleKind) {
-      case 'aircraft': {
+      case "aircraft": {
         // Pixels live in the batched primitive collection — upsert icon image /
         // rotation / scale / filter-dim / label text there. The entity stays
         // graphics-less; we only keep e.name fresh so the watchbox evaluator
@@ -1837,7 +2043,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText && e.name !== labelText) e.name = labelText;
         break;
       }
-      case 'vessel': {
+      case "vessel": {
         // Pixels live in the batched primitive layer — upsert icon / rotation /
         // scale / filter-dim / label there. Keep e.name fresh for watchbox + the
         // count-bubble aggregator (a late AIS name upgrades the MMSI fallback).
@@ -1846,7 +2052,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         if (labelText && e.name !== labelText) e.name = labelText;
         break;
       }
-      case 'jamming': {
+      case "jamming": {
         if (e.polygon) {
           // Polygon (hexagon) entity — update fill material and outline colour.
           const { fillColor, outlineColor, alpha } = jammingPolygonStyle(props);
@@ -1865,7 +2071,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         }
         break;
       }
-      case 'tfr': {
+      case "tfr": {
         if (e.polygon) {
           const { fillColor, outlineColor, alpha } = tfrPolygonStyle(props);
           e.polygon.material = new Cesium.ColorMaterialProperty(
@@ -1892,7 +2098,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
 
 // Read the active filter clause list once per drain pass. Pulled out so the
 // hot per-entity loop calls a plain function (no zustand subscription churn).
-function activeFilterClauses(): readonly import('../../state/stores.js').FilterClause[] {
+function activeFilterClauses(): readonly import("../../state/stores.js").FilterClause[] {
   return useFilters.getState().clauses;
 }
 
@@ -1905,18 +2111,21 @@ function jammingStyle(props: Record<string, unknown>): {
   color: Cesium.Color;
   pixelSize: number;
 } {
-  const total = Number(props['total'] ?? 1);
-  const pct = Number(props['percent_bad'] ?? 0);
-  const severity = (props['severity'] as string | undefined) ?? 'low';
+  const total = Number(props["total"] ?? 1);
+  const pct = Number(props["percent_bad"] ?? 0);
+  const severity = (props["severity"] as string | undefined) ?? "low";
   // Hue: low/medium = warn (#f59e0b), high = alert (#ef4444).
-  const hex = severity === 'high' ? '#ef4444' : '#f59e0b';
+  const hex = severity === "high" ? "#ef4444" : "#f59e0b";
   const base = Cesium.Color.fromCssColorString(hex);
   // Alpha from 0.35 (just visible) to 0.85 (saturated) as pct goes 0 → 100.
   const alpha = 0.35 + 0.5 * Math.min(1, Math.max(0, pct / 100));
   const color = base.withAlpha(alpha);
   // pixelSize: 8 px floor, +4 per ln(total). 3 ac → ~12 px, 25 ac → ~21 px,
   // 200 ac → ~29 px. Clamped at 36 so a megacluster doesn't take over.
-  const pixelSize = Math.max(8, Math.min(36, 8 + 4 * Math.log(Math.max(1, total))));
+  const pixelSize = Math.max(
+    8,
+    Math.min(36, 8 + 4 * Math.log(Math.max(1, total))),
+  );
   return { color, pixelSize };
 }
 

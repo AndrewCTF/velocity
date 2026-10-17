@@ -1,5 +1,11 @@
-import { Bell, Clock, Map as MapIcon } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Bell, Clock, Map as MapIcon } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import {
   useFoundry,
   type Dataset,
@@ -12,9 +18,9 @@ import {
   type MonitorSeverity,
   type MonitorTrigger,
   type SqlResult,
-} from '../state/foundry.js';
-import { Badge, type BadgeTone, Btn, Toggle } from '../shell/instruments.js';
-import { useConfirm } from '../shell/Modal.js';
+} from "../state/foundry.js";
+import { Badge, type BadgeTone, Btn, Toggle } from "../shell/instruments.js";
+import { useConfirm } from "../shell/Modal.js";
 import {
   EmptyState,
   Field,
@@ -26,8 +32,8 @@ import {
   slugIdent,
   stamp,
   tableHeadCls,
-} from './ui.js';
-import { Icon } from '../normal/Icon.js';
+} from "./ui.js";
+import { Icon } from "../normal/Icon.js";
 
 // Three "workbench" dataset-detail tabs added alongside the original
 // Schema/Preview/Stats/…: a dependency-free geo plot, a read-only SQL
@@ -72,7 +78,11 @@ export function MapTab({ dataset }: { dataset: Dataset }): JSX.Element {
   if (geo === null || !geo.ok) {
     return (
       <div className="p-4">
-        <EmptyState icon={MapIcon} title="No map to show" hint={geo === null ? 'Failed to load geo data.' : geo.reason} />
+        <EmptyState
+          icon={MapIcon}
+          title="No map to show"
+          hint={geo === null ? "Failed to load geo data." : geo.reason}
+        />
       </div>
     );
   }
@@ -113,12 +123,16 @@ export function MapTab({ dataset }: { dataset: Dataset }): JSX.Element {
   const sy = (lat: number): number => ((y1 - lat) / spanLat) * VB_H;
 
   const gratLons: number[] = [];
-  for (let g = Math.ceil(x0 / 30) * 30; g <= x1 + 1e-9; g += 30) gratLons.push(g);
+  for (let g = Math.ceil(x0 / 30) * 30; g <= x1 + 1e-9; g += 30)
+    gratLons.push(g);
   const gratLats: number[] = [];
-  for (let g = Math.ceil(y0 / 30) * 30; g <= y1 + 1e-9; g += 30) gratLats.push(g);
+  for (let g = Math.ceil(y0 / 30) * 30; g <= y1 + 1e-9; g += 30)
+    gratLats.push(g);
 
   const tooltipProps = hover
-    ? Object.entries(hover.feature.properties).filter(([k]) => k !== '_idx').slice(0, 3)
+    ? Object.entries(hover.feature.properties)
+        .filter(([k]) => k !== "_idx")
+        .slice(0, 3)
     : [];
 
   return (
@@ -132,10 +146,26 @@ export function MapTab({ dataset }: { dataset: Dataset }): JSX.Element {
         >
           <rect x={0} y={0} width={VB_W} height={VB_H} fill="var(--bg-0)" />
           {gratLons.map((g) => (
-            <line key={`glon-${g}`} x1={sx(g)} y1={0} x2={sx(g)} y2={VB_H} stroke="var(--line-2)" strokeWidth={0.5} />
+            <line
+              key={`glon-${g}`}
+              x1={sx(g)}
+              y1={0}
+              x2={sx(g)}
+              y2={VB_H}
+              stroke="var(--line-2)"
+              strokeWidth={0.5}
+            />
           ))}
           {gratLats.map((g) => (
-            <line key={`glat-${g}`} x1={0} y1={sy(g)} x2={VB_W} y2={sy(g)} stroke="var(--line-2)" strokeWidth={0.5} />
+            <line
+              key={`glat-${g}`}
+              x1={0}
+              y1={sy(g)}
+              x2={VB_W}
+              y2={sy(g)}
+              stroke="var(--line-2)"
+              strokeWidth={0.5}
+            />
           ))}
           {features.map((f) => {
             const [lon, lat] = f.geometry.coordinates;
@@ -150,8 +180,20 @@ export function MapTab({ dataset }: { dataset: Dataset }): JSX.Element {
                 stroke="var(--bg-0)"
                 strokeWidth={0.5}
                 className="cursor-pointer"
-                onMouseEnter={(e) => setHover({ feature: f, clientX: e.clientX, clientY: e.clientY })}
-                onMouseMove={(e) => setHover({ feature: f, clientX: e.clientX, clientY: e.clientY })}
+                onMouseEnter={(e) =>
+                  setHover({
+                    feature: f,
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                  })
+                }
+                onMouseMove={(e) =>
+                  setHover({
+                    feature: f,
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                  })
+                }
                 onMouseLeave={() => setHover(null)}
               />
             );
@@ -163,7 +205,9 @@ export function MapTab({ dataset }: { dataset: Dataset }): JSX.Element {
             style={{ left: hover.clientX + 10, top: hover.clientY + 10 }}
             data-testid="map-tooltip"
           >
-            <div className="text-txt-3">row #{hover.feature.properties._idx}</div>
+            <div className="text-txt-3">
+              row #{hover.feature.properties._idx}
+            </div>
             {tooltipProps.map(([k, v]) => (
               <div key={k}>
                 <span className="text-txt-3">{k}:</span> {String(v)}
@@ -173,9 +217,10 @@ export function MapTab({ dataset }: { dataset: Dataset }): JSX.Element {
         )}
       </div>
       <div className="mono text-[10px] text-txt-3">
-        {geo.count.toLocaleString()} points · lat <span className="text-txt-2">{geo.lat_col}</span> · lon{' '}
+        {geo.count.toLocaleString()} points · lat{" "}
+        <span className="text-txt-2">{geo.lat_col}</span> · lon{" "}
         <span className="text-txt-2">{geo.lon_col}</span>
-        {features.length >= 5000 ? ' · capped at 5,000' : ''}
+        {features.length >= 5000 ? " · capped at 5,000" : ""}
       </div>
     </div>
   );
@@ -214,7 +259,7 @@ export function SqlTab({ dataset }: { dataset: Dataset }): JSX.Element {
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       void run();
     }
@@ -236,19 +281,27 @@ export function SqlTab({ dataset }: { dataset: Dataset }): JSX.Element {
         data-testid="sql-query-input"
       />
       <div className="flex items-center gap-2">
-        <Btn tone="accent" disabled={!query.trim() || running} onClick={() => void run()}>
-          {running ? 'Running…' : '▶ Run'}
+        <Btn
+          tone="accent"
+          disabled={!query.trim() || running}
+          onClick={() => void run()}
+        >
+          {running ? "Running…" : "▶ Run"}
         </Btn>
         <span className="text-[10px] text-txt-4">Ctrl/Cmd+Enter to run</span>
         {result?.ok && (
           <span className="mono text-[10px] text-txt-3 ml-auto">
-            {result.row_count.toLocaleString()} row{result.row_count === 1 ? '' : 's'}
-            {elapsedMs != null ? ` · ${elapsedMs}ms` : ''}
+            {result.row_count.toLocaleString()} row
+            {result.row_count === 1 ? "" : "s"}
+            {elapsedMs != null ? ` · ${elapsedMs}ms` : ""}
           </span>
         )}
       </div>
       {result && !result.ok && (
-        <div className="rounded-sm border border-alert bg-alert-bg px-2.5 py-2 text-[11px] text-alert" data-testid="sql-error">
+        <div
+          className="rounded-sm border border-alert bg-alert-bg px-2.5 py-2 text-[11px] text-alert"
+          data-testid="sql-error"
+        >
           {result.error}
         </div>
       )}
@@ -267,14 +320,17 @@ export function SqlTab({ dataset }: { dataset: Dataset }): JSX.Element {
                 <tr key={i} className={rowCls}>
                   {result.columns.map((c) => (
                     <td key={c} className={cellMono}>
-                      {String((row as Record<string, unknown>)[c] ?? '')}
+                      {String((row as Record<string, unknown>)[c] ?? "")}
                     </td>
                   ))}
                 </tr>
               ))}
               {result.rows.length === 0 && (
                 <tr>
-                  <td colSpan={result.columns.length || 1} className="px-2.5 py-3 text-center mono text-[11px] text-txt-3">
+                  <td
+                    colSpan={result.columns.length || 1}
+                    className="px-2.5 py-3 text-center mono text-[11px] text-txt-3"
+                  >
                     No rows.
                   </td>
                 </tr>
@@ -288,23 +344,34 @@ export function SqlTab({ dataset }: { dataset: Dataset }): JSX.Element {
 }
 
 // ── Monitors tab ─────────────────────────────────────────────────────────────
-const TRIGGERS: MonitorTrigger[] = ['new_version', 'row_condition', 'check_failed', 'build_failed'];
-const ACTIONS: MonitorAction[] = ['alert', 'llm', 'both'];
-const SEVERITIES: MonitorSeverity[] = ['info', 'low', 'medium', 'high', 'critical'];
-const LLM_TIERS: Array<'fast' | 'reason'> = ['fast', 'reason'];
+const TRIGGERS: MonitorTrigger[] = [
+  "new_version",
+  "row_condition",
+  "check_failed",
+  "build_failed",
+];
+const ACTIONS: MonitorAction[] = ["alert", "llm", "both"];
+const SEVERITIES: MonitorSeverity[] = [
+  "info",
+  "low",
+  "medium",
+  "high",
+  "critical",
+];
+const LLM_TIERS: Array<"fast" | "reason"> = ["fast", "reason"];
 
 const SEVERITY_TONE: Record<MonitorSeverity, BadgeTone> = {
-  info: 'neutral',
-  low: 'neutral',
-  medium: 'warn',
-  high: 'alert',
-  critical: 'alert',
+  info: "neutral",
+  low: "neutral",
+  medium: "warn",
+  high: "alert",
+  critical: "alert",
 };
 
 const ACTION_TONE: Record<MonitorAction, BadgeTone> = {
-  alert: 'neutral',
-  llm: 'mag',
-  both: 'accent',
+  alert: "neutral",
+  llm: "mag",
+  both: "accent",
 };
 
 interface MonitorForm {
@@ -312,7 +379,7 @@ interface MonitorForm {
   trigger: MonitorTrigger;
   conditionExpr: string;
   action: MonitorAction;
-  llmTier: 'fast' | 'reason';
+  llmTier: "fast" | "reason";
   llmSystem: string;
   llmPrompt: string;
   severity: MonitorSeverity;
@@ -321,14 +388,14 @@ interface MonitorForm {
 
 function emptyForm(): MonitorForm {
   return {
-    name: '',
-    trigger: 'new_version',
-    conditionExpr: '',
-    action: 'alert',
-    llmTier: 'fast',
-    llmSystem: '',
-    llmPrompt: '',
-    severity: 'medium',
+    name: "",
+    trigger: "new_version",
+    conditionExpr: "",
+    action: "alert",
+    llmTier: "fast",
+    llmSystem: "",
+    llmPrompt: "",
+    severity: "medium",
     enabled: true,
   };
 }
@@ -352,11 +419,11 @@ function toBody(datasetId: string, f: MonitorForm): MonitorInput {
     dataset_id: datasetId,
     name: f.name.trim(),
     trigger: f.trigger,
-    condition_expr: f.trigger === 'row_condition' ? f.conditionExpr : '',
+    condition_expr: f.trigger === "row_condition" ? f.conditionExpr : "",
     action: f.action,
     llm_tier: f.llmTier,
-    llm_system: f.action !== 'alert' ? f.llmSystem : '',
-    llm_prompt: f.action !== 'alert' ? f.llmPrompt : '',
+    llm_system: f.action !== "alert" ? f.llmSystem : "",
+    llm_prompt: f.action !== "alert" ? f.llmPrompt : "",
     severity: f.severity,
     enabled: f.enabled,
   };
@@ -410,7 +477,9 @@ export function MonitorsTab({ datasetId }: { datasetId: string }): JSX.Element {
   const submit = async (): Promise<void> => {
     if (!form.name.trim()) return;
     const body = toBody(datasetId, form);
-    const result = editingId ? await updateMonitor(editingId, body) : await createMonitor(body);
+    const result = editingId
+      ? await updateMonitor(editingId, body)
+      : await createMonitor(body);
     if (result) {
       cancelEdit();
       await loadMonitors(datasetId);
@@ -418,11 +487,21 @@ export function MonitorsTab({ datasetId }: { datasetId: string }): JSX.Element {
   };
 
   const toggleEnabled = async (m: Monitor, next: boolean): Promise<void> => {
-    await updateMonitor(m.id, toBody(datasetId, { ...formFromMonitor(m), enabled: next }));
+    await updateMonitor(
+      m.id,
+      toBody(datasetId, { ...formFromMonitor(m), enabled: next }),
+    );
   };
 
   const onDelete = async (m: Monitor): Promise<void> => {
-    if (await confirm({ title: `Delete monitor "${m.name}"?`, body: 'Its event history is removed too.', tone: 'danger', confirmLabel: 'Delete' })) {
+    if (
+      await confirm({
+        title: `Delete monitor "${m.name}"?`,
+        body: "Its event history is removed too.",
+        tone: "danger",
+        confirmLabel: "Delete",
+      })
+    ) {
       const ok = await deleteMonitor(m.id);
       if (ok) {
         if (selectedId === m.id) {
@@ -434,8 +513,8 @@ export function MonitorsTab({ datasetId }: { datasetId: string }): JSX.Element {
     }
   };
 
-  const showCondition = form.trigger === 'row_condition';
-  const showLlm = form.action !== 'alert';
+  const showCondition = form.trigger === "row_condition";
+  const showLlm = form.action !== "alert";
 
   return (
     <div className="space-y-3" data-testid="monitors-tab">
@@ -455,19 +534,46 @@ export function MonitorsTab({ datasetId }: { datasetId: string }): JSX.Element {
             {monitors.map((m) => (
               <tr
                 key={m.id}
-                className={`${rowCls} cursor-pointer ${selectedId === m.id ? 'bg-accent-dim' : ''}`}
+                className={`${rowCls} cursor-pointer ${selectedId === m.id ? "bg-accent-dim" : ""}`}
                 onClick={() => selectMonitor(m.id)}
               >
                 <td className={`${cellMono} text-txt-0`}>{m.name}</td>
                 <td className={`${cellMono} text-txt-2`}>{m.trigger}</td>
-                <td className="px-2.5 py-1.5"><Badge tone={ACTION_TONE[m.action]}>{m.action}</Badge></td>
-                <td className="px-2.5 py-1.5"><Badge tone={SEVERITY_TONE[m.severity]}>{m.severity}</Badge></td>
-                <td className="px-2.5 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
-                  <Toggle on={m.enabled} onChange={(next) => void toggleEnabled(m, next)} label={`${m.name} enabled`} />
+                <td className="px-2.5 py-1.5">
+                  <Badge tone={ACTION_TONE[m.action]}>{m.action}</Badge>
                 </td>
-                <td className="px-2.5 py-1.5 text-right" onClick={(e) => e.stopPropagation()}>
-                  <button type="button" onClick={() => startEdit(m)} className="text-txt-3 hover:text-accent text-[10px] mono mr-2">edit</button>
-                  <button type="button" onClick={() => void onDelete(m)} className="text-txt-3 hover:text-alert text-[12px]" aria-label={`Delete monitor ${m.name}`}><Icon name="x" className="w-3 h-3" /></button>
+                <td className="px-2.5 py-1.5">
+                  <Badge tone={SEVERITY_TONE[m.severity]}>{m.severity}</Badge>
+                </td>
+                <td
+                  className="px-2.5 py-1.5 text-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Toggle
+                    on={m.enabled}
+                    onChange={(next) => void toggleEnabled(m, next)}
+                    label={`${m.name} enabled`}
+                  />
+                </td>
+                <td
+                  className="px-2.5 py-1.5 text-right"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => startEdit(m)}
+                    className="text-txt-3 hover:text-accent text-[10px] mono mr-2"
+                  >
+                    edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onDelete(m)}
+                    className="text-txt-3 hover:text-alert text-[12px]"
+                    aria-label={`Delete monitor ${m.name}`}
+                  >
+                    <Icon name="x" className="w-3 h-3" />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -475,84 +581,178 @@ export function MonitorsTab({ datasetId }: { datasetId: string }): JSX.Element {
         </table>
         {monitors.length === 0 && (
           <div className="p-4">
-            <EmptyState icon={Bell} title="No monitors" hint="Watch this dataset for new versions, row conditions, or failed checks/builds, then fire an alert, an LLM summary, or both." />
+            <EmptyState
+              icon={Bell}
+              title="No monitors"
+              hint="Watch this dataset for new versions, row conditions, or failed checks/builds, then fire an alert, an LLM summary, or both."
+            />
           </div>
         )}
       </div>
 
       <div className="rounded-md border border-line-2 bg-bg-1 p-3 space-y-2.5">
         <div className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">
-          {editingId ? 'Edit monitor' : 'New monitor'}
+          {editingId ? "Edit monitor" : "New monitor"}
         </div>
         <div className="flex items-end gap-2 flex-wrap">
-          <div className="w-40"><Field label="Name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="row spike" className={controlCls} /></Field></div>
+          <div className="w-40">
+            <Field label="Name">
+              <input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="row spike"
+                className={controlCls}
+              />
+            </Field>
+          </div>
           <div className="w-36">
             <Field label="Trigger">
-              <Select value={form.trigger} onChange={(v) => setForm({ ...form, trigger: v as MonitorTrigger })} options={TRIGGERS.map((t) => ({ value: t, label: t }))} />
+              <Select
+                value={form.trigger}
+                onChange={(v) =>
+                  setForm({ ...form, trigger: v as MonitorTrigger })
+                }
+                options={TRIGGERS.map((t) => ({ value: t, label: t }))}
+              />
             </Field>
           </div>
           <div className="w-32">
             <Field label="Action">
-              <Select value={form.action} onChange={(v) => setForm({ ...form, action: v as MonitorAction })} options={ACTIONS.map((a) => ({ value: a, label: a }))} />
+              <Select
+                value={form.action}
+                onChange={(v) =>
+                  setForm({ ...form, action: v as MonitorAction })
+                }
+                options={ACTIONS.map((a) => ({ value: a, label: a }))}
+              />
             </Field>
           </div>
           <div className="w-28">
             <Field label="Severity">
-              <Select value={form.severity} onChange={(v) => setForm({ ...form, severity: v as MonitorSeverity })} options={SEVERITIES.map((s) => ({ value: s, label: s }))} />
+              <Select
+                value={form.severity}
+                onChange={(v) =>
+                  setForm({ ...form, severity: v as MonitorSeverity })
+                }
+                options={SEVERITIES.map((s) => ({ value: s, label: s }))}
+              />
             </Field>
           </div>
           {showLlm && (
             <div className="w-28">
               <Field label="LLM tier">
-                <Select value={form.llmTier} onChange={(v) => setForm({ ...form, llmTier: v as 'fast' | 'reason' })} options={LLM_TIERS.map((t) => ({ value: t, label: t }))} />
+                <Select
+                  value={form.llmTier}
+                  onChange={(v) =>
+                    setForm({ ...form, llmTier: v as "fast" | "reason" })
+                  }
+                  options={LLM_TIERS.map((t) => ({ value: t, label: t }))}
+                />
               </Field>
             </div>
           )}
           <label className="flex items-center gap-1.5 mb-[5px]">
-            <Toggle on={form.enabled} onChange={(next) => setForm({ ...form, enabled: next })} label="enabled" />
-            <span className="text-[10px] uppercase tracking-[0.4px] text-txt-3">enabled</span>
+            <Toggle
+              on={form.enabled}
+              onChange={(next) => setForm({ ...form, enabled: next })}
+              label="enabled"
+            />
+            <span className="text-[10px] uppercase tracking-[0.4px] text-txt-3">
+              enabled
+            </span>
           </label>
         </div>
         {showCondition && (
-          <Field label="Condition expression" hint="Safe DSL over row fields, e.g. speed_kn > 40 and flag == 'red'">
-            <textarea value={form.conditionExpr} onChange={(e) => setForm({ ...form, conditionExpr: e.target.value })} rows={2} className={`${controlCls} font-mono resize-y`} />
+          <Field
+            label="Condition expression"
+            hint="Safe DSL over row fields, e.g. speed_kn > 40 and flag == 'red'"
+          >
+            <textarea
+              value={form.conditionExpr}
+              onChange={(e) =>
+                setForm({ ...form, conditionExpr: e.target.value })
+              }
+              rows={2}
+              className={`${controlCls} font-mono resize-y`}
+            />
           </Field>
         )}
         {showLlm && (
           <>
             <Field label="LLM system prompt">
-              <textarea value={form.llmSystem} onChange={(e) => setForm({ ...form, llmSystem: e.target.value })} rows={2} placeholder="You are a data monitor assistant." className={`${controlCls} resize-y`} />
+              <textarea
+                value={form.llmSystem}
+                onChange={(e) =>
+                  setForm({ ...form, llmSystem: e.target.value })
+                }
+                rows={2}
+                placeholder="You are a data monitor assistant."
+                className={`${controlCls} resize-y`}
+              />
             </Field>
-            <Field label="LLM prompt template" hint="Template vars: {dataset} {rows} {trigger}">
-              <textarea value={form.llmPrompt} onChange={(e) => setForm({ ...form, llmPrompt: e.target.value })} rows={3} placeholder={'Summarize {trigger} on {dataset}: {rows}'} className={`${controlCls} font-mono resize-y`} />
+            <Field
+              label="LLM prompt template"
+              hint="Template vars: {dataset} {rows} {trigger}"
+            >
+              <textarea
+                value={form.llmPrompt}
+                onChange={(e) =>
+                  setForm({ ...form, llmPrompt: e.target.value })
+                }
+                rows={3}
+                placeholder={"Summarize {trigger} on {dataset}: {rows}"}
+                className={`${controlCls} font-mono resize-y`}
+              />
             </Field>
           </>
         )}
         <div className="flex items-center gap-2">
-          <Btn tone="accent" disabled={!form.name.trim()} onClick={() => void submit()}>{editingId ? 'Save' : '+ Monitor'}</Btn>
+          <Btn
+            tone="accent"
+            disabled={!form.name.trim()}
+            onClick={() => void submit()}
+          >
+            {editingId ? "Save" : "+ Monitor"}
+          </Btn>
           {editingId && <Btn onClick={cancelEdit}>Cancel</Btn>}
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <div className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">Events</div>
+        <div className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">
+          Events
+        </div>
         {!selectedId ? (
           <div className="p-4 rounded-md border border-line-2 bg-bg-1">
-            <EmptyState icon={Clock} title="Select a monitor" hint="Click a monitor above to see its firing history." />
+            <EmptyState
+              icon={Clock}
+              title="Select a monitor"
+              hint="Click a monitor above to see its firing history."
+            />
           </div>
         ) : events.length === 0 ? (
           <div className="p-4 rounded-md border border-line-2 bg-bg-1">
-            <EmptyState icon={Clock} title="No events yet" hint="This monitor hasn't fired." />
+            <EmptyState
+              icon={Clock}
+              title="No events yet"
+              hint="This monitor hasn't fired."
+            />
           </div>
         ) : (
           <div className="rounded-md border border-line-2 bg-bg-1 divide-y divide-line">
             {events.map((ev) => (
               <div key={ev.id} className="px-3 py-2 space-y-1">
                 <div className="flex items-center gap-2">
-                  <Badge tone={ev.kind === 'llm_error' ? 'alert' : 'ok'}>{ev.kind}</Badge>
-                  <span className="mono text-[10px] text-txt-3">{stamp(ev.at)}</span>
+                  <Badge tone={ev.kind === "llm_error" ? "alert" : "ok"}>
+                    {ev.kind}
+                  </Badge>
+                  <span className="mono text-[10px] text-txt-3">
+                    {stamp(ev.at)}
+                  </span>
                 </div>
-                <p className="text-[11px] text-txt-1 whitespace-pre-wrap">{ev.summary}</p>
+                <p className="text-[11px] text-txt-1 whitespace-pre-wrap">
+                  {ev.summary}
+                </p>
               </div>
             ))}
           </div>

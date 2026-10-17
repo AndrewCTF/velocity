@@ -1,6 +1,6 @@
-import * as Cesium from 'cesium';
-import { useCaptures, type Capture } from '../state/captures.js';
-import { colorFor, detCounts } from '../ground/detectionOverlay.js';
+import * as Cesium from "cesium";
+import { useCaptures, type Capture } from "../state/captures.js";
+import { colorFor, detCounts } from "../ground/detectionOverlay.js";
 
 // Renders the captures store (globe/CaptureLayer). Client-store-backed, mounted
 // once by GlobeCanvas. OPTIMISED: a single CustomDataSource with UPSERT-BY-ID
@@ -15,9 +15,9 @@ import { colorFor, detCounts } from '../ground/detectionOverlay.js';
 
 // Dominant colour of a capture: person = red, else the top vehicle class colour.
 function captureColor(c: Capture): string {
-  if (c.dets.some((d) => d.cls === 'person')) return '#ef4444';
+  if (c.dets.some((d) => d.cls === "person")) return "#ef4444";
   const top = detCounts(c.dets)[0];
-  return top ? colorFor(top[0]) : '#9ca3af';
+  return top ? colorFor(top[0]) : "#9ca3af";
 }
 
 // Reticle glyph (corner brackets + centre dot), tinted by content. SVG data URI
@@ -39,15 +39,17 @@ function iconFor(color: string): string {
 
 function labelText(c: Capture): string {
   const counts = detCounts(c.dets);
-  return counts.length ? counts.map(([cls, n]) => `${n} ${cls}`).join(' · ') : c.label.slice(0, 20);
+  return counts.length
+    ? counts.map(([cls, n]) => `${n} ${cls}`).join(" · ")
+    : c.label.slice(0, 20);
 }
 
 function bagFor(c: Capture, summary: string): Cesium.PropertyBag {
   return new Cesium.PropertyBag({
-    kind: 'capture',
+    kind: "capture",
     source: c.source,
-    cam_id: c.camId ?? '',
-    photo_url: c.photoUrl ?? '',
+    cam_id: c.camId ?? "",
+    photo_url: c.photoUrl ?? "",
     label: c.label,
     n: c.dets.length,
     summary,
@@ -59,7 +61,7 @@ function bagFor(c: Capture, summary: string): Cesium.PropertyBag {
 }
 
 export function installCaptures(viewer: Cesium.Viewer): () => void {
-  const ds = new Cesium.CustomDataSource('__captures');
+  const ds = new Cesium.CustomDataSource("__captures");
   void viewer.dataSources.add(ds);
 
   const sync = (): void => {
@@ -88,11 +90,15 @@ export function installCaptures(viewer: Cesium.Viewer): () => void {
             font: '600 11px "IBM Plex Mono", monospace',
             fillColor: Cesium.Color.fromCssColorString(color),
             showBackground: true,
-            backgroundColor: Cesium.Color.fromCssColorString('#0c0e11').withAlpha(0.78),
+            backgroundColor:
+              Cesium.Color.fromCssColorString("#0c0e11").withAlpha(0.78),
             backgroundPadding: new Cesium.Cartesian2(6, 3),
             pixelOffset: new Cesium.Cartesian2(0, -18),
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2_000_000),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+              0,
+              2_000_000,
+            ),
           },
         });
       } else {
@@ -100,7 +106,9 @@ export function installCaptures(viewer: Cesium.Viewer): () => void {
         if (e.billboard) e.billboard.image = new Cesium.ConstantProperty(img);
         if (e.label) {
           e.label.text = new Cesium.ConstantProperty(txt);
-          e.label.fillColor = new Cesium.ConstantProperty(Cesium.Color.fromCssColorString(color));
+          e.label.fillColor = new Cesium.ConstantProperty(
+            Cesium.Color.fromCssColorString(color),
+          );
         }
       }
       e.properties = bagFor(c, txt);

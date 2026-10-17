@@ -8,36 +8,36 @@
 //
 // Every storage key the app writes is listed in exactly one of the two lists;
 // userData.test.ts scans src/ and fails on a key that is in neither.
-import { useCaptures } from '../state/captures.js';
-import { useSavedSearches } from '../state/savedSearches.js';
-import { useTaskingQuestions } from '../state/taskingQuestions.js';
-import { useInbox } from '../state/inbox.js';
-import { useAnnotations } from '../annotations/annotationStore.js';
+import { useCaptures } from "../state/captures.js";
+import { useSavedSearches } from "../state/savedSearches.js";
+import { useTaskingQuestions } from "../state/taskingQuestions.js";
+import { useInbox } from "../state/inbox.js";
+import { useAnnotations } from "../annotations/annotationStore.js";
 
 export const USER_DATA_KEYS = [
-  'velocity.captures',
-  'velocity.savedSearches',
-  'velocity.taskingQuestions',
-  'velocity.inbox.read',
-  'velocity.inbox.archived',
-  'osint.annotations',
+  "velocity.captures",
+  "velocity.savedSearches",
+  "velocity.taskingQuestions",
+  "velocity.inbox.read",
+  "velocity.inbox.archived",
+  "osint.annotations",
   // Last input time for the idle sign-out (auth/idle.ts). Cleared with the
   // rest so the next sign-in does not read a stale stamp and end at once.
-  'velocity.auth.lastActivity',
+  "velocity.auth.lastActivity",
 ] as const;
 
 export const DEVICE_PREF_KEYS = [
-  'velocity.settings',
-  'velocity.theme',
-  'velocity.dashboardMode',
-  'velocity.appView',
-  'velocity.aiSetupSeen',
-  'velocity.onboarded.v1',
-  'velocity.degradedDismissed',
-  'velocity.lowEndDismissed',
-  'velocity.openModeDismissed',
-  'csl.leftW',
-  'csl.rightW',
+  "velocity.settings",
+  "velocity.theme",
+  "velocity.dashboardMode",
+  "velocity.appView",
+  "velocity.aiSetupSeen",
+  "velocity.onboarded.v1",
+  "velocity.degradedDismissed",
+  "velocity.lowEndDismissed",
+  "velocity.openModeDismissed",
+  "csl.leftW",
+  "csl.rightW",
 ] as const;
 
 /** Empty the in-memory stores, then remove their persisted copies. The order

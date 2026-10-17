@@ -6,7 +6,7 @@
 //
 // Measurements mirror the mockup exactly. Colours come from tokens.css.
 
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from "react";
 
 // ── section divider label (.seclbl) ────────────────────────────────────────
 // Section title + optional count, rendered as a styled header BAR so every
@@ -17,7 +17,7 @@ import type { CSSProperties, ReactNode } from 'react';
 export function SectionLabel({
   title,
   count,
-  className = '',
+  className = "",
   style,
 }: {
   title: string;
@@ -29,23 +29,35 @@ export function SectionLabel({
     <div
       className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-sm border-l-[3px] ${className}`}
       style={{
-        borderLeftColor: 'var(--accent)',
-        background: 'color-mix(in srgb, var(--accent) 12%, var(--panel-bg))',
+        borderLeftColor: "var(--accent)",
+        background: "color-mix(in srgb, var(--accent) 12%, var(--panel-bg))",
         ...style,
       }}
     >
       <span className="text-[12px] font-semibold text-txt-0">{title}</span>
-      {count !== undefined && count !== '' && (
-        <span className="mono text-[11px] text-txt-2 tabular-nums">{count}</span>
+      {count !== undefined && count !== "" && (
+        <span className="mono text-[11px] text-txt-2 tabular-nums">
+          {count}
+        </span>
       )}
     </div>
   );
 }
 
 // ── micro caps label (.lbl) ─────────────────────────────────────────────────
-export function MicroLabel({ children, className = '' }: { children: ReactNode; className?: string }): JSX.Element {
+export function MicroLabel({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}): JSX.Element {
   return (
-    <span className={`text-[11px] font-medium tracking-[0.06em] uppercase text-txt-2 ${className}`}>{children}</span>
+    <span
+      className={`text-[11px] font-medium tracking-[0.06em] uppercase text-txt-2 ${className}`}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -55,7 +67,7 @@ export function Toggle({
   on,
   onChange,
   label,
-  className = '',
+  className = "",
 }: {
   on: boolean;
   onChange: (next: boolean) => void;
@@ -70,16 +82,16 @@ export function Toggle({
       aria-label={label}
       onClick={() => onChange(!on)}
       className={[
-        'relative w-[22px] h-[12px] rounded-sm border transition-colors shrink-0',
-        on ? 'bg-accent-dim border-accent-line' : 'bg-bg-3 border-line',
+        "relative w-[22px] h-[12px] rounded-sm border transition-colors shrink-0",
+        on ? "bg-accent-dim border-accent-line" : "bg-bg-3 border-line",
         className,
-      ].join(' ')}
+      ].join(" ")}
     >
       <span
         className={[
-          'absolute top-px h-[8px] w-[8px] transition-all',
-          on ? 'left-[11px] bg-accent' : 'left-px bg-txt-3',
-        ].join(' ')}
+          "absolute top-px h-[8px] w-[8px] transition-all",
+          on ? "left-[11px] bg-accent" : "left-px bg-txt-3",
+        ].join(" ")}
       />
     </button>
   );
@@ -88,26 +100,31 @@ export function Toggle({
 // ── thin progress / density meter (.bar) ────────────────────────────────────
 export function MeterBar({
   pct,
-  tone = 'accent',
-  className = '',
+  tone = "accent",
+  className = "",
 }: {
   pct: number;
-  tone?: 'accent' | 'alert' | 'warn' | 'ok';
+  tone?: "accent" | "alert" | "warn" | "ok";
   className?: string;
 }): JSX.Element {
   const fill =
-    tone === 'alert'
-      ? 'var(--alert)'
-      : tone === 'warn'
-        ? 'var(--warn)'
-        : tone === 'ok'
-          ? 'var(--ok)'
-          : 'var(--accent-line)';
+    tone === "alert"
+      ? "var(--alert)"
+      : tone === "warn"
+        ? "var(--warn)"
+        : tone === "ok"
+          ? "var(--ok)"
+          : "var(--accent-line)";
   return (
-    <span className={`relative block h-[3px] bg-bg-3 rounded-sm overflow-hidden ${className}`}>
+    <span
+      className={`relative block h-[3px] bg-bg-3 rounded-sm overflow-hidden ${className}`}
+    >
       <span
         className="absolute left-0 top-0 bottom-0 rounded-sm"
-        style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: fill }}
+        style={{
+          width: `${Math.max(0, Math.min(100, pct))}%`,
+          background: fill,
+        }}
       />
     </span>
   );
@@ -126,19 +143,19 @@ export function ScoreBar({ pct }: { pct: number }): JSX.Element {
 }
 
 // ── status badge (.badge) ───────────────────────────────────────────────────
-export type BadgeTone = 'alert' | 'warn' | 'accent' | 'mag' | 'ok' | 'neutral';
+export type BadgeTone = "alert" | "warn" | "accent" | "mag" | "ok" | "neutral";
 const BADGE_TONE: Record<BadgeTone, string> = {
-  alert: 'text-alert-fg bg-alert-bg border border-alert-line',
-  warn: 'text-warn-fg bg-warn-bg border border-warn-line',
-  accent: 'text-accent-fg bg-accent-dim border border-accent-line',
-  mag: 'text-mag-fg bg-mag-dim border border-mag-line',
-  ok: 'text-ok bg-ok-bg border border-ok-line',
-  neutral: 'text-txt-3 border border-line',
+  alert: "text-alert-fg bg-alert-bg border border-alert-line",
+  warn: "text-warn-fg bg-warn-bg border border-warn-line",
+  accent: "text-accent-fg bg-accent-dim border border-accent-line",
+  mag: "text-mag-fg bg-mag-dim border border-mag-line",
+  ok: "text-ok bg-ok-bg border border-ok-line",
+  neutral: "text-txt-3 border border-line",
 };
 export function Badge({
-  tone = 'neutral',
+  tone = "neutral",
   children,
-  className = '',
+  className = "",
 }: {
   tone?: BadgeTone;
   children: ReactNode;
@@ -154,11 +171,17 @@ export function Badge({
 }
 
 // ── key/value grid (.kv) ────────────────────────────────────────────────────
-export function KV({ children, className = '' }: { children: ReactNode; className?: string }): JSX.Element {
+export function KV({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}): JSX.Element {
   return (
     <div
       className={`grid items-baseline gap-x-3 gap-y-[5px] text-[12px] ${className}`}
-      style={{ gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)' }}
+      style={{ gridTemplateColumns: "minmax(0, auto) minmax(0, 1fr)" }}
     >
       {children}
     </div>
@@ -186,7 +209,7 @@ export function KVRow({
         {k}
       </span>
       <span
-        className={`mono text-right min-w-0 wrap-break-word ${warn ? 'text-alert-fg' : 'text-txt-0'}`}
+        className={`mono text-right min-w-0 wrap-break-word ${warn ? "text-alert-fg" : "text-txt-0"}`}
         {...(title && { title })}
       >
         {v}
@@ -199,17 +222,17 @@ export function KVRow({
 export function Btn({
   children,
   onClick,
-  tone = 'neutral',
-  size = 'md',
+  tone = "neutral",
+  size = "md",
   disabled = false,
   title,
   ariaLabel,
-  className = '',
+  className = "",
 }: {
   children: ReactNode;
   onClick?: () => void;
-  tone?: 'neutral' | 'accent';
-  size?: 'sm' | 'md';
+  tone?: "neutral" | "accent";
+  size?: "sm" | "md";
   disabled?: boolean;
   title?: string;
   // Accessible name for icon-only buttons (where `children` is a bare glyph).
@@ -225,13 +248,15 @@ export function Btn({
       title={title}
       aria-label={ariaLabel ?? title}
       className={[
-        'mono tracking-[0.3px] rounded-sm border transition-colors disabled:opacity-40',
-        size === 'sm' ? 'text-[11px] px-2 py-1' : 'text-[11px] px-[10px] py-[6px]',
-        tone === 'accent'
-          ? 'border-accent-line bg-accent-dim text-accent-fg hover:text-accent'
-          : 'border-line-2 bg-bg-2 text-txt-1 hover:border-accent-line',
+        "mono tracking-[0.3px] rounded-sm border transition-colors disabled:opacity-40",
+        size === "sm"
+          ? "text-[11px] px-2 py-1"
+          : "text-[11px] px-[10px] py-[6px]",
+        tone === "accent"
+          ? "border-accent-line bg-accent-dim text-accent-fg hover:text-accent"
+          : "border-line-2 bg-bg-2 text-txt-1 hover:border-accent-line",
         className,
-      ].join(' ')}
+      ].join(" ")}
     >
       {children}
     </button>
@@ -241,32 +266,48 @@ export function Btn({
 // ── correlation / threat hero (.hero) ───────────────────────────────────────
 // Left accent bar + tinted gradient. tone drives the colour family.
 export function Hero({
-  tone = 'alert',
+  tone = "alert",
   title,
   children,
-  className = '',
+  className = "",
 }: {
-  tone?: 'alert' | 'warn';
+  tone?: "alert" | "warn";
   title: ReactNode;
   children: ReactNode;
   className?: string;
 }): JSX.Element {
   const c =
-    tone === 'warn'
-      ? { border: 'rgba(245,165,36,0.32)', g0: 'rgba(245,165,36,0.06)', bar: 'var(--warn)', t: '#fcd9a0' }
-      : { border: 'rgba(255,90,82,0.32)', g0: 'rgba(255,90,82,0.06)', bar: 'var(--alert)', t: '#ffb3ae' };
+    tone === "warn"
+      ? {
+          border: "rgba(245,165,36,0.32)",
+          g0: "rgba(245,165,36,0.06)",
+          bar: "var(--warn)",
+          t: "#fcd9a0",
+        }
+      : {
+          border: "rgba(255,90,82,0.32)",
+          g0: "rgba(255,90,82,0.06)",
+          bar: "var(--alert)",
+          t: "#ffb3ae",
+        };
   return (
     <div
       className={`relative rounded-sm overflow-hidden ${className}`}
       style={{
         border: `1px solid ${c.border}`,
         background: `linear-gradient(180deg, ${c.g0}, transparent)`,
-        padding: '11px 12px 12px 14px',
+        padding: "11px 12px 12px 14px",
       }}
     >
-      <span className="absolute left-0 top-0 bottom-0 w-[2px]" style={{ background: c.bar }} />
+      <span
+        className="absolute left-0 top-0 bottom-0 w-[2px]"
+        style={{ background: c.bar }}
+      />
       <div className="flex items-center gap-2 mb-2">
-        <span className="mono text-[11px] tracking-[0.7px] uppercase" style={{ color: c.t }}>
+        <span
+          className="mono text-[11px] tracking-[0.7px] uppercase"
+          style={{ color: c.t }}
+        >
           {title}
         </span>
       </div>
@@ -282,24 +323,24 @@ export function Hero({
 export function Widget({
   title,
   count,
-  elevation = 'raised',
+  elevation = "raised",
   action,
   children,
-  className = '',
+  className = "",
 }: {
   title?: string;
   count?: string | number;
-  elevation?: 'flat' | 'raised' | 'inset';
+  elevation?: "flat" | "raised" | "inset";
   action?: ReactNode;
   children: ReactNode;
   className?: string;
 }): JSX.Element {
   const shadow =
-    elevation === 'raised'
-      ? '0 1px 0 rgba(0,0,0,0.35), 0 6px 16px -10px rgba(0,0,0,0.7)'
-      : elevation === 'inset'
-        ? 'inset 0 1px 3px rgba(0,0,0,0.45)'
-        : 'none';
+    elevation === "raised"
+      ? "0 1px 0 rgba(0,0,0,0.35), 0 6px 16px -10px rgba(0,0,0,0.7)"
+      : elevation === "inset"
+        ? "inset 0 1px 3px rgba(0,0,0,0.45)"
+        : "none";
   return (
     <section
       className={`rounded-md border border-line-2 bg-bg-1/90 p-2.5 ${className}`}
@@ -307,17 +348,27 @@ export function Widget({
     >
       {title && (
         <div className="flex items-center gap-2">
-          <SectionLabel title={title} {...(count !== undefined ? { count } : {})} className="flex-1" />
+          <SectionLabel
+            title={title}
+            {...(count !== undefined ? { count } : {})}
+            className="flex-1"
+          />
           {action}
         </div>
       )}
-      <div className={title ? 'mt-1.5' : ''}>{children}</div>
+      <div className={title ? "mt-1.5" : ""}>{children}</div>
     </section>
   );
 }
 
 // ── icon tile (.selhead .ico) — 34×34 framed glyph ──────────────────────────
-export function IconTile({ children, color }: { children: ReactNode; color?: string }): JSX.Element {
+export function IconTile({
+  children,
+  color,
+}: {
+  children: ReactNode;
+  color?: string;
+}): JSX.Element {
   return (
     <div
       // Decorative: the glyph is always paired with an adjacent text label, so
@@ -332,16 +383,26 @@ export function IconTile({ children, color }: { children: ReactNode; color?: str
 }
 
 // ── status dot ──────────────────────────────────────────────────────────────
-export function StatusDot({ tone, className = '' }: { tone: string; className?: string }): JSX.Element {
+export function StatusDot({
+  tone,
+  className = "",
+}: {
+  tone: string;
+  className?: string;
+}): JSX.Element {
   const bg =
-    tone === 'green' || tone === 'ok'
-      ? 'bg-ok'
-      : tone === 'amber' || tone === 'warn'
-        ? 'bg-warn'
-        : tone === 'red' || tone === 'alert'
-          ? 'bg-alert'
-          : 'bg-txt-4';
-  return <span className={`inline-block h-[6px] w-[6px] rounded-full ${bg} ${className}`} />;
+    tone === "green" || tone === "ok"
+      ? "bg-ok"
+      : tone === "amber" || tone === "warn"
+        ? "bg-warn"
+        : tone === "red" || tone === "alert"
+          ? "bg-alert"
+          : "bg-txt-4";
+  return (
+    <span
+      className={`inline-block h-[6px] w-[6px] rounded-full ${bg} ${className}`}
+    />
+  );
 }
 
 // ── brand mark (.brand) — the V track glyph + wordmark ──────────────────────
@@ -351,7 +412,13 @@ export function StatusDot({ tone, className = '' }: { tone: string; className?: 
 // diamond is a panel-header device (FOUNDRY, WORKFLOWS, CITY 3D) and the
 // product mark stays distinct from it. Drawn at 18px because the open square's
 // counter closes up below roughly 16.
-export function BrandMark({ size = 18, className = '' }: { size?: number; className?: string }): JSX.Element {
+export function BrandMark({
+  size = 18,
+  className = "",
+}: {
+  size?: number;
+  className?: string;
+}): JSX.Element {
   return (
     <svg
       width={size}
@@ -361,7 +428,11 @@ export function BrandMark({ size = 18, className = '' }: { size?: number; classN
       className={`shrink-0 ${className}`}
     >
       <g fill="none" stroke="currentColor">
-        <path d="M7 11 16 25.5 25 11" strokeWidth="2.9" strokeLinejoin="miter" />
+        <path
+          d="M7 11 16 25.5 25 11"
+          strokeWidth="2.9"
+          strokeLinejoin="miter"
+        />
         <rect x="3.9" y="4.9" width="6.2" height="6.2" strokeWidth="2.1" />
       </g>
       <rect x="21.9" y="4.9" width="6.2" height="6.2" fill="currentColor" />
@@ -369,7 +440,13 @@ export function BrandMark({ size = 18, className = '' }: { size?: number; classN
   );
 }
 
-export function Brand({ name = 'VELOCITY', version }: { name?: string; version?: string }): JSX.Element {
+export function Brand({
+  name = "VELOCITY",
+  version,
+}: {
+  name?: string;
+  version?: string;
+}): JSX.Element {
   return (
     <div className="flex items-center gap-2 mono font-semibold tracking-[1.5px] text-[12px] text-txt-0">
       <BrandMark />
@@ -388,20 +465,20 @@ export function Brand({ name = 'VELOCITY', version }: { name?: string; version?:
 // "NOTIONAL // SIMULATED"). Rendered as a hairline-bordered pill — always tiny,
 // never decorative. tone drives the colour family; neutral is default (most data
 // is unclassified); warn = exercise/notional; alert = handling warning.
-const CAVEAT_TONE: Record<'neutral' | 'warn' | 'alert', string> = {
-  neutral: 'text-txt-2 border-line-2',
-  warn:    'text-warn-fg border-warn-line bg-warn-bg',
-  alert:   'text-alert-fg border-alert-line bg-alert-bg',
+const CAVEAT_TONE: Record<"neutral" | "warn" | "alert", string> = {
+  neutral: "text-txt-2 border-line-2",
+  warn: "text-warn-fg border-warn-line bg-warn-bg",
+  alert: "text-alert-fg border-alert-line bg-alert-bg",
 };
 export function Caveat({
-  level = 'UNCLAS//FOUO',
+  level = "UNCLAS//FOUO",
   note,
-  tone = 'neutral',
+  tone = "neutral",
   noteClassName,
 }: {
   level?: string;
   note?: string;
-  tone?: 'neutral' | 'warn' | 'alert';
+  tone?: "neutral" | "warn" | "alert";
   /** Extra classes on the note segment, e.g. to hide it responsively. */
   noteClassName?: string;
 }): JSX.Element {
@@ -411,7 +488,9 @@ export function Caveat({
     >
       {level}
       {note && (
-        <span className={`inline-flex items-center gap-[5px] ${noteClassName ?? ''}`}>
+        <span
+          className={`inline-flex items-center gap-[5px] ${noteClassName ?? ""}`}
+        >
           <span className="opacity-40">·</span>
           <span className="opacity-70">{note}</span>
         </span>

@@ -1,10 +1,10 @@
-import { ListChecks } from 'lucide-react';
-import { Fragment, useEffect, useState } from 'react';
-import { useWorkflows } from '../state/workflows.js';
-import { Badge } from '../shell/instruments.js';
-import { InlineAlert } from '../shell/InlineAlert.js';
-import { useWorkflowsNav } from './nav.js';
-import { useWorkflowsPoll } from './useWorkflowsPoll.js';
+import { ListChecks } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
+import { useWorkflows } from "../state/workflows.js";
+import { Badge } from "../shell/instruments.js";
+import { InlineAlert } from "../shell/InlineAlert.js";
+import { useWorkflowsNav } from "./nav.js";
+import { useWorkflowsPoll } from "./useWorkflowsPoll.js";
 import {
   EmptyState,
   LogView,
@@ -16,7 +16,7 @@ import {
   stamp,
   statusTone,
   tableHeadCls,
-} from '../foundry/ui.js';
+} from "../foundry/ui.js";
 
 // Runs — history for one workflow at a time (the backend has no cross-
 // workflow run listing: GET /api/workflows/{id}/runs is scoped, see
@@ -24,20 +24,31 @@ import {
 // the editor's Run button (navigate('runs', run.id)) resolves the run's
 // workflow via GET /api/workflows/runs/{run_id} and lands expanded.
 
-function OutputTables({ output }: { output: Record<string, Array<Record<string, unknown>>> }): JSX.Element | null {
+function OutputTables({
+  output,
+}: {
+  output: Record<string, Array<Record<string, unknown>>>;
+}): JSX.Element | null {
   const blockIds = Object.keys(output);
   if (blockIds.length === 0) return null;
   return (
     <div className="space-y-2">
-      <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3">Terminal block output (sample)</div>
+      <div className="text-[10px] uppercase tracking-[0.4px] text-txt-3">
+        Terminal block output (sample)
+      </div>
       {blockIds.map((bid) => {
         const rows = output[bid] ?? [];
         const cols = rows.length > 0 ? Object.keys(rows[0] ?? {}) : [];
         return (
-          <div key={bid} className="rounded-sm border border-line overflow-hidden">
+          <div
+            key={bid}
+            className="rounded-sm border border-line overflow-hidden"
+          >
             <div className="px-2 py-1 bg-bg-2 mono text-[10px] text-txt-2 flex items-center justify-between">
               <span>{bid}</span>
-              <span className="text-txt-4">{rows.length} row{rows.length === 1 ? '' : 's'}</span>
+              <span className="text-txt-4">
+                {rows.length} row{rows.length === 1 ? "" : "s"}
+              </span>
             </div>
             {rows.length === 0 ? (
               <div className="px-2 py-2 text-[10.5px] text-txt-4">No rows.</div>
@@ -56,7 +67,7 @@ function OutputTables({ output }: { output: Record<string, Array<Record<string, 
                       <tr key={i} className={rowCls}>
                         {cols.map((c) => (
                           <td key={c} className={cellMono}>
-                            {String(row[c] ?? '')}
+                            {String(row[c] ?? "")}
                           </td>
                         ))}
                       </tr>
@@ -81,7 +92,7 @@ export function RunsView(): JSX.Element {
   const getRun = useWorkflows((s) => s.getRun);
   const selectedId = useWorkflowsNav((s) => s.selectedId);
 
-  const [workflowId, setWorkflowId] = useState('');
+  const [workflowId, setWorkflowId] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   // Resolve a deep-linked run id (from EditorView's Run button) to its
@@ -107,8 +118,11 @@ export function RunsView(): JSX.Element {
   // id — getRun 404s on it above) before falling back to the first workflow.
   useEffect(() => {
     if (workflowId || workflows.length === 0) return;
-    const deep = selectedId && workflows.some((w) => w.id === selectedId) ? selectedId : null;
-    setWorkflowId(deep ?? workflows[0]?.id ?? '');
+    const deep =
+      selectedId && workflows.some((w) => w.id === selectedId)
+        ? selectedId
+        : null;
+    setWorkflowId(deep ?? workflows[0]?.id ?? "");
   }, [workflowId, workflows, selectedId]);
 
   // Fetch runs the moment a workflow becomes selected (default pick, deep
@@ -125,14 +139,17 @@ export function RunsView(): JSX.Element {
 
   // Fast 5s poll while a run is in flight. Depend on the derived boolean, not
   // the runs array (a fresh ref each poll would recreate the interval every tick).
-  const anyRunning = runs.some((r) => r.status === 'running' || r.status === 'queued');
+  const anyRunning = runs.some(
+    (r) => r.status === "running" || r.status === "queued",
+  );
   useEffect(() => {
     if (!anyRunning || !workflowId) return;
     const id = window.setInterval(() => void loadRuns(workflowId), 5000);
     return () => window.clearInterval(id);
   }, [anyRunning, workflowId, loadRuns]);
 
-  const nameOf = (id: string): string => workflows.find((w) => w.id === id)?.name ?? id;
+  const nameOf = (id: string): string =>
+    workflows.find((w) => w.id === id)?.name ?? id;
 
   return (
     <div className="p-5 space-y-5">
@@ -156,7 +173,11 @@ export function RunsView(): JSX.Element {
       {error && <p className="text-[11px] text-alert">{error}</p>}
 
       {!workflowId && (
-        <EmptyState icon={ListChecks} title="No workflow selected" hint="Pick a workflow above, or trigger a Run from the editor to land here." />
+        <EmptyState
+          icon={ListChecks}
+          title="No workflow selected"
+          hint="Pick a workflow above, or trigger a Run from the editor to land here."
+        />
       )}
 
       {workflowId && (
@@ -174,14 +195,24 @@ export function RunsView(): JSX.Element {
             <tbody>
               {runs.map((r) => (
                 <Fragment key={r.id}>
-                  <tr className={`${rowCls} cursor-pointer`} onClick={() => setExpanded(expanded === r.id ? null : r.id)} data-testid={`run-row-${r.id}`}>
+                  <tr
+                    className={`${rowCls} cursor-pointer`}
+                    onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+                    data-testid={`run-row-${r.id}`}
+                  >
                     <td className="px-2.5 py-1.5">
-                      <Badge tone={statusTone[r.status] ?? 'neutral'}>{r.status}</Badge>
+                      <Badge tone={statusTone[r.status] ?? "neutral"}>
+                        {r.status}
+                      </Badge>
                     </td>
                     <td className={`${cellMono} text-txt-2`}>{r.trigger}</td>
                     <td className={`${cellMono} text-right`}>{r.log.length}</td>
-                    <td className={`${cellMono} text-txt-3 text-[10px]`}>{stamp(r.started_at)}</td>
-                    <td className={`${cellMono} text-txt-3 text-[10px]`}>{stamp(r.finished_at)}</td>
+                    <td className={`${cellMono} text-txt-3 text-[10px]`}>
+                      {stamp(r.started_at)}
+                    </td>
+                    <td className={`${cellMono} text-txt-3 text-[10px]`}>
+                      {stamp(r.finished_at)}
+                    </td>
                   </tr>
                   {expanded === r.id && (
                     <tr className="border-t border-line bg-bg-0">
