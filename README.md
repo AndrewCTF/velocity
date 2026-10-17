@@ -24,7 +24,7 @@ account, no API key, nobody who can paywall, filter or cut off your archive.
 crowd-sourced ADS-B aggregator; a contact appearing on a map is not evidence it
 was ever broadcast. So every contact carries which independent sources reported
 it, how many agreed, and how old the fix actually is — with the confidence rule
-written out rather than implied. Cached sources report the age of the *data*,
+written out rather than implied. Cached sources report the age of the _data_,
 not the age of the response, so nothing sits on the map looking live because it
 was fresh when we fetched it this morning. `/api/status/provenance` gives you
 the same picture per source, including how many contacts each one is alone in
@@ -52,9 +52,9 @@ labelled as automated output, not sold as "AI insight."
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
-[![Tests](https://img.shields.io/badge/tests-2996%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-3102%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
-[![ISO/IEC 27001:2022 controls mapped, self-assessed](https://img.shields.io/badge/ISO%2FIEC%2027001%3A2022-controls%20mapped%20(self--assessed)-informational.svg)](docs/security/isms/statement-of-applicability.md)
+[![ISO/IEC 27001:2022 controls mapped, self-assessed](<https://img.shields.io/badge/ISO%2FIEC%2027001%3A2022-controls%20mapped%20(self--assessed)-informational.svg>)](docs/security/isms/statement-of-applicability.md)
 [![OWASP ASVS 5.0 L2 self-assessed](https://img.shields.io/badge/OWASP%20ASVS%205.0-L2%20self--assessed-informational.svg)](docs/security/asvs-l2-assessment.md)
 
 <p align="center">
@@ -65,17 +65,17 @@ labelled as automated output, not sold as "AI insight."
 The short version, against the trackers you already use (free tiers, as of
 July 2026):
 
-|  | History you can replay | Self-hosted | Account / API key | Who owns the archive |
-|---|---|---|---|---|
-| **Velocity** | Unlimited — bounded by your disk, scrubbable to any past moment | Yes | None | You |
-| Flightradar24 | 7 days on the free tier | No | Account | Them |
-| MarineTraffic | 24 hours free (down from 72) | No | Account | Them |
-| ADS-B Exchange | Free API tier discontinued | No | Paid API | Them |
+|                | History you can replay                                          | Self-hosted | Account / API key | Who owns the archive |
+| -------------- | --------------------------------------------------------------- | ----------- | ----------------- | -------------------- |
+| **Velocity**   | Unlimited — bounded by your disk, scrubbable to any past moment | Yes         | None              | You                  |
+| Flightradar24  | 7 days on the free tier                                         | No          | Account           | Them                 |
+| MarineTraffic  | 24 hours free (down from 72)                                    | No          | Account           | Them                 |
+| ADS-B Exchange | Free API tier discontinued                                      | No          | Paid API          | Them                 |
 
 Live coverage is the same community feeder data everywhere; the columns above
 are the paywall. Each cell is checkable on the vendors' own pricing pages.
 
-> **Before you get excited:** it's a single-analyst tool. Live *derived* state —
+> **Before you get excited:** it's a single-analyst tool. Live _derived_ state —
 > the current incident list, AOI selections, watch-officer briefs — lives in
 > memory and clears on restart; what you deliberately keep is durable (see
 > [Scope and limits](#scope-and-limits)): the position-history archive, the
@@ -137,9 +137,9 @@ out where things live; you can pull it back up whenever from **⚙ Settings**.
 
 That dock along the bottom is the archive. Pick a window (1h, 6h, 24h, 3d, 7d),
 click anywhere on the density strip, and the globe rewinds to that moment; the
-header swaps from *Live* to *Replay*, and one button puts you back. Playback
-runs at 1x through 3600x. The dated day-picker and the *recording since … · GB
-· fixes* ownership chip live in the 2D console at `/2d`, which reads the same
+header swaps from _Live_ to _Replay_, and one button puts you back. Playback
+runs at 1x through 3600x. The dated day-picker and the _recording since … · GB
+· fixes_ ownership chip live in the 2D console at `/2d`, which reads the same
 `/api/history/coverage` archive.
 
 The Play button drives the clock through half-hour tar1090 replay chunks with a
@@ -152,7 +152,7 @@ aircraft tracks over Europe. Vessels have no public equivalent, so they replay
 only as far back as your own archive goes.
 
 > **Local (open) mode.** The compute-heavy endpoints — the LLM-backed Reports
-> tabs, recon, and OSINT enrichment — *fail closed* on a keyless box so a
+> tabs, recon, and OSINT enrichment — _fail closed_ on a keyless box so a
 > public deployment can't be made to spend GPU/credits by an anonymous caller.
 > The dev `docker compose up` sets `ALLOW_UNAUTHENTICATED=1` for you (the stack
 > is loopback-only), so those features work out of the box and the UI shows an
@@ -185,14 +185,14 @@ Velocity isn't one mega-dashboard; it's a workspace of fourteen apps that all
 share the same selection and time context, so switching never loses the object
 you had selected. The launcher in the top bar groups them:
 
-| Group | Apps | What they're for |
-| --- | --- | --- |
-| **Live** | Map · Sim | The Cesium globe (always mounted behind everything else) and a browser war-game overlay. |
-| **AI** | AI | The analyst agent, automated watch and alerts, and the local model manager in one place. |
+| Group       | Apps                                                                   | What they're for                                                                                                                                                                                                                              |
+| ----------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Live**    | Map · Sim                                                              | The Cesium globe (always mounted behind everything else) and a browser war-game overlay.                                                                                                                                                      |
+| **AI**      | AI                                                                     | The analyst agent, automated watch and alerts, and the local model manager in one place.                                                                                                                                                      |
 | **Analyze** | Explorer · Graph · Investigate · Targeting · Video · Country · Markets | Filter the live object store, grow a link-analysis graph, run digital OSINT (domains/people/wallets), a notional kill-chain board, FMV/ground recon, per-country World-Bank/UN stat dossiers, and indices/commodities/FX with a stress index. |
-| **Data** | Foundry · Workflows | Bring your own data through governed pipelines; automate the live feeds with a node-graph editor. |
-| **Product** | Reports | Case files, watch-officer briefs, dossiers, and case→report export. |
-| **3D** | City 3D | Gaussian-splat city scenes built from a keyless satellite AOI. |
+| **Data**    | Foundry · Workflows                                                    | Bring your own data through governed pipelines; automate the live feeds with a node-graph editor.                                                                                                                                             |
+| **Product** | Reports                                                                | Case files, watch-officer briefs, dossiers, and case→report export.                                                                                                                                                                           |
+| **3D**      | City 3D                                                                | Gaussian-splat city scenes built from a keyless satellite AOI.                                                                                                                                                                                |
 
 The rest of this README tours the ones you'll live in. Everything below is a
 real screenshot of the current build (v1.0.1), taken against live feeds on
@@ -266,7 +266,7 @@ owner, launch date, radar cross-section and orbit class.
 **8. The watch officer works the inbox.** An autonomous watch officer fuses
 jamming, dark vessels, military air activity and conflict events into ranked,
 cited alerts — GPS spoofing, jamming cells, dark-vessel candidates — each with an
-`[inferred]` reasoning line and a one-click *slew to*. It runs `detect_deception`
+`[inferred]` reasoning line and a one-click _slew to_. It runs `detect_deception`
 and `deep_analyze` against the live picture, so the inbox fills itself on a fresh
 keyless boot with no operator setup.
 
@@ -275,7 +275,7 @@ keyless boot with no operator setup.
 **9. …and writes the brief.** Every couple of minutes it promotes the
 convergences — "vessels went dark near reported activity", "spoofed tracks
 co-located with an AIS gap" — into ranked incident cards with a written, cited
-summary and a *slew to* button. Actionable incidents are auto-promoted into the
+summary and a _slew to_ button. Actionable incidents are auto-promoted into the
 investigation graph, so the ontology grows itself.
 
 ![Watch-officer intel brief: ranked, cited cross-domain incidents with slew-to](docs/media/ui-briefs.png)
@@ -294,7 +294,7 @@ or a PPTX brief — with any AI narrative confined to a clearly labelled block.
 editor, the watchbox rules and the field kit open as free-floating, draggable,
 resizable windows over the globe rather than stealing the rail from the layer
 tree — arm a tool from the map toolbar, set up what it draws beside the thing
-you are drawing on, and *Window → Re-dock every floating panel* clears them all.
+you are drawing on, and _Window → Re-dock every floating panel_ clears them all.
 Positions persist for the session.
 
 ![Two floating windows over the live globe: the annotation editor with its shape, colour and style controls, and the watchbox panel with its enter/exit/loiter trigger rules](docs/media/ui-detach-toolbar.jpeg)
@@ -376,7 +376,7 @@ be annoyed later:
   ADS-B (OpenSky + the httpx tar1090 mirrors + ShipXplorer AIS) and the
   regional Kystverket/Digitraffic AIS feeds are direct HTTP calls and run at
   full strength in the container. But the tar1090 ADS-B sidecar and
-  MyShipTracking (the enabled primary keyless *wide-area* AIS source) drive a
+  MyShipTracking (the enabled primary keyless _wide-area_ AIS source) drive a
   real Chromium via Node, which the slim API image doesn't ship — they log a
   warning and sit idle rather than crash the backend, so you lose their extra
   coverage, not the app. Run bare-metal (`bash scripts/run-api.sh`) for full
@@ -405,7 +405,7 @@ it:
   appended to an immutable custody log; `GET /api/evidence/{sha}/verify`
   re-checks the bytes. → `apps/api/tests/test_evidence.py`
 - **Hash-chained audit.** Mutations append to `action_log.db`; `GET
-  /api/audit/verify` walks the chain. → `apps/api/tests/test_asvs_fix_a_logging.py`
+/api/audit/verify` walks the chain. → `apps/api/tests/test_asvs_fix_a_logging.py`
 - **Citations withheld when ungrounded.** `LLM_REQUIRE_CITATIONS=1` (default)
   withholds a selection or country brief that cites none of its own ids;
   `GET /api/ai/guardrails` reports the posture. →
@@ -419,28 +419,28 @@ it:
 Live numbers measured off a running keyless backend on 2026-08-08; they move
 around through the day:
 
-| Feed | Typical live count | Where it comes from |
-| --- | --- | --- |
-| Aircraft (ADS-B) | 12–15k (14,436 measured) | OpenSky + airplanes.live + adsb.lol + FR24 |
-| Military aircraft | ~30–60 | adsb.lol + airplanes.live |
-| Vessels (AIS) | ~50k tracked, global | ShipXplorer + MyShipTracking + Digitraffic + Kystverket |
-| GPS jamming | ~220 flagged 1° cells | ADS-B NACp/NIC, the GPSJam method |
-| Dark vessels | radar change-detection | Sentinel-1 SAR |
-| Fused incidents | correlation-driven | the correlation engine |
-| Satellites | 16,095, SATCAT-enriched | CelesTrak |
-| Airspace (TFRs) | live restriction polygons | FAA |
-| Military bases | 7,183 (+1,330 MIRTA/Wikidata) | Wikidata + DIA MIRTA |
-| Naval broadcast warnings | ~800 plotted points | NGA NAVAREA |
-| Ports | 3,804, with harbour detail | NGA World Port Index |
-| Airports | runways + ILS + frequencies + live METAR | FAA NASR, NOAA, LiveATC |
-| Earthquakes | ~290/day | USGS + EMSC |
-| News + fact-check | ~370 articles (off by default) | publisher RSS |
-| Internet outages | country level | IODA, Cloudflare |
-| Submarine cables | ~700 | TeleGeography |
-| Conflict events | ~1.5k live | GDELT, EONET, ACLED |
-| Wildfires | VIIRS hotspots | NASA FIRMS (needs a key) |
-| 3D war damage, imagery, webcams | varies | Sentinel, GIBS, OSM |
-| Per-country toolkits | 53 countries | open-data / registries / sanctions links |
+| Feed                            | Typical live count                       | Where it comes from                                     |
+| ------------------------------- | ---------------------------------------- | ------------------------------------------------------- |
+| Aircraft (ADS-B)                | 12–15k (14,436 measured)                 | OpenSky + airplanes.live + adsb.lol + FR24              |
+| Military aircraft               | ~30–60                                   | adsb.lol + airplanes.live                               |
+| Vessels (AIS)                   | ~50k tracked, global                     | ShipXplorer + MyShipTracking + Digitraffic + Kystverket |
+| GPS jamming                     | ~220 flagged 1° cells                    | ADS-B NACp/NIC, the GPSJam method                       |
+| Dark vessels                    | radar change-detection                   | Sentinel-1 SAR                                          |
+| Fused incidents                 | correlation-driven                       | the correlation engine                                  |
+| Satellites                      | 16,095, SATCAT-enriched                  | CelesTrak                                               |
+| Airspace (TFRs)                 | live restriction polygons                | FAA                                                     |
+| Military bases                  | 7,183 (+1,330 MIRTA/Wikidata)            | Wikidata + DIA MIRTA                                    |
+| Naval broadcast warnings        | ~800 plotted points                      | NGA NAVAREA                                             |
+| Ports                           | 3,804, with harbour detail               | NGA World Port Index                                    |
+| Airports                        | runways + ILS + frequencies + live METAR | FAA NASR, NOAA, LiveATC                                 |
+| Earthquakes                     | ~290/day                                 | USGS + EMSC                                             |
+| News + fact-check               | ~370 articles (off by default)           | publisher RSS                                           |
+| Internet outages                | country level                            | IODA, Cloudflare                                        |
+| Submarine cables                | ~700                                     | TeleGeography                                           |
+| Conflict events                 | ~1.5k live                               | GDELT, EONET, ACLED                                     |
+| Wildfires                       | VIIRS hotspots                           | NASA FIRMS (needs a key)                                |
+| 3D war damage, imagery, webcams | varies                                   | Sentinel, GIBS, OSM                                     |
+| Per-country toolkits            | 53 countries                             | open-data / registries / sanctions links                |
 
 Optional keys, if you want more reach: AISStream for global AIS, an OpenSky
 login for a bigger ADS-B budget, `FIRMS_MAP_KEY` for fires, an ACLED key for
@@ -454,22 +454,22 @@ Protocol** server, so an AI agent can interrogate the same warm feeds the globe
 renders without scraping a dozen sites or flooding its own context. Ask "where
 is GPS being jammed right now?" and it answers from the live feed. Full
 architecture + `/api/intel/*` HTTP reference: [`docs/mcp-server.md`](./docs/mcp-server.md).
-It exposes 89 tools over `app.mcp_server` (a representative slice below; run
+It exposes 94 tools over `app.mcp_server` (a representative slice below; run
 `--list-tools` for the full set):
 
-| Tool | What it returns |
-| --- | --- |
-| `get_situation` | Global summary: aircraft by category, GNSS-degraded count, emergencies, worst jamming cells, vessel/alert counts. The cheap first call. |
-| `focus_area(lat,lon,radius_nm)` | **Loads a region PRIMARY** (dedicated fresh `/v2/point` fetch + ongoing priority refresh, independent of global rate limits) and returns a full bundle: aircraft + density + GPS jamming + vessels + fused anomalies. |
-| `aircraft_density` | Grid of cells (count, by category, GNSS-degraded) for an area. |
-| `gps_jamming` | GPSJam-method assessment (ADS-B NACp<8 / NIC<7, 1° bins): flagged cells, severity, affected aircraft. Global or scoped. |
-| `query_aircraft` | Filtered query (bbox/centre, category, squawk, callsign, altitude band, emergency / gnss_degraded / on_ground). |
-| `lookup_aircraft(ident)` | One aircraft by ICAO24 or callsign + integrity/threat assessment. |
-| `query_vessels` | AIS vessels in an area, classified; `dark_only` for dark-vessel candidates. |
-| `anomalies` | Fused report: emergencies, jamming hotspots, dark vessels, alerts + a triage threat level. |
-| `detect_deception` / `locate_emitter` | Flag spoofed/co-located tracks; triangulate a jamming source from degraded-integrity aircraft. |
-| `whats_changed` / `incident_history` | Delta since a timestamp; the incident timeline for an area. |
-| `deep_analyze(question, lat?, lon?)` | Gathers the relevant intel JSON and has a **reasoning model** reason over it (DeepSeek when configured, else a local Ollama model), so heavy analysis stays off the agent's context and only the conclusion returns. |
+| Tool                                  | What it returns                                                                                                                                                                                                       |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_situation`                       | Global summary: aircraft by category, GNSS-degraded count, emergencies, worst jamming cells, vessel/alert counts. The cheap first call.                                                                               |
+| `focus_area(lat,lon,radius_nm)`       | **Loads a region PRIMARY** (dedicated fresh `/v2/point` fetch + ongoing priority refresh, independent of global rate limits) and returns a full bundle: aircraft + density + GPS jamming + vessels + fused anomalies. |
+| `aircraft_density`                    | Grid of cells (count, by category, GNSS-degraded) for an area.                                                                                                                                                        |
+| `gps_jamming`                         | GPSJam-method assessment (ADS-B NACp<8 / NIC<7, 1° bins): flagged cells, severity, affected aircraft. Global or scoped.                                                                                               |
+| `query_aircraft`                      | Filtered query (bbox/centre, category, squawk, callsign, altitude band, emergency / gnss_degraded / on_ground).                                                                                                       |
+| `lookup_aircraft(ident)`              | One aircraft by ICAO24 or callsign + integrity/threat assessment.                                                                                                                                                     |
+| `query_vessels`                       | AIS vessels in an area, classified; `dark_only` for dark-vessel candidates.                                                                                                                                           |
+| `anomalies`                           | Fused report: emergencies, jamming hotspots, dark vessels, alerts + a triage threat level.                                                                                                                            |
+| `detect_deception` / `locate_emitter` | Flag spoofed/co-located tracks; triangulate a jamming source from degraded-integrity aircraft.                                                                                                                        |
+| `whats_changed` / `incident_history`  | Delta since a timestamp; the incident timeline for an area.                                                                                                                                                           |
+| `deep_analyze(question, lat?, lon?)`  | Gathers the relevant intel JSON and has a **reasoning model** reason over it (DeepSeek when configured, else a local Ollama model), so heavy analysis stays off the agent's context and only the conclusion returns.  |
 
 Every tool returns compact, bounded JSON (counts, grids, ≤50-item samples), so
 an agent can sweep the planet for a few hundred tokens instead of pulling 15k
@@ -488,7 +488,7 @@ to the raw props if no model is configured.
 ### Install as a Claude Code plugin (skill + commands + agent)
 
 The repo is also a Claude Code **plugin marketplace**. One install wires the MCP
-server *plus* an analyst skill (`osint-intel`), slash commands (`/osint-brief`,
+server _plus_ an analyst skill (`osint-intel`), slash commands (`/osint-brief`,
 `/osint-watch`, `/osint-jamming`), and a `osint-watch-officer` agent. Start the
 backend (`bash scripts/run-api.sh`), then in Claude Code:
 
@@ -590,11 +590,11 @@ GPU (`chrome://gpu`, look for adapter "ACTIVE").
   resident set is still large. On a card with less VRAM, Cesium evicts and
   re-fetches more aggressively (lower fps, more pop-in) and still runs.
 
-| Tier | GPU | RAM | Display | What you get |
-|---|---|---|---|---|
-| Edge / lite | WebGL2 integrated (Iris Xe / Vega / M1) | 8 GB | 1080p | `OSINT_PROFILE=lite` (default). 9k aircraft, 32k vessels, 2D-dark. Backend fits in ~1.5 GB; the adaptive governor sheds low-priority layers to keep frames under budget. |
-| Recommended | Discrete ≥8 GB VRAM (RTX 3060 / RX 6700 / M-Pro) | 16 GB | 1080p–1440p | Full profile with all feeds. 2D-dark smooth; 3D-sat usable at city scale. |
-| Full / 3D-sat | RTX 4070+/16 GB VRAM or better | 32 GB | up to 4K | All feeds + browser sidecars + 3D-sat terrain + buildings; best frame rate. |
+| Tier          | GPU                                              | RAM   | Display     | What you get                                                                                                                                                             |
+| ------------- | ------------------------------------------------ | ----- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Edge / lite   | WebGL2 integrated (Iris Xe / Vega / M1)          | 8 GB  | 1080p       | `OSINT_PROFILE=lite` (default). 9k aircraft, 32k vessels, 2D-dark. Backend fits in ~1.5 GB; the adaptive governor sheds low-priority layers to keep frames under budget. |
+| Recommended   | Discrete ≥8 GB VRAM (RTX 3060 / RX 6700 / M-Pro) | 16 GB | 1080p–1440p | Full profile with all feeds. 2D-dark smooth; 3D-sat usable at city scale.                                                                                                |
+| Full / 3D-sat | RTX 4070+/16 GB VRAM or better                   | 32 GB | up to 4K    | All feeds + browser sidecars + 3D-sat terrain + buildings; best frame rate.                                                                                              |
 
 These tiers come from a cgroup-isolated benchmark (`tools/perf/bench_ram.sh`)
 that constrains backend + Vite + Chrome inside a single MemoryMax and measures
@@ -615,7 +615,7 @@ enabled — or keep `lite` and use the direct feeds.
 ## Stack
 
 - **Frontend**: Vite + React 18 + TypeScript + CesiumJS + MapLibre GL JS v5.24 + Tailwind + Zustand
-- **Backend**: FastAPI (Python 3.12) + httpx + websockets. Live *derived* state
+- **Backend**: FastAPI (Python 3.12) + httpx + websockets. Live _derived_ state
   is in-process (bounded observation store + disk tile cache); durable state
   (the position-track replay archive, the ontology store: objects / case files /
   situations, and the evidence locker's custody chain) persists to
@@ -656,7 +656,7 @@ osint/
 
 ```bash
 # from the repo ROOT (running from apps/api makes .env auth resolve → a wall of 401s)
-OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 2996 passed + 21 skipped
+OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 3102 passed + 21 skipped
 pnpm -r test                          # vitest (web, shared)
 pnpm -r typecheck
 bash scripts/verify.sh                # typecheck + lint + web unit + api tests in one shot

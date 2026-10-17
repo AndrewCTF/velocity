@@ -1,0 +1,25 @@
+# Candidate keyless ADS-B endpoints — second research pass (2026-10-04, with a
+# working web_search backend). Measured by tools/adsb_candidates.py.
+# Credit-metered hosts are refused by the tool before any request, so listing
+# one here is harmless and documents that it was considered and excluded.
+
+# ── new finds this pass (never measured before) ──
+https://adsb.chaos-consulting.de/data/aircraft.json
+https://api.flyitalyadsb.com/api/v2/point/0/0/20000
+https://api.adsbhub.org/api/v2/point/0/0/20000
+https://atc.plane.watch/api/v2/point/0/0/20000
+
+# ── adsb.lol alternate surfaces / mil feed ──
+https://birds.adsb.lol/v2/mil
+https://planes.lol/v2/mil
+https://adsb.lol/data/aircraft.json
+https://globe.adsbexchange.com/data/aircraft.json
+
+# ── known control: the incumbent winner ──
+https://api.adsb.lol/v2/point/0/0/20000
+https://globe.theairtraffic.com/data/aircraft.json
+https://skylink.hpradar.com/data/aircraft.json
+
+# ── considered and EXCLUDED by policy (credit-metered / keyed) ──
+https://opensky-network.org/api/states/all
+https://www.adsbexchange.com/api/aircraft/json

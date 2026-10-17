@@ -1,0 +1,29 @@
+# 16 hosts fingerprinted KEYLESS_AIRCRAFT_JSON by tools/fingerprint_tar1090.py
+# (2026-10-04, no data path requested during fingerprinting — only the front door
+# and the hashed early.js the shell references).
+# Now MEASURED live by tools/adsb_candidates.py: one request each, no credentials.
+
+# ── new regional / community finds never measured before ──
+https://adsb.pro/data/aircraft.json
+https://adsbitalia.it/data/aircraft.json
+https://adsb.boringservice.net/data/aircraft.json
+https://adsbkarte.jung-services.de/data/aircraft.json
+https://adsbiq.com/data/aircraft.json
+https://globe.banksdada.com/data/aircraft.json
+https://graphs.banksdada.com/data/aircraft.json
+https://www.banksdada.com/data/aircraft.json
+https://globe.debeers-labs.xyz/data/aircraft.json
+https://spotter.post8.org/data/aircraft.json
+https://vdliq.com/data/aircraft.json
+
+# ── adsb.lol / airplanes.live globes (sister surfaces of known feeds) ──
+https://globe.adsb.lol/data/aircraft.json
+https://globe.airplanes.live/data/aircraft.json
+
+# ── incumbent control (must still win or tie) ──
+https://api.adsb.lol/v2/point/0/0/20000
+https://globe.theairtraffic.com/data/aircraft.json
+https://skylink.hpradar.com/data/aircraft.json
+
+# ── fingerprinted keyless but ADS-B Exchange is credit-metered: refused, not probed ──
+# https://globe.adsbexchange.com/data/aircraft.json

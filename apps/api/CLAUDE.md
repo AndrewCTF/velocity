@@ -59,9 +59,37 @@ changing BOTH the guard and this file.
 
 ## AIS
 
-- AIS = ShipXplorer direct httpx (needs `Referer`/`Origin`) + MyShipTracking
-  sidecar `:8093`, MMSI-deduped. SHIP_ID-keyed feeders (MarineTraffic,
-  VesselFinder) must never run alongside an MMSI source.
+- AIS = ShipXplorer direct httpx (needs `Referer`/`Origin`) + OpenWaters tiled
+  sweep + VesselFinder direct httpx + MyShipTracking sidecar `:8093`,
+  MMSI-deduped. SHIP_ID-keyed feeders (the MarineTraffic and VesselFinder
+  BROWSER sidecars) must never run alongside an MMSI source; the direct
+  VesselFinder reader is MMSI-keyed and is not one of them.
+- VesselFinder (`app/ais_pipeline/vesselfinder.py`) is a port of the site's own
+  map script, not sniffed bytes. Three things there are measured, not chosen:
+  the scale is 600 000 per degree for bbox AND positions (the old feeder's 1e6
+  was wrong for both); zoom 11 answers a box up to 4x4 degrees in full and a
+  larger one with a ~10-row sample and NO error; a throttled answer is HTTP 200
+  with a 4-byte body, so it raises instead of parsing to zero rows. Each row's
+  `t` is now minus the UPPER bound of its age bucket; a row with no age is
+  dropped. Its "Satellite Position" markers carry no MMSI, name or age and stay
+  a separate, unidentified layer (`/api/maritime/satellite`), never merged.
+  → `tests/test_ais_vesselfinder.py`
+- ShipXplorer, OpenWaters and VesselFinder are polled by `app/ais_pipeline` into its own
+  FRESHNESS-WINS store (`/api/maritime/coverage`, `/api/maritime/vessels`) and
+  reach everything else through ONE bridge, `ais_pipeline._mirror`, into the
+  shared store below. The bridge writes a fix only when it is strictly newer
+  than what the shared store holds for that id, stamps the UPSTREAM fix time
+  (clamped to now), and skips anything outside retention. One fetcher per
+  upstream: `ais_keyless.start()` no longer spawns ShipXplorer, and the
+  pipeline does not poll Kystdatahuset (`ais_keyless` does, because it also
+  broadcasts on `/ws/ais`). ShipXplorer sends the ship type as a NAME; the
+  bridge maps it to the ITU code the icon dispatch reads.
+  → `tests/test_ais_pipeline.py` (section 4), `docs/ais/ais-vessel-pipeline.md`
+- `/api/maritime/snapshot` never rebuilds the union on the event loop: the
+  world, capped-world (`?limit=N`) and viewport (bbox) forms all read the
+  feature list built once per blob cycle in a thread. The union is several
+  times larger with the VesselFinder tier, and the inline rebuild it replaced
+  already cost 0.5 s per camera move. → `tests/test_maritime_hot_blob.py`
 - The vessel store is LAST-WRITE-WINS (`ObservationStore.add_many` assigns
   `_latest[id]` unconditionally), so an optimistic `Observation.t` is a
   CORRECTNESS bug, not a rounding one: it steals the MMSI from a live source AND
@@ -115,6 +143,12 @@ Browser-tier pacing and the headful lever are in `tools/CLAUDE.md`.
 
 - Satellites: `/api/space/gp` requests `FORMAT=tle` (JSON variant → 0 sats);
   propagation stays chunked, client-side. → `tests/test_invariants.py`
+- Keyless Google Earth 3D (`app/rocktree.py`, `/tiles/g3d`) is OFF unless
+  `GOOGLE_3D_KEYLESS` is set, and `ENABLE_GOOGLE_3D` (the licensed stream) must
+  never turn it on: it reads a private Google endpoint, outside Google's terms,
+  by operator decision. Do not "simplify" `_to_wgs84` or the texture V rule —
+  the globe is a sphere and atlases run top-down, both measured.
+  → `tests/test_rocktree.py`, `docs/decisions.md` (Keyless Google Earth 3D)
 - Keyless layers keep working with no API key: ADS-B grid, Baltic AIS,
   MyShipTracking, ShipXplorer, USGS quakes, Esri dark-canvas basemap, CelesTrak. FIRMS
   degrades gracefully without MAP_KEY.
@@ -310,4 +344,8 @@ The style rules it enforces are in `apps/web/CLAUDE.md`.
 - "Stale/slow/empty" reports land HERE first: diff two `/api/adsb/global` pulls
   on `seen_pos_s` and check sidecar `:8090`/`:8093` health
   (`scripts/verify.sh --live` does both).
-- Backend lag/cycle attribution is live at `/api/status/perf`.
+- Backend lag/cycle attribution is live at `/api/status/perf`. `loop_stalls`
+  there names the line the event loop was stuck on (wall against CPU time per
+  call site, since boot). ptrace is refused on the dev box, so py-spy and perf
+  cannot attach; this is the only way to ask.
+  → `tests/test_status.py`
