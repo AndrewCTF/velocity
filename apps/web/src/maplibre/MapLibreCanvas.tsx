@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import * as maplibregl from 'maplibre-gl';
-import type { Map as MapLibreMap, LngLatBoundsLike } from 'maplibre-gl';
-import type * as GeoJSON from 'geojson';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import type { LayerDescriptor } from '@osint/shared';
-import type { LayerRegistry } from '../registry/LayerRegistry.js';
-import { useFeeds, useSelection } from '../state/stores.js';
-import { useAoi } from '../state/aoi.js';
-import { apiFetch, backendUrl } from '../transport/http.js';
-import { tracks } from '../intel/tracks.js';
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap, LngLatBoundsLike } from "maplibre-gl";
+import type * as GeoJSON from "geojson";
+import "maplibre-gl/dist/maplibre-gl.css";
+import type { LayerDescriptor } from "@osint/shared";
+import type { LayerRegistry } from "../registry/LayerRegistry.js";
+import { useFeeds, useSelection } from "../state/stores.js";
+import { useAoi } from "../state/aoi.js";
+import { apiFetch, backendUrl } from "../transport/http.js";
+import { tracks } from "../intel/tracks.js";
 
 interface Props {
   registry: LayerRegistry;
@@ -34,19 +34,23 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
     return {
       version: 8,
       // Local glyph PBFs (Noto Sans, OFL) → any symbol labels render offline.
-      glyphs: '/fonts/{fontstack}/{range}.pbf',
+      glyphs: "/fonts/{fontstack}/{range}.pbf",
       sources: {
         basemap: {
-          type: 'raster',
-          tiles: [backendUrl('/tiles/basemap/{z}/{x}/{y}.png')],
+          type: "raster",
+          tiles: [backendUrl("/tiles/basemap/{z}/{x}/{y}.png")],
           tileSize: 256,
           maxzoom: 22,
-          attribution: '© OpenStreetMap contributors, © CARTO',
+          attribution: "© OpenStreetMap contributors, © CARTO",
         },
       },
       layers: [
-        { id: 'bg', type: 'background', paint: { 'background-color': '#0a0e14' } },
-        { id: 'basemap', type: 'raster', source: 'basemap' },
+        {
+          id: "bg",
+          type: "background",
+          paint: { "background-color": "#0a0e14" },
+        },
+        { id: "basemap", type: "raster", source: "basemap" },
       ],
     } as unknown as maplibregl.StyleSpecification;
   }, []);
@@ -62,12 +66,17 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
       attributionControl: false,
       hash: false,
     });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      "top-right",
+    );
     // Globe projection (MapLibre v5+).
-    map.on('style.load', () => {
+    map.on("style.load", () => {
       try {
-        (map as unknown as { setProjection: (p: { type: string }) => void }).setProjection({
-          type: 'globe',
+        (
+          map as unknown as { setProjection: (p: { type: string }) => void }
+        ).setProjection({
+          type: "globe",
         });
       } catch {
         /* projection not available, stays mercator */
@@ -88,10 +97,13 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
   useEffect(() => {
     if (!ready || !mapRef.current || !activeAoi) return;
     const [w, s, e, n] = activeAoi.bbox;
-    mapRef.current.fitBounds([
-      [w, s],
-      [e, n],
-    ] as LngLatBoundsLike, { padding: 40, duration: 1200 });
+    mapRef.current.fitBounds(
+      [
+        [w, s],
+        [e, n],
+      ] as LngLatBoundsLike,
+      { padding: 40, duration: 1200 },
+    );
   }, [activeAoi, ready]);
 
   // Mirror registry → MapLibre layers
@@ -110,34 +122,44 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
       // Aircraft layers add cluster + cluster_count siblings; remove all three
       // before dropping the source, otherwise removeSource throws and the
       // source leaks.
-      for (const layerId of [`${id}__pts`, `${id}__clusters`, `${id}__cluster_count`]) {
+      for (const layerId of [
+        `${id}__pts`,
+        `${id}__clusters`,
+        `${id}__cluster_count`,
+      ]) {
         if (map.getLayer(layerId)) map.removeLayer(layerId);
       }
       if (map.getSource(id)) map.removeSource(id);
-      useFeeds.getState().setFeed({ id, label: id, status: 'unknown' });
+      useFeeds.getState().setFeed({ id, label: id, status: "unknown" });
     };
 
     const colorFor = (d: LayerDescriptor): string => {
-      if (d.emits?.includes('aircraft')) return '#2dd4bf';
-      if (d.emits?.includes('vessel')) return '#34d399';
-      if (d.emits?.includes('quake')) return '#f59e0b';
-      if (d.emits?.includes('fire')) return '#ef4444';
-      return '#e6edf3';
+      if (d.emits?.includes("aircraft")) return "#2dd4bf";
+      if (d.emits?.includes("vessel")) return "#34d399";
+      if (d.emits?.includes("quake")) return "#f59e0b";
+      if (d.emits?.includes("fire")) return "#ef4444";
+      return "#e6edf3";
     };
 
-    const sizeFor = (d: LayerDescriptor): number => (d.emits?.includes('aircraft') ? 3 : 2.5);
+    const sizeFor = (d: LayerDescriptor): number =>
+      d.emits?.includes("aircraft") ? 3 : 2.5;
 
     const attach = (d: LayerDescriptor) => {
-      if (d.kind !== 'geojson') return; // skip ws/cog/3dtiles in /2d
+      if (d.kind !== "geojson") return; // skip ws/cog/3dtiles in /2d
       if (map.getSource(d.id)) return;
-      const empty = { type: 'FeatureCollection', features: [] } as unknown as GeoJSON.FeatureCollection;
+      const empty = {
+        type: "FeatureCollection",
+        features: [],
+      } as unknown as GeoJSON.FeatureCollection;
       // Cluster vessel and aircraft sources: at world / continent scale a raw
       // dump of ~18k AIS contacts overdraws the Baltic into one green blob.
       // Below clusterMaxZoom MapLibre auto-aggregates them into bubbles; past
       // that, individual icons reappear.
-      const clusterable = !!(d.emits?.includes('aircraft') || d.emits?.includes('vessel'));
+      const clusterable = !!(
+        d.emits?.includes("aircraft") || d.emits?.includes("vessel")
+      );
       map.addSource(d.id, {
-        type: 'geojson',
+        type: "geojson",
         data: empty,
         // MapLibre only auto-populates feature.id for numeric ids; our
         // backend ships string top-level ids (e.g. "aircraft:hex"). promoteId
@@ -148,18 +170,28 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
         clusterMaxZoom: 5,
         clusterRadius: 40,
       });
-      const radius = ['interpolate', ['linear'], ['zoom'], 1, sizeFor(d) - 1, 6, sizeFor(d) + 1, 10, sizeFor(d) + 3];
+      const radius = [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        1,
+        sizeFor(d) - 1,
+        6,
+        sizeFor(d) + 1,
+        10,
+        sizeFor(d) + 3,
+      ];
       map.addLayer({
         id: `${d.id}__pts`,
-        type: 'circle',
+        type: "circle",
         source: d.id,
-        filter: ['!', ['has', 'point_count']],
+        filter: ["!", ["has", "point_count"]],
         paint: {
-          'circle-color': colorFor(d),
-          'circle-radius': radius as unknown as number,
-          'circle-stroke-width': 0.8,
-          'circle-stroke-color': '#000',
-          'circle-opacity': d.opacity,
+          "circle-color": colorFor(d),
+          "circle-radius": radius as unknown as number,
+          "circle-stroke-width": 0.8,
+          "circle-stroke-color": "#000",
+          "circle-opacity": d.opacity,
         },
       });
       // Clustered sources (aircraft + vessel) get their own paint layers — a
@@ -167,40 +199,50 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
       // colour-key the bubble to the layer accent so vessels (green) and
       // aircraft (teal) remain visually distinguishable when both are dense.
       if (clusterable) {
-        const clusterColor = d.emits?.includes('vessel') ? '#34d399' : '#2dd4bf';
+        const clusterColor = d.emits?.includes("vessel")
+          ? "#34d399"
+          : "#2dd4bf";
         map.addLayer({
           id: `${d.id}__clusters`,
-          type: 'circle',
+          type: "circle",
           source: d.id,
-          filter: ['has', 'point_count'],
+          filter: ["has", "point_count"],
           paint: {
-            'circle-color': clusterColor,
-            'circle-opacity': 0.5,
-            'circle-radius': ['step', ['get', 'point_count'], 8, 50, 12, 200, 18],
-            'circle-stroke-color': '#0d1117',
-            'circle-stroke-width': 1.5,
+            "circle-color": clusterColor,
+            "circle-opacity": 0.5,
+            "circle-radius": [
+              "step",
+              ["get", "point_count"],
+              8,
+              50,
+              12,
+              200,
+              18,
+            ],
+            "circle-stroke-color": "#0d1117",
+            "circle-stroke-width": 1.5,
           },
         });
         map.addLayer({
           id: `${d.id}__cluster_count`,
-          type: 'symbol',
+          type: "symbol",
           source: d.id,
-          filter: ['has', 'point_count'],
+          filter: ["has", "point_count"],
           layout: {
-            'text-field': '{point_count_abbreviated}',
-            'text-size': 10,
+            "text-field": "{point_count_abbreviated}",
+            "text-size": 10,
             // Only Noto Sans PBFs are bundled under /fonts (see glyphs above);
             // 'Open Sans *' 404s and the count renders invisible.
-            'text-font': ['Noto Sans Medium'] as unknown as string[],
+            "text-font": ["Noto Sans Medium"] as unknown as string[],
           },
-          paint: { 'text-color': '#0b0e14' },
+          paint: { "text-color": "#0b0e14" },
         });
       }
       const pull = async () => {
         const aoi = useAoi.getState().active;
         const url =
-          aoi && d.id === 'aviation.opensky.states'
-            ? `${d.endpoint}${d.endpoint.includes('?') ? '&' : '?'}lamin=${aoi.bbox[1]}&lomin=${aoi.bbox[0]}&lamax=${aoi.bbox[3]}&lomax=${aoi.bbox[2]}`
+          aoi && d.id === "aviation.opensky.states"
+            ? `${d.endpoint}${d.endpoint.includes("?") ? "&" : "?"}lamin=${aoi.bbox[1]}&lomin=${aoi.bbox[0]}&lamax=${aoi.bbox[3]}&lomax=${aoi.bbox[2]}`
             : d.endpoint;
         aborters.get(d.id)?.abort();
         const aborter = new AbortController();
@@ -208,10 +250,17 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
         try {
           const r = await apiFetch(url, { signal: aborter.signal });
           if (!r.ok) {
-            useFeeds.getState().setFeed({ id: d.id, label: d.title, status: 'red', note: `upstream ${r.status}` });
+            useFeeds.getState().setFeed({
+              id: d.id,
+              label: d.title,
+              status: "red",
+              note: `upstream ${r.status}`,
+            });
             return;
           }
-          const data = (await r.json()) as GeoJSON.FeatureCollection & { note?: string };
+          const data = (await r.json()) as GeoJSON.FeatureCollection & {
+            note?: string;
+          };
           // Copy top-level feature.id into properties.__eid so the click
           // handler can recover it via queryRenderedFeatures (feature.id is
           // undefined there for non-numeric string ids).
@@ -224,22 +273,33 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
               }
             }
           }
-          const src = map.getSource(d.id) as maplibregl.GeoJSONSource | undefined;
+          const src = map.getSource(d.id) as
+            maplibregl.GeoJSONSource | undefined;
           if (src) src.setData(data);
           const dataNote = (data as { note?: string }).note;
           if (dataNote) {
             useFeeds.getState().setFeed({
               id: d.id,
               label: d.title,
-              status: 'amber',
+              status: "amber",
               note: dataNote,
             });
           } else {
-            useFeeds.getState().setFeed({ id: d.id, label: d.title, status: 'green', lastSeen: Date.now() });
+            useFeeds.getState().setFeed({
+              id: d.id,
+              label: d.title,
+              status: "green",
+              lastSeen: Date.now(),
+            });
           }
         } catch (e) {
-          if ((e as DOMException)?.name === 'AbortError') return;
-          useFeeds.getState().setFeed({ id: d.id, label: d.title, status: 'red', note: 'transport error' });
+          if ((e as DOMException)?.name === "AbortError") return;
+          useFeeds.getState().setFeed({
+            id: d.id,
+            label: d.title,
+            status: "red",
+            note: "transport error",
+          });
         }
       };
       void pull();
@@ -254,11 +314,12 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
 
     // subscribe to changes
     const unsub = registry.subscribe((e) => {
-      if (e.type === 'register' && registry.isEnabled(e.layer.id)) attach(e.layer);
-      else if (e.type === 'enable') {
+      if (e.type === "register" && registry.isEnabled(e.layer.id))
+        attach(e.layer);
+      else if (e.type === "enable") {
         const d = registry.get(e.id);
         if (d) attach(d);
-      } else if (e.type === 'disable' || e.type === 'unregister') {
+      } else if (e.type === "disable" || e.type === "unregister") {
         detach(e.id);
       }
     });
@@ -269,15 +330,16 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
       const f = feats[0];
       // Prefer __eid (set on every setData) since feature.id is undefined for
       // non-numeric string ids; fall back to f.id for any future numeric feeds.
-      const eid = (f?.properties as { __eid?: unknown } | undefined)?.__eid ?? f?.id;
+      const eid =
+        (f?.properties as { __eid?: unknown } | undefined)?.__eid ?? f?.id;
       useSelection.getState().select(eid != null ? String(eid) : null);
     };
-    map.on('click', onClick);
+    map.on("click", onClick);
 
     return () => {
       unsub();
       for (const id of [...timers.keys()]) detach(id);
-      map.off('click', onClick);
+      map.off("click", onClick);
     };
   }, [registry, ready]);
 
@@ -288,35 +350,38 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
   useEffect(() => {
     if (!ready || !mapRef.current) return;
     const map = mapRef.current;
-    const SRC = '__selectionTrack';
-    const LYR = '__selectionTrack__line';
-    const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+    const SRC = "__selectionTrack";
+    const LYR = "__selectionTrack__line";
+    const empty: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: [],
+    };
 
     if (!map.getSource(SRC)) {
-      map.addSource(SRC, { type: 'geojson', data: empty });
+      map.addSource(SRC, { type: "geojson", data: empty });
       // Wider dark casing under the magenta line — same trick as a road
       // casing — so the trail stays visible against bright basemap tiles.
       map.addLayer({
         id: `${LYR}__outline`,
-        type: 'line',
+        type: "line",
         source: SRC,
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          'line-color': '#000',
-          'line-opacity': 0.5,
-          'line-width': 8,
+          "line-color": "#000",
+          "line-opacity": 0.5,
+          "line-width": 8,
         },
       });
       map.addLayer({
         id: LYR,
-        type: 'line',
+        type: "line",
         source: SRC,
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          'line-color': '#d946ef',
-          'line-width': 5,
-          'line-opacity': 0.95,
-          'line-blur': 1,
+          "line-color": "#d946ef",
+          "line-width": 5,
+          "line-opacity": 0.95,
+          "line-blur": 1,
         },
       });
     }
@@ -339,11 +404,11 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
         coords[i] = [p.lon, p.lat];
       }
       src.setData({
-        type: 'FeatureCollection',
+        type: "FeatureCollection",
         features: [
           {
-            type: 'Feature',
-            geometry: { type: 'LineString', coordinates: coords },
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: coords },
             properties: {},
           },
         ],
@@ -380,5 +445,11 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
     };
   }, [ready]);
 
-  return <div ref={containerRef} className="h-full w-full" data-testid="maplibre-container" />;
+  return (
+    <div
+      ref={containerRef}
+      className="h-full w-full"
+      data-testid="maplibre-container"
+    />
+  );
 }
