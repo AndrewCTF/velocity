@@ -82,6 +82,7 @@ HOSTS = [
 ]
 
 CTX = ssl.create_default_context()  # CERT_REQUIRED + check_hostname
+CTX.minimum_version = ssl.TLSVersion.TLSv1_2  # said explicitly; no legacy TLS here
 TIMEOUT = 10
 
 
