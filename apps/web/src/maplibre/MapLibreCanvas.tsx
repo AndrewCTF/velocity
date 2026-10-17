@@ -9,6 +9,15 @@ import { useFeeds, useSelection } from "../state/stores.js";
 import { useAoi } from "../state/aoi.js";
 import { apiFetch, backendUrl } from "../transport/http.js";
 import { tracks } from "../intel/tracks.js";
+import { deviceTier, isMobileDevice } from "../shell/device.js";
+
+// The layers whose world payload is too big for a budget device; the backend
+// honours lamin/lomin/lamax/lomax + limit on each (same as the 3D path).
+const VIEWPORT_LAYERS = new Set([
+  "aviation.adsb.global",
+  "maritime.keyless",
+  "maritime.digitraffic",
+]);
 
 interface Props {
   registry: LayerRegistry;
@@ -112,11 +121,18 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
     const map = mapRef.current;
     const timers = new Map<string, number>();
     const aborters = new Map<string, AbortController>();
+    // The devices this route exists for (phones, tablets, low-tier GPUs the
+    // LowEndBanner sends here) get the same budget the 3D phone path has: the
+    // high-volume layers ask for the visible box with a cap and poll every
+    // >= 4 s, instead of the full ~5 MB world snapshot every second.
+    const budget = isMobileDevice() || deviceTier() === "low";
+    const viewportPulls = new Map<string, () => void>();
 
     const detach = (id: string) => {
       const t = timers.get(id);
       if (t) window.clearInterval(t);
       timers.delete(id);
+      viewportPulls.delete(id);
       aborters.get(id)?.abort();
       aborters.delete(id);
       // Aircraft layers add cluster + cluster_count siblings; remove all three
@@ -240,10 +256,17 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
       }
       const pull = async () => {
         const aoi = useAoi.getState().active;
-        const url =
+        const sep = d.endpoint.includes("?") ? "&" : "?";
+        let url =
           aoi && d.id === "aviation.opensky.states"
-            ? `${d.endpoint}${d.endpoint.includes("?") ? "&" : "?"}lamin=${aoi.bbox[1]}&lomin=${aoi.bbox[0]}&lamax=${aoi.bbox[3]}&lomax=${aoi.bbox[2]}`
+            ? `${d.endpoint}${sep}lamin=${aoi.bbox[1]}&lomin=${aoi.bbox[0]}&lamax=${aoi.bbox[3]}&lomax=${aoi.bbox[2]}`
             : d.endpoint;
+        if (budget && VIEWPORT_LAYERS.has(d.id)) {
+          const b = map.getBounds();
+          const clamp = (v: number, lo: number, hi: number) =>
+            Math.min(hi, Math.max(lo, v));
+          url = `${d.endpoint}${sep}lamin=${clamp(b.getSouth(), -85, 85).toFixed(2)}&lomin=${clamp(b.getWest(), -180, 180).toFixed(2)}&lamax=${clamp(b.getNorth(), -85, 85).toFixed(2)}&lomax=${clamp(b.getEast(), -180, 180).toFixed(2)}&limit=2000`;
+        }
         aborters.get(d.id)?.abort();
         const aborter = new AbortController();
         aborters.set(d.id, aborter);
@@ -303,8 +326,14 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
         }
       };
       void pull();
-      const id = window.setInterval(pull, (d.refresh.ttlSec ?? 30) * 1000);
+      const viewport = budget && VIEWPORT_LAYERS.has(d.id);
+      const ttlSec = d.refresh.ttlSec ?? 30;
+      const id = window.setInterval(
+        pull,
+        (viewport ? Math.max(ttlSec, 4) : ttlSec) * 1000,
+      );
       timers.set(d.id, id);
+      if (viewport) viewportPulls.set(d.id, () => void pull());
     };
 
     // initial
@@ -335,11 +364,17 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
       useSelection.getState().select(eid != null ? String(eid) : null);
     };
     map.on("click", onClick);
+    // A viewport-scoped layer is stale the moment the box moves.
+    const onMoveEnd = () => {
+      for (const pull of viewportPulls.values()) pull();
+    };
+    map.on("moveend", onMoveEnd);
 
     return () => {
       unsub();
       for (const id of [...timers.keys()]) detach(id);
       map.off("click", onClick);
+      map.off("moveend", onMoveEnd);
     };
   }, [registry, ready]);
 

@@ -6,7 +6,8 @@
 //        [--checks layout,perf,data] --grade
 // checks: layout = map share / right edge / tap targets / dialogs (default);
 // perf = worst long task after the first 10 s < 300 ms (use --cpu-throttle);
-// data = no /ws/adsb socket and every aircraft request carries a bbox.
+// data = no /ws/adsb socket, every aircraft request carries a bbox, and the
+// aircraft payload stays under 5 MB/min on the wire.
 // Limits: no scrolling, no hover states; the ancestor check stops at the first
 // non-visible-overflow ancestor. belowFold counts content outside the viewport,
 // which includes scrolled list rows and is NOT a clipping defect.
@@ -48,6 +49,12 @@ const page = await ctx.newPage();
 const sockets = [], aircraftReqs = [];
 page.on('websocket', (ws) => sockets.push(ws.url()));
 page.on('request', (r) => { if (/\/api\/adsb\/(global|fi\/global)/.test(r.url())) aircraftReqs.push(r.url()); });
+let aircraftBytes = 0;
+const t0 = Date.now();
+page.on('requestfinished', async (r) => {
+  if (!/\/api\/adsb\/(global|fi\/global)/.test(r.url())) return;
+  try { aircraftBytes += (await r.sizes()).responseBodySize; } catch { /* request gone */ }
+});
 if (CPU_THROTTLE > 1) await (await ctx.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
 await page.goto(`${process.env.BASE_URL || 'http://localhost:5173'}${ROUTE}`, { waitUntil: GRADE ? 'domcontentloaded' : 'networkidle', timeout: 90000 });
 await page.waitForTimeout(GRADE ? 25000 : 12000);
@@ -79,6 +86,7 @@ if (GRADE) {
   g.adsbSockets = sockets.filter((u) => u.includes('/ws/adsb')).length;
   g.aircraftRequests = aircraftReqs.length;
   g.aircraftRequestsWithoutBbox = aircraftReqs.filter((u) => !/lamin=/.test(u)).length;
+  g.aircraftKBPerMin = Math.round(aircraftBytes / 1024 / ((Date.now() - t0) / 60000));
   const fails = [];
   if (CHECKS.has('layout')) {
     if (g.mapPct < 70) fails.push(`map ${g.mapPct}% of screen (< 70%)`);
@@ -92,6 +100,7 @@ if (GRADE) {
   if (CHECKS.has('data')) {
     if (g.adsbSockets > 0) fails.push(`${g.adsbSockets} /ws/adsb socket(s) opened`);
     if (g.aircraftRequestsWithoutBbox > 0) fails.push(`${g.aircraftRequestsWithoutBbox} of ${g.aircraftRequests} aircraft requests without a bbox`);
+    if (g.aircraftKBPerMin > 5120) fails.push(`aircraft data ${g.aircraftKBPerMin} KB/min on the wire (> 5 MB/min)`);
   }
   fs.writeFileSync(`${OUT}/phone-grade.json`, JSON.stringify({ device: DEVICE || `${W}x${H}`, route: ROUTE, firstVisit: FIRST_VISIT, ...g, fails }, null, 1));
   await page.screenshot({ path: `${OUT}/phone-grade.png` });
