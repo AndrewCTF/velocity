@@ -43,6 +43,11 @@ Assets these need, none of which exist yet except the GIF:
 
 ### A. r/aviation (video)
 
+No video yet? Post the still instead: `docs/media/heathrow-before-after-2025-03.png`
+(rendered 2026-10-19 from adsb.fi's public archive, 06:00 to 09:00 UTC each
+day: 226 aircraft below 2,500 ft within 12 km of Heathrow on the 20th, 7 on
+the 21st). The same image works as an [OC] post on r/dataisbeautiful.
+
 ```
 Heathrow the day before the substation fire vs the day of. Every plane over London, replayed at 600x.
 ```
