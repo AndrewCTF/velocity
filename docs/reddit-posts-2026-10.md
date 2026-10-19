@@ -28,9 +28,10 @@ The account history is the biggest risk, not the copy. See the post-mortem in
    from comment activity in that hour.
 
 Suggested order: r/ClaudeAI, r/selfhosted, r/RTLSDR, r/aviation, r/PostgreSQL,
-r/dataengineering, r/mcp, r/maritime, r/ADSB, then r/OSINT and r/DataHoarder
-once their mods have replied. At one post every 3 or 4 days that is about six
-weeks; don't compress it.
+r/dataengineering, r/mcp, r/maritime, r/ADSB, r/satellites, r/Python,
+r/webdev, r/AppSec, r/remotesensing, r/webscraping, then r/OSINT and
+r/DataHoarder once their mods have replied. At one post every 3 or 4 days that
+is about two months; don't compress it.
 
 r/ADSB and r/homelab were among the subs posted to in July. If you post there
 again, leave the longest gap before it.
@@ -595,3 +596,307 @@ Repo (AGPL, no API keys): https://github.com/AndrewCTF/velocity. The coverage me
 ```
 
 **The 20%:** the disclosure paragraph. The coverage numbers and what they mean hold for any free tracker.
+
+---
+
+## 12. r/satellites (or r/SatelliteTracking)
+
+**Title options**
+
+One title per block, pick one.
+
+```
+CelesTrak isn't banning you. That 403 means "you already have this."
+```
+
+```
+Tracking satellites in the browser: the 403 that wasn't a ban, and why I draw 4,000 of 16,000
+```
+
+**Body**
+
+```
+If you pull TLEs from CelesTrak in anything you build, this will save you a confusing afternoon.
+
+**The 403 that isn't a block.** CelesTrak publishes GP data every 2 hours. If you request the same GROUP again from the same IP inside that window, it answers **403** with a body like: "GP data has not updated since your last successful download of GROUP=active at <time>. Data is updated once every 2 hours." It's a conditional GET dressed as a 403. Browser user agent or not, same answer.
+
+I treated it as an outage. My cache lived in memory, so every restart of my backend re-requested, got the 403, and showed an empty sky until the window passed. The fix: keep the last good download on disk, and when the 403 body says "has not updated", serve the disk copy as if it were a 304. Any other 403 is still a real error.
+
+**Pick the format your propagator wants.** If your SGP4 library parses TLE lines (satellite.js's `twoline2satrec` does), ask for `FORMAT=tle`. The JSON/OMM output doesn't include the TLE line strings, and my satellite layer quietly showed zero objects until I noticed.
+
+**16,000 is too many for a main thread.** The `active` group is around 16,000 objects and 6.5 MB. Propagating all of them every frame in the browser will stutter. What worked for me:
+
+- Cap what you draw. I draw 4,000 on a desktop at high quality and 1,000 on phones. Nobody can read 16,000 dots on a globe anyway.
+- Don't propagate per frame. Sample each orbit ahead in time and let the renderer interpolate.
+- Spread the sampling across frames with a time budget (about 5 ms a frame for me), so re-sampling never lands as one big hitch.
+
+**Disclosure:** this is the satellite layer in Velocity, a self-hosted tracker I build that puts satellites, aircraft and ships on one globe and keeps their history on your own disk. Built with a lot of help from Claude Code. Repo in the first comment.
+
+If you've built SGP4 propagation for the browser, did you move it to a Web Worker? I've held off because the frame budget was enough at 4,000, but I'd like to hear where that stops being true.
+```
+
+**First comment**
+
+```
+Repo (AGPL, no API keys): https://github.com/AndrewCTF/velocity. The CelesTrak handling is in apps/api/app/routes/space.py.
+```
+
+**The 20%:** the disclosure paragraph. The 403 behaviour and the rendering advice apply to anyone using CelesTrak.
+
+---
+
+## 13. r/webscraping
+
+Read the subreddit's self-promotion rule first. This post is about reading responses correctly and backing off, not about getting around blocks. Keep it that way in the comments too.
+
+**Title options**
+
+One title per block, pick one.
+
+```
+Six HTTP responses that lie to your scraper (and what each one actually meant)
+```
+
+```
+A 403 that means 'not modified', a 200 that means 'slow down', and other things I learned polling public data
+```
+
+**Body**
+
+```
+I poll a dozen public data sources every few seconds. Most of my bugs weren't parsing bugs. They were me believing the status code. Six that fooled me:
+
+**1. 200 OK, text/plain body = you're throttled.** One API answers rate limits with a 200 and a plain-text message instead of a 429. Parse it as JSON and you get an exception at best, an empty list at worst. Now any non-JSON body from a JSON endpoint is an error, not "no data".
+
+**2. 200 OK, 4-byte body = also throttled.** Another source returns a valid but tiny binary response when you ask too often. It parses fine, into zero rows. I now raise on bodies below a sane minimum instead of reporting an empty map.
+
+**3. 403 = "you already have this".** CelesTrak returns 403 when you re-request data that hasn't changed in its 2-hour window, with a body that says exactly that. Read the body before you decide you're blocked. Treat it as a 304 and serve your saved copy.
+
+**4. 403 for everyone, including a real browser.** Some paths are blocked by a WAF rule no matter who asks. Headers, proxies and real Chrome all get the same 403. Don't fight it. Load the page in a browser and look at what request the page itself makes. That's the endpoint meant for you.
+
+**5. 451 = we don't serve non-browser clients.** One host answers 451 to anything that doesn't look like a browser. That's a policy statement, not an outage.
+
+**6. 403 with an email address in the body = a person.** That's not a bot wall. That's someone asking you to stop or to get in touch. I moved that host to last resort, added a setting to switch it off entirely, and wrote to them.
+
+And one that was my fault: **httpx doesn't follow redirects by default.** A source moved from http to https, answered 301 with an empty body, and my health check scored it as up. A whole layer went to zero and nothing complained. Either follow redirects or treat a 3xx as a failure, explicitly.
+
+The general rule I ended up with: a response is healthy only if it has the shape you expect. Status code alone tells you almost nothing.
+
+**Disclosure:** these all came from building Velocity, a self-hosted tracker for public aircraft, ship and satellite data. Each source's health and data age is shown in the app instead of hidden. Built with a lot of help from Claude Code. Repo in the first comment.
+
+What's the strangest "success" response you've hit?
+```
+
+**First comment**
+
+```
+Repo: https://github.com/AndrewCTF/velocity
+```
+
+**The 20%:** the disclosure paragraph. The six responses are useful to anyone polling public endpoints.
+
+---
+
+## 14. r/Python
+
+The snippet in the body was run on 2026-10-19 against a deliberate 0.6 s `time.sleep` inside a coroutine and named the right function and line. Reddit shows the indented lines as a code block.
+
+**Title options**
+
+One title per block, pick one.
+
+```
+py-spy couldn't attach, so I made my asyncio app tell me which line blocks the event loop. 25 lines.
+```
+
+```
+Find the exact line stalling your asyncio event loop, from inside the process
+```
+
+**Body**
+
+```
+My FastAPI app had lag nobody could explain. A 2 ms route was taking over 100 ms almost half the time, and up to 4 seconds under load. The usual answer is py-spy, but on my box ptrace is refused, so nothing outside the process can look at its stack.
+
+So I made the process watch itself. The idea: a coroutine updates a heartbeat every 50 ms. A plain thread checks the heartbeat. If it's late, the event loop is stuck, and the thread reads the loop thread's current stack with `sys._current_frames()` and counts which line it's stuck on.
+
+    import asyncio, sys, threading, time
+    from collections import Counter
+
+    stalls = Counter()
+    _keep = set()
+
+    def _watch(loop_thread, beat):
+        while True:
+            time.sleep(0.05)
+            if time.monotonic() - beat[0] > 0.1:
+                f = sys._current_frames().get(loop_thread)
+                if f:
+                    stalls[f"{f.f_code.co_filename}:{f.f_lineno} {f.f_code.co_name}"] += 1
+
+    async def _heartbeat(beat):
+        while True:
+            beat[0] = time.monotonic()
+            await asyncio.sleep(0.05)
+
+    async def start_stall_watch():
+        beat = [time.monotonic()]
+        _keep.add(asyncio.create_task(_heartbeat(beat)))
+        threading.Thread(target=_watch, args=(threading.get_ident(), beat), daemon=True).start()
+
+Call `await start_stall_watch()` at startup and print `stalls.most_common(10)` from a debug route. Each count is roughly 50 ms the loop spent stuck on that line.
+
+Two upgrades that made it much more useful:
+
+- **Walk up to your own code.** The innermost frame is often inside a library (`json`, `gzip`, `ssl`). Walk `f.f_back` until the filename is in your project and record that too, so you see *your* line that called the slow thing.
+- **Measure CPU time as well as wall time.** On Linux, `time.pthread_getcpuclockid(thread_id)` gives the loop thread's own CPU clock. If CPU time is close to wall time, the loop was computing (move that work to a thread or process). If it's far below, the loop was waiting: a blocking call, or another thread holding the GIL.
+
+One I'd hit before in the same app: serializing and gzipping a ~13,000-item payload on every poll. Building it once per cycle and serving the bytes made latency flat. That's exactly the kind of line this points straight at.
+
+**Disclosure:** this is from Velocity, a self-hosted aircraft and ship tracker I build. The full version reports per-line wall and CPU time at a status endpoint. Written with a lot of help from Claude Code. Repo in the first comment.
+
+Is there a cleaner way to do this that I've missed? `sys._current_frames()` being underscore-private makes me a little nervous.
+```
+
+**First comment**
+
+```
+Full version with CPU time and the walk up to app frames: https://github.com/AndrewCTF/velocity (apps/api/app/routes/status.py).
+```
+
+**The 20%:** the disclosure paragraph. The snippet works in any asyncio app.
+
+---
+
+## 15. r/AppSec (or r/websecurity)
+
+**Title options**
+
+One title per block, pick one.
+
+```
+Letting users paste a webhook URL is an SSRF hole. The checks I needed, including the ones that surprised me.
+```
+
+```
+User-supplied webhook URLs: why 'block private IPs' isn't enough
+```
+
+**Body**
+
+```
+My app lets users paste a webhook URL for alerts (Discord, ntfy, any webhook). That's a server making requests to a URL an outsider chose, which is textbook SSRF. "Block private IPs" sounded like the whole fix. It wasn't.
+
+**What a working check needed:**
+
+1. **Resolve the hostname and check every address.** Checking the string `localhost` catches nothing. `my-site.example` can resolve to 127.0.0.1.
+2. **Unwrap IPv4 hidden in IPv6.** `::ffff:127.0.0.1` (IPv4-mapped), 6to4 (`2002::/16`) and Teredo addresses all carry an IPv4 inside. Older CPython versions don't apply `is_private` or `is_loopback` to the embedded address of a mapped literal, so you have to pull it out yourself (`ipv4_mapped`, `sixtofour`, `teredo` on `IPv6Address`) and check that.
+3. **Block CGNAT explicitly.** `100.64.0.0/10` is not covered by `is_private`. If you run on Tailscale or behind a carrier NAT, that range is your internal network.
+4. **Check link-local, reserved, multicast and unspecified too.** 169.254.169.254 is the cloud metadata service on most providers, and the classic SSRF target.
+5. **Check again at delivery, not just when the URL is saved.** DNS can change between the two. A name that resolved to a public IP at signup can point at 127.0.0.1 next week.
+6. **Re-check every redirect hop.** If your HTTP client follows redirects, a public URL can 302 to an internal one. Either turn redirects off for these requests or validate each hop.
+7. **Treat the URL as a secret.** A Discord webhook URL *is* the credential. Log the host when you refuse, never the full URL.
+
+**The gap I couldn't close cheaply: DNS rebinding over https.** For plain http I resolve once, check the IP, then connect to that exact IP with the original Host header, so there's no second lookup to poison. For https the hostname has to stay in the URL for certificate validation, so the client resolves again. I've accepted that window because metadata endpoints are http-only, but I'd like a better answer.
+
+And one product decision: alert webhooks are public-internet only, with an explicit allow-list for the operator's own LAN hosts. If someone wants alerts sent to Home Assistant on their LAN, they opt in by name.
+
+**Disclosure:** this is the guard in Velocity, a self-hosted aircraft and ship tracker I build (AGPL), where alert rules can post to Discord, ntfy or a webhook. Written with a lot of help from Claude Code. Repo in the first comment, the classifier is in `apps/api/app/netguard.py`.
+
+How do you close the https rebinding gap in practice? A custom resolver in the transport, or something else?
+```
+
+**First comment**
+
+```
+Repo: https://github.com/AndrewCTF/velocity. The classifier is apps/api/app/netguard.py and the http pinning is in apps/api/app/workflows/control.py.
+```
+
+**The 20%:** the disclosure paragraph. The checklist applies to any app that accepts user URLs.
+
+---
+
+## 16. r/webdev
+
+**Title options**
+
+One title per block, pick one.
+
+```
+Showing 13,000 moving objects that update every second in a browser: the bottleneck was never rendering
+```
+
+```
+One line of decimation code made half my map icons churn every second. 112% ID churn, measured.
+```
+
+**Body**
+
+```
+I built a web map that shows every tracked aircraft, around 13,000 of them, with positions polled every second. I assumed drawing would be the hard part. It was the cheapest part. Three things that actually mattered.
+
+**1. Thin data by a hash of the ID, never by position in the list.** When a view had too many objects, I kept every Nth item. But the server's list order and count changed on every refresh, so every poll picked a *different* subset. Between two polls one second apart, the set of visible IDs churned by 112%. Icons kept appearing and disappearing, and none lived long enough to animate smoothly. The fix was to choose the subset by a hash of each object's ID. The same aircraft stay visible poll after poll, and motion interpolation works again.
+
+**2. The cost is updating your object store, not drawing it.** The time went into upserting and re-clustering thousands of entities per poll. Rendering them was cheap. So the server now sends only what's inside the current viewport, and the browser never holds the full set unless you're looking at the whole world.
+
+**3. Build the response once, serve the same bytes to everyone.** The server used to filter, serialize and gzip ~13,000 features on every request. Response times alternated short, long, short, long, depending on what else the event loop was doing. Now it builds one gzipped blob per refresh cycle and serves those bytes as-is, with an ETag. A poll inside the same cycle gets a 304. Latency went flat.
+
+Bonus, for anything computed client-side: I propagate satellite orbits in the browser, and doing it all at once caused visible hitches. Spreading the work across animation frames with a fixed budget (about 5 ms a frame) removed them without needing a Web Worker.
+
+**Disclosure:** this is Velocity, a self-hosted aircraft, ship and satellite tracker I build (CesiumJS front end, FastAPI back end). It records history so you can rewind the map. Built with a lot of help from Claude Code. Repo in the first comment.
+
+If you've done live maps at this scale: did you end up on WebSockets, or is a 1-second poll with ETags fine? Mine does both and I'm not sure the socket earns its keep.
+```
+
+**First comment**
+
+```
+Repo: https://github.com/AndrewCTF/velocity
+```
+
+**The 20%:** the disclosure paragraph. The three lessons apply to any live map or list.
+
+---
+
+## 17. r/remotesensing
+
+**Title options**
+
+One title per block, pick one.
+
+```
+What satellite imagery can you get with no account and no API key at all? I measured it.
+```
+
+```
+Keyless imagery: sub-metre optical from Esri Wayback, and full Sentinel-1 scenes from anonymous S3
+```
+
+**Body**
+
+```
+I needed imagery a server could fetch without any account, key or metered quota. Most "free" options fail that test: Copernicus Data Space, Earth Engine, EarthExplorer and every commercial broker need a login. Here's what passed, measured from live requests.
+
+**Sub-metre optical: Esri Wayback.** It serves the dated releases of World Imagery as XYZ tiles. 196 releases from 2014-02-20 to 2026-08-05, roughly every four weeks. Measured resolution 0.13 to 0.27 m per pixel. I checked six cities with no special event coverage (Nairobi, Lhasa, Reykjavik, Ulaanbaatar, Perth, Manaus) and all returned tiles at zoom 19. Nairobi resolves individual cars.
+
+Two caveats that matter:
+
+- **A release date is not an acquisition date.** It's a mosaic of best-available imagery, so a 2026 release can serve 2024 photos. The metadata layer has a per-tile source date, but for my Nairobi probes it came back empty. Treat the release date as an upper bound.
+- **Licensing.** World Imagery is licensed for use in Esri and ArcGIS apps. Occasional research use is one thing. Building a product on bulk tile fetches is not.
+
+**Best quality, wrong coverage: Maxar Open Data.** Genuinely 0.3 m RGB, with un-JPEG'd source bands. But it's event-scoped: 55 disaster events, and none of the six cities above has any footprint. Excellent for before/after on a specific event, useless as a global layer. I spent too long building toward it before I checked.
+
+**Radar for the open ocean: Sentinel-1.** Element 84's Earth Search STAC catalogue is public, and the `sentinel-s1-l1c` S3 bucket serves pixels anonymously. I fetched a full VV GRD scene (25,998 x 19,529) with no credentials. The trap: those raw measurement TIFFs are in pixel space with no CRS. You have to georeference them from the scene's `annotation/iw-*.xml` ground-range metadata. From there a plain CFAR detector is the standard way to pull out ship-sized bright targets, AIS or not.
+
+**Disclosure:** I build Velocity, a self-hosted tracker that uses Wayback for close-ups of a location (always showing the source date) and Sentinel-1 for a dark-vessel layer over open water. Built with a lot of help from Claude Code. Repo in the first comment.
+
+What did I miss? Specifically anything sub-metre and keyless that isn't a mosaic.
+```
+
+**First comment**
+
+```
+Repo (AGPL): https://github.com/AndrewCTF/velocity. The full measurement write-up is docs/free-keyless-vhr-imagery-measured.md.
+```
+
+**The 20%:** the disclosure paragraph. The source-by-source findings stand on their own.
