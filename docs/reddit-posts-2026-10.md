@@ -552,7 +552,7 @@ Repo: https://github.com/AndrewCTF/velocity. The merge rules and their tests are
 One title per block, pick one.
 
 ```
-I tested every free ship tracker feed I could find over open ocean. All of them returned zero ships.
+I queried two free ship-tracking feeds over six patches of open ocean. Every one came back with zero ships.
 ```
 
 ```
