@@ -118,6 +118,152 @@ Claude Code kept "tidying up" my code and quietly undoing my decisions. So I mad
 
 ---
 
+### F. r/sysadmin (also works in r/selfhosted)
+
+Text post. r/sysadmin removes self-promotion, so the project is only in your
+first comment.
+
+```
+PSA: go look at your SQLite -wal files. One of mine was 49 GB for 15 GB of data.
+```
+
+```
+Quick one, because I'd never have guessed this could happen.
+
+My database was 15 GB. The file next to it, the -wal file, was 49.6 GB.
+
+Why: SQLite's write-ahead log can only be folded back into the database past the oldest open reader. I had a status query that ran every 5 seconds and took longer than 5 seconds. So there was always a reader open, the log never got checkpointed, and the writer kept appending.
+
+It snowballs. A bigger WAL makes every read slower, which keeps the reader open longer, which grows the WAL faster. The same query took 73 s with the bloated log and 14.8 s after.
+
+Check yours:
+
+    ls -la *.db-wal
+
+Shrink it (stop the writer first):
+
+    sqlite3 your.db "PRAGMA wal_checkpoint(TRUNCATE);"
+
+That gave me back 48.6 GB in 38 seconds. To stop it coming back: make sure no query runs longer than the interval it's polled at, and set `PRAGMA journal_size_limit`.
+
+Lots of self-hosted apps keep their data in SQLite. If one of them has a constant writer and a slow reader, it can do this to you too.
+```
+
+```
+For context, this was the position archive in Velocity, a self-hosted flight and ship tracker I build: https://github.com/AndrewCTF/velocity. The archive has moved to TimescaleDB since, but SQLite is still the default for people who don't want Postgres, and that path has the fix.
+```
+
+### G. r/LocalLLaMA
+
+Attach a screenshot of an MCP client answering "what's flying near X" with the
+source and age visible.
+
+```
+I gave my local model live access to planes and ships over MCP. The fix that mattered: make every answer say how old the data is.
+```
+
+```
+Ask any model "what's flying over London right now" and it either refuses or invents something. So I wrote an MCP server that answers from live aircraft and ship feeds instead.
+
+Three things made the answers trustworthy:
+
+- **Every contact carries its age.** Without it, the model reports a 20-minute-old position as "currently". With it, it says "last seen 20 minutes ago" on its own.
+- **Every contact carries its sources.** Which feeds reported it and how many agreed. The model hedges by itself when only one source saw something.
+- **Derived output is labelled as derived.** The model passes the label on instead of upgrading a guess into a fact.
+
+The heavy reasoning runs locally. One tool gathers the relevant data and hands it to an Ollama model (the smallest one you have installed, by default), so only the conclusion comes back into the agent's context. If Ollama isn't running, it returns the raw data instead of failing.
+
+It works with any MCP client and needs no API keys. The data comes from a self-hosted tracker I build called Velocity, written with a lot of help from Claude Code. Link in the comments.
+
+Which local models are you finding reliable for long tool-calling chains? That's the part I'd like to tune next.
+```
+
+```
+Repo (AGPL): https://github.com/AndrewCTF/velocity. The MCP setup and the Ollama settings are in the README.
+```
+
+### H. r/selfhosted (discussion)
+
+Discussion posts get the most comments here. Reply to every answer in the
+first hour, and add your own second and third examples in the comments.
+
+```
+What does your server keep that no company will keep for you?
+```
+
+```
+Mine is flight and ship history. Flightradar24's free tier now stops at 12 hours, and MarineTraffic's at 24. My server has kept every aircraft and ship position it's seen since August: 132 million of them, in 27 GB.
+
+What's yours? I'm after the stuff where the free tier quietly got smaller or the service disappeared, and you decided to just keep it yourself.
+```
+
+```
+The flight and ship one is Velocity, which I build. It's AGPL, docker compose up, no API keys: https://github.com/AndrewCTF/velocity
+```
+
+### I. r/interestingasfuck (image)
+
+A clean screenshot of the Singapore Strait vessel layer with the panels
+hidden. No self-promotion in the post.
+
+```
+1,282 ships in the Singapore Strait at a single moment, from free tracking data
+```
+
+When someone asks:
+
+```
+It's a self-hosted ship and flight tracker I build, called Velocity. It merges the free AIS feeds and keeps the history: https://github.com/AndrewCTF/velocity. And this is only what shore receivers can hear. Out at sea, free tracking sees almost nothing.
+```
+
+### J. r/homelab (photo)
+
+Post a real photo of the machine, plus the replay GIF. r/homelab rewards the
+hardware story: if you can, add one line at the top of the body saying what
+the machine is (CPU, RAM, disk).
+
+```
+My homelab records every plane and ship it can get from public feeds. 132 million positions since August, 27 GB.
+```
+
+```
+What it runs: a docker compose stack (API, web, nginx, TimescaleDB) that pulls live aircraft and ship positions from public feeds with no API keys and writes every one to disk. 27 GB so far. The compression is the reason it's that small: the same data was 11.3 GB in SQLite before it became 840 MB in TimescaleDB.
+
+The payoff is the slider. Drag it and the map rewinds to any moment it recorded. It can also ping your phone (ntfy, Discord or a webhook) when a military aircraft or GPS jamming shows up in an area you pick.
+
+Rough edges: the 3D globe wants a decent GPU on whatever you view it from, and ocean coverage is thin because free ship data comes from shore receivers.
+
+I built it, with a lot of help from Claude Code. Link in the comments.
+```
+
+```
+Repo (AGPL): https://github.com/AndrewCTF/velocity
+```
+
+### K. r/opensource (GIF)
+
+```
+I built a flight and ship tracker that keeps its own history, because the free ones keep deleting theirs (AGPL)
+```
+
+```
+Flightradar24's free tier keeps 12 hours of history, MarineTraffic's keeps 24, and ADS-B Exchange ended its free API. So I built an open one you run yourself.
+
+Velocity records every aircraft and ship position it sees to your own disk, and a slider rewinds the map to any moment. For aircraft it can also replay public archives back to January 2024. No API keys, no account, docker compose up.
+
+Every plane and ship on the map shows which sources reported it and how old the fix is, so a stale dot never pretends to be live.
+
+What's rough: ocean coverage is thin (free ship data comes from shore receivers), the 3D globe wants a decent GPU (there's a 2D view), and it's a single-user tool for now. I wrote it with a lot of help from Claude Code and review every change; there are 3,276 backend tests.
+
+Contributions welcome, especially from people who run their own ADS-B receivers.
+```
+
+```
+https://github.com/AndrewCTF/velocity
+```
+
+---
+
 ## Before posting any of these
 
 The account history is the biggest risk, not the copy. See the post-mortem in
