@@ -210,7 +210,7 @@ posting.** Treat the text below as notes, not copy.
 >    accept uploads from anyone. A contact seen by one feeder and no one else
 >    is a lead, not a fact.
 > 2. **How old is the fix?** Many trackers keep drawing a contact for minutes
->    after its last position, and cached sources often report when *they*
+>    after its last position, and cached sources often report when _they_
 >    fetched the data, not when the plane broadcast it. A stale dot looks
 >    exactly like a live one.
 > 3. **ADS-B or MLAT?** MLAT positions are computed from arrival times at
@@ -262,7 +262,7 @@ posting.** Treat the text below as notes, not copy.
 > 2. **A decision log the guards point to.** `docs/decisions.md` holds the why,
 >    the date and the post-mortem. CLAUDE.md says: read the entry before
 >    changing guarded behaviour. To revoke a decision you change the guard
->    *and* the file that states it, deliberately.
+>    _and_ the file that states it, deliberately.
 > 3. **CLAUDE.md per directory.** The root file is short and points to one
 >    per area (web, api, ml, infra). They load when Claude works there, so it
 >    sees the rules for the code it's touching without a 2,000-line root file.
@@ -331,4 +331,3 @@ posting.** Treat the text below as notes, not copy.
 **First comment:** `Repo: https://github.com/AndrewCTF/velocity`
 
 **The 20%:** the disclosure paragraph. The output-design list is the post.
-
