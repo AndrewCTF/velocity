@@ -19,13 +19,21 @@ The account history is the biggest risk, not the copy. See the post-mortem in
 3. **Repo link goes in the first comment**, not the body. Then check the post
    logged out at 30 minutes. If it isn't there, it was filtered: message the
    mods, don't repost.
-4. **Re-measure every number marked `[like this]`** on the morning you post
-   (commands are in `launch-2026-10.md`). A stale number loses the thread.
+4. **Re-check the numbers on the morning you post.** They were last measured
+   2026-10-17: 132M positions, 27 GB, 3,276 backend tests, Flightradar24 free
+   history at 12 hours (the README table still says 7 days; check FR24's
+   pricing page). Commands are in `launch-2026-10.md`. A stale number loses
+   the thread.
 5. **Spend the first hour answering comments.** Most of a post's reach comes
    from comment activity in that hour.
 
-Suggested order: r/ClaudeAI, r/selfhosted, r/ADSB, r/mcp, r/OSINT (needs a
-mod reply first).
+Suggested order: r/ClaudeAI, r/selfhosted, r/RTLSDR, r/aviation, r/PostgreSQL,
+r/dataengineering, r/mcp, r/maritime, r/ADSB, then r/OSINT and r/DataHoarder
+once their mods have replied. At one post every 3 or 4 days that is about six
+weeks; don't compress it.
+
+r/ADSB and r/homelab were among the subs posted to in July. If you post there
+again, leave the longest gap before it.
 
 ## Why these are built the way they are
 
@@ -77,7 +85,7 @@ A 49 GB SQLite WAL file, and other things I learned self-hosting a flight archiv
 **Body**
 
 ```
-Free flight trackers keep cutting their history. Flightradar24 wants a subscription for anything past [12 hours], MarineTraffic cut its free window to 24 hours, and ADS-B Exchange ended its free API. So I started recording everything locally, and I couldn't find a straight answer for what that costs. Here's mine, measured.
+Free flight trackers keep cutting their history. Flightradar24 wants a subscription for anything past 12 hours, MarineTraffic cut its free window to 24 hours, and ADS-B Exchange ended its free API. So I started recording everything locally, and I couldn't find a straight answer for what that costs. Here's mine, measured.
 
 **The raw number.** Flat out, one row per position, plain SQLite: 9.43 GB a day, about 3.4 TB a year. 97% of that is aircraft. Roughly 12,600 planes are airborne at any moment and they all move fast enough to beat the dedup threshold. Ships are 3%: most of the ~57,000 in view are parked and barely write rows.
 
@@ -87,11 +95,11 @@ Free flight trackers keep cutting their history. Flightradar24 wants a subscript
 
 **What fixed the size for real.** Moving to Postgres + TimescaleDB with 6-hour chunks and columnar compression segmented by ID. Migrating 55,352,047 rows ran at ~120k rows/s, and the compressed table came out 13.46x smaller (11.3 GB down to 840 MB). SQLite is still the fallback if you don't want to run Postgres. Retention is a byte budget you set, not a pricing tier.
 
-Right now mine holds [132M] positions since August in [27 GB].
+Right now mine holds 132M positions since August in 27 GB.
 
 **The thing doing the recording** is something I built, called Velocity: a docker compose stack (api + web + nginx), no API keys, live aircraft and ships on a map with a scrubber to rewind to any moment you recorded. It can fold in your own ADS-B receiver's tar1090, and alert you to Discord, a webhook or ntfy when something enters an area. Loopback-only by default; I reach it over Tailscale.
 
-What's rough: coverage is whatever the volunteer feeders can see, so it's thin over open ocean. The 3D globe wants a real GPU on the viewing machine (there's a lighter 2D map). And I built it with a lot of help from Claude Code; I review every change and it has [3,276] backend tests.
+What's rough: coverage is whatever the volunteer feeders can see, so it's thin over open ocean. The 3D globe wants a real GPU on the viewing machine (there's a lighter 2D map). And I built it with a lot of help from Claude Code; I review every change and it has 3,276 backend tests.
 
 Question for people who've stored time series at this row count: would you partition by day, or is Timescale's chunking already doing the job? Repo in the first comment.
 ```
@@ -219,7 +227,7 @@ What fixed it, in order of impact:
 2. **A decision log the guards point to.** `docs/decisions.md` holds the why, the date and the post-mortem. CLAUDE.md says: read the entry before changing guarded behaviour. To revoke a decision you change the guard _and_ the file that states it, deliberately.
 3. **CLAUDE.md per directory.** The root file is short and points to one per area (web, api, ml, infra). They load when Claude works there, so it sees the rules for the code it's touching without a 2,000-line root file.
 4. **Evidence words.** It can't say "done", "works" or "fixed" without the command and output from that turn, and claims get tagged proven-live, plumbed-unverified or not-built. "Complete" and "global" are banned without a live count. This one change killed most of the overclaiming.
-5. **A test baseline it may not drop below.** The pass count lives in CLAUDE.md with a date. It's [3,276] now. Never commit below the number you inherited.
+5. **A test baseline it may not drop below.** The pass count lives in CLAUDE.md with a date. It's 3,276 now. Never commit below the number you inherited.
 
 One surprise: running tests in parallel by default made results depend on core count. Green on a 16-core machine, red in 4-core CI, because of state leaking between test files. Serial is now the default.
 
@@ -272,3 +280,318 @@ Repo: https://github.com/AndrewCTF/velocity
 ```
 
 **The 20%:** the disclosure paragraph. The output-design list is the post.
+
+---
+
+## 6. r/aviation
+
+Message the mods first; the sub is strict about self-promotion. Attach the Heathrow replay video (`heathrow-2025-03-21-replay.mp4`, see `launch-2026-10.md`) as the post's media. Re-record it from the merged build before posting.
+
+**Title options**
+
+One title per block, pick one.
+
+```
+Heathrow, 20 March vs 21 March 2025, replayed from a free public ADS-B archive
+```
+
+```
+You can replay any day of air traffic since January 2024 for free. Here's Heathrow the day the substation burned.
+```
+
+**Body**
+
+```
+On the night of 20 March 2025 a fire at the North Hyde substation cut power to Heathrow, and the airport stayed shut for most of the 21st. The video is London on the 20th, then the 21st, both replayed at 600x. The approach traffic west of London is there on the first day and gone on the second.
+
+The part I think more people should know: **you can do this for almost any day since January 2024, for free.**
+
+Most community ADS-B sites run readsb, and readsb writes a history file every half hour. Several aggregators publish those files openly under `globe_history/YYYY/MM/DD/heatmap/NN.bin.ttf`, where NN is the half-hour of the day (00 is 00:00 UTC, 47 is 23:30 UTC). Each file is a stream of time-slice markers followed by every aircraft position, callsign and squawk in that slice.
+
+How far back it goes, from a coverage check I ran in September:
+
+- **adsb.fi** had all 990 days since 1 January 2024.
+- **adsb.lol** had 689 of the 990, but with 10-second slices instead of 30, so where it has a day the tracks are smoother.
+
+tar1090, the map most of these sites use, can replay these same files, so some of them let you scrub back right on their own map.
+
+Two caveats. These are volunteer-run servers: my 990-request coverage sweep got me blocked by one of them, so fetch only what you need and cache it. And there is no equivalent for ships. If you want vessel history, someone has to have recorded it.
+
+**Disclosure:** that last point is why I built Velocity, a free self-hosted tracker. It replays these public aircraft files on a 3D globe (that's what the video is) and records its own aircraft and ship archive to your disk. Built with a lot of help from Claude Code. Repo in the comments.
+
+What day would you want to see replayed? I'll do a few in the comments. Not crashes, though.
+```
+
+**First comment**
+
+```
+Repo (AGPL, no API keys): https://github.com/AndrewCTF/velocity
+```
+
+**The 20%:** the disclosure paragraph. How to find and replay the public history files works without Velocity.
+
+---
+
+## 7. r/DataHoarder
+
+Mod approval first: the sub's rules require it for anything self-promotional, and the July post was filtered without it (`post-datahoarder-2026-07-16.md`).
+
+**Title options**
+
+One title per block, pick one.
+
+```
+Every aircraft position since January 2024 is sitting on public servers in half-hour files. Here's the format, and how to fetch it without getting banned.
+```
+
+```
+Free, public, minute-by-minute air traffic history back to 2024. Nobody seems to be mirroring it.
+```
+
+**Body**
+
+```
+Flight trackers sell history back to you. Flightradar24's free tier stops at 12 hours. But a large chunk of the raw data is already public, and I haven't found anyone mirroring it.
+
+**Where it is.** Community aggregators that run readsb publish its half-hour history files at `globe_history/YYYY/MM/DD/heatmap/NN.bin.ttf` (NN = 2 x hour + 1 if past :30, zero-padded, UTC). In a September check, adsb.fi had every one of the 990 days since 1 January 2024. adsb.lol had 689 of them, but at 10-second resolution instead of 30.
+
+**The format.** A file is a flat array of 16-byte little-endian records, `<iiihh` in Python struct terms: three 32-bit ints and two 16-bit shorts. Most records are positions: ICAO hex, latitude x 1e6, longitude x 1e6, altitude, ground speed. A record whose first int is the magic value `0x0E7F7C9D` starts a new time slice and carries the timestamp; its altitude field holds the slice interval in milliseconds. Callsign and squawk records sit inside the slices too. One adsb.lol file I decoded (2024-06-01 12:00 UTC) held 180 slices and 3,953 aircraft tracks over Europe.
+
+**Fetch it politely, or lose it.** These are volunteer-run. A 990-request sweep at 8 concurrent requests got my address blocked by adsb.fi's Cloudflare. To check which days exist, probe one file per day (I use 12:00 UTC), not all 48. Send a normal browser user agent; some hosts refuse anything else. Cache what you fetch, gzipped, and never fetch the same file twice.
+
+**What isn't out there: ships.** There is no public equivalent for AIS. If you want vessel history, you have to record it yourself, live. That's the genuinely hoardable gap.
+
+**Disclosure:** I build Velocity, a self-hosted tracker that does both. It proxies and caches these aircraft files under a size cap you set (least recently used goes first) and replays them on a globe. It also records its own live aircraft and ship archive. Mine holds 132M positions since August in 27 GB of TimescaleDB. Built with heavy help from Claude Code. Repo in the first comment.
+
+Is anyone already mirroring globe_history? I'd rather point people at a mirror than at volunteers' servers.
+```
+
+**First comment**
+
+```
+Repo (AGPL-3.0): https://github.com/AndrewCTF/velocity
+```
+
+**The 20%:** the disclosure paragraph. The format and the fetching rules stand on their own.
+
+---
+
+## 8. r/RTLSDR
+
+The highest-fit audience in the distribution kit: these readers run feeders. The script in the body was tested against a fake feed on 2026-10-19 (military and 7700 contacts inside the radius alerted; a normal squawk and a military contact outside it didn't). Reddit shows the indented lines as a code block.
+
+**Title options**
+
+One title per block, pick one.
+
+```
+Get a phone alert when a military or emergency aircraft flies near you, from your own feeder, in 30 lines
+```
+
+```
+Your readsb already knows when a military plane is overhead. 30 lines to make it tell your phone.
+```
+
+**Body**
+
+```
+If you run readsb with the tar1090 database, your `aircraft.json` already flags military aircraft. `dbFlags` bit 1 means military. Add the emergency squawks (7500, 7600, 7700) and a distance check, and you have alerts with no account and no API.
+
+This polls your feeder every 10 seconds and pushes to ntfy (free, there's a phone app, no sign-up). Each aircraft alerts at most once an hour.
+
+    import json, math, time, urllib.request
+
+    HOME = (51.47, -0.45)        # your lat, lon
+    RADIUS_KM = 30
+    TOPIC = "https://ntfy.sh/pick-a-long-random-topic"
+    URL = "http://localhost/tar1090/data/aircraft.json"
+    seen = {}
+
+    def km(a, b):
+        la1, lo1, la2, lo2 = map(math.radians, (*a, *b))
+        h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
+        return 12742 * math.asin(math.sqrt(h))
+
+    while True:
+        for ac in json.load(urllib.request.urlopen(URL))["aircraft"]:
+            if "lat" not in ac:
+                continue
+            mil = ac.get("dbFlags", 0) & 1
+            sq = ac.get("squawk")
+            emergency = sq in ("7500", "7600", "7700")
+            if not (mil or emergency) or km(HOME, (ac["lat"], ac["lon"])) > RADIUS_KM:
+                continue
+            if time.time() - seen.get(ac["hex"], 0) < 3600:
+                continue
+            seen[ac["hex"]] = time.time()
+            what = "military" if mil else "squawk " + sq
+            msg = f'{ac.get("flight", "?").strip()} ({ac["hex"]}) {what}, {km(HOME, (ac["lat"], ac["lon"])):.0f} km away'
+            urllib.request.urlopen(urllib.request.Request(TOPIC, data=msg.encode()))
+        time.sleep(10)
+
+Things to know:
+
+- **No `dbFlags`?** readsb only adds it when it's run with the aircraft database. Check one entry in your `aircraft.json`.
+- **ntfy topics are public by name.** Use a long random topic, or self-host ntfy.
+- **Military aircraft often don't send a position.** They show up as Mode S only, with no lat/lon, so this will miss them. MLAT catches some if you're in a dense area.
+- **7600 and 7700 are rare, and a real 7500 is extremely rare; most are mistyped.** Treat the alert as "go look", not news.
+
+**Disclosure:** I build Velocity, a self-hosted tracker that does a bigger version of this: you pick an area (centre and radius) and what to watch for (military aircraft or ships, GPS jamming, dark vessels, loitering, quakes, fires) and it pushes to ntfy, Discord or a webhook. It can read your tar1090 feed alongside the public ones and keeps the history, so you can rewind to the moment of the alert. Built with help from Claude Code. Repo in the first comment.
+
+What else would you filter on? I've thought about a list of interesting hexes, but I'd like to hear what feeders actually watch for.
+```
+
+**First comment**
+
+```
+Repo (AGPL, no API keys): https://github.com/AndrewCTF/velocity. Point ADSB_FEED_URLS at your tar1090 and it folds your receiver in.
+```
+
+**The 20%:** the disclosure paragraph. The script runs on any readsb feeder with nothing else installed.
+
+---
+
+## 9. r/PostgreSQL
+
+**Title options**
+
+One title per block, pick one.
+
+```
+Moved 55M time-series rows from SQLite to TimescaleDB: 13.46x smaller and a 73-second query became instant. Numbers and mistakes.
+```
+
+```
+SQLite to TimescaleDB for 55 million GPS positions: what the migration actually measured
+```
+
+**Body**
+
+```
+I keep an archive of aircraft and ship positions: one row per fix, append only, roughly 10,000 to 13,000 aircraft and tens of thousands of ships feeding it. It started as SQLite. Here's what moving it to Postgres + TimescaleDB measured.
+
+**The migration.** 55,352,047 rows (9 August to 13 September), copied with asyncpg COPY at about 120k rows/s, landing in 12 chunks. The script resumes from the target's `max(t)`, so a crash halfway costs nothing.
+
+**The size.** The SQLite file was 11,300,810,752 bytes. The compressed hypertable is 839,786,496. That's 13.46x smaller overall and 11.29x from columnar compression alone.
+
+**The setup that got there:**
+
+- 6-hour chunks.
+- `compress_segmentby` on the object ID. Positions for the same aircraft sit together, so lat/lon/time compress as nearly smooth series. That's where the columnar win comes from.
+- A continuous aggregate (`positions_hourly`) for the "what do I have, and when" coverage question. On SQLite that question was a full scan: 73 seconds over 78M rows. Now it reads the aggregate.
+- Retention drops whole chunks, so nothing on this path ever runs VACUUM.
+
+**Mistakes I'd skip next time:**
+
+- The SQLite row was 208.8 bytes for six numbers, because the ship's name was rewritten into every row. Static per-object data belongs in its own table.
+- That 73-second coverage scan, polled every 5 seconds by the UI, kept a reader permanently open and grew SQLite's WAL to 49.6 GB. On any MVCC or WAL system, a slow query run more often than it takes to finish will eventually bite.
+
+SQLite is still the fallback for people who don't want to run Postgres, so both paths implement the same reads.
+
+**Disclosure:** this is the archive inside Velocity, a self-hosted aircraft and ship tracker I build (AGPL). Built with a lot of help from Claude Code. Repo in the first comment if you want to read `history_pg.py`.
+
+Question for people running Timescale at higher volume: is segmenting by a high-cardinality ID (tens of thousands of distinct values per chunk) going to hurt me later, or is that what it's designed for?
+```
+
+**First comment**
+
+```
+The schema and the migration script are in https://github.com/AndrewCTF/velocity (apps/api/app/history_pg.py, scripts/history_migrate_sqlite_to_pg.py).
+```
+
+**The 20%:** the disclosure paragraph. The numbers and the setup apply to any append-only time series.
+
+---
+
+## 10. r/dataengineering
+
+**Title options**
+
+One title per block, pick one.
+
+```
+Last-write-wins silently corrupted our merged feed. Freshest-observation-wins fixed it.
+```
+
+```
+Merging live feeds: the cache that kept reporting stale data as fresh
+```
+
+**Body**
+
+```
+I merge live position data from several upstream sources: aircraft and ships, each reported by more than one feed. The merge looked simple. It turned out to be the source of almost every "the map is lying" bug I had. Three lessons that apply to any multi-source merge.
+
+**1. Last-write-wins is a correctness bug, not a rounding error.** My store did `latest[id] = obs` for whatever arrived last. If a slow source delivered a 3-minute-old fix after a fast source delivered a 5-second-old one, the old fix won. Worse, it carried an optimistic timestamp, so retention thought it was fresh and kept it. The fix: merge by **observation time** (when the thing was actually seen), and only accept a write if it is strictly newer than what you hold.
+
+**2. A cache must report the age of the data, not the age of the response.** One upstream reported each position's age relative to when *it* served the request. Cache that response and the ages freeze: a position "2 seconds old" stays 2 seconds old forever. Compute `observed_at = served_at - age` once, at fetch time, and store that. Never compare raw ages across tiers that cache differently.
+
+**3. Refuse data instead of passing it through.** A feeder that hangs will often keep answering its health check with 200 and the last thing it had. Now a source whose newest data is older than 180 seconds is refused, not merged. Going silent lets stale positions age out. Passing them through pins them on the map.
+
+A bonus physics check that caught a whole class of bad merges: if a fast-moving aircraft's new fix is *behind* it along its own heading, drop it. Something older arrived late.
+
+**Disclosure:** this is the merge inside Velocity, a self-hosted aircraft and ship tracker I build (AGPL). Every contact now shows which sources reported it and how old the fix is. Written with a lot of help from Claude Code. Repo in the first comment.
+
+How do you handle sources that report relative times? I'd like to know if there's a cleaner pattern than converting at the edge.
+```
+
+**First comment**
+
+```
+Repo: https://github.com/AndrewCTF/velocity. The merge rules and their tests are in apps/api/CLAUDE.md.
+```
+
+**The 20%:** the disclosure paragraph. The three rules work for any multi-source merge.
+
+---
+
+## 11. r/maritime (or r/shipping)
+
+**Title options**
+
+One title per block, pick one.
+
+```
+I tested every free ship tracker feed I could find over open ocean. All of them returned zero ships.
+```
+
+```
+Free AIS has a blind spot the size of the Pacific. Measured.
+```
+
+**Body**
+
+```
+Free ship-tracking maps make the ocean look covered. I wanted to know how much of that is real, so I queried the free, no-key AIS sources directly over boxes of open ocean and over chokepoints.
+
+**Open ocean, 10 x 10 degree boxes with no coast in them:**
+
+- mid-Pacific: 0
+- South Atlantic: 0
+- Indian Ocean: 0
+- North Pacific: 0
+- Southern Ocean: 0
+- Coral Sea: 0
+
+Two independent providers, same result.
+
+**Chokepoints, same store:** Singapore Strait 1,282, Strait of Hormuz 373, Gibraltar 267, Malacca 54, Bab-el-Mandeb 0 (no free feed reaches that box at all).
+
+Why: free AIS comes from shore receivers run by volunteers, and VHF from a coastal antenna typically reaches 20 to 40 nautical miles. Satellite AIS is what covers mid-ocean, and every vendor I checked keeps it behind a paid token. One provider shows some satellite positions on its public map, but they have no MMSI, name or age, so you can see that *a* ship is there, not which one or when.
+
+What that means in practice: an empty ocean on a free map tells you nothing. A ship that "went dark" mid-Atlantic may just have left receiver range. And the Red Sea gap is worth knowing about, given what's been happening there.
+
+The free option for open ocean is radar, not AIS. Sentinel-1 SAR imagery is downloadable with no account (a public catalogue plus anonymous S3 reads). It shows hulls, not identities, and only when a satellite passes over, but it does see ships with their transponders off.
+
+**Disclosure:** I build Velocity, a self-hosted tracker that merges these free AIS feeds (deduped by MMSI), records the history to your disk, and draws an AIS coverage layer so empty water reads as "no data" rather than "no ships". It has a dark-vessel layer built on Sentinel-1. Built with heavy help from Claude Code. Repo in the first comment.
+
+People who work at sea: how often do you see your own ship missing from these maps, and where?
+```
+
+**First comment**
+
+```
+Repo (AGPL, no API keys): https://github.com/AndrewCTF/velocity. The coverage measurements are in docs/ais/ais-vessel-pipeline.md.
+```
+
+**The 20%:** the disclosure paragraph. The coverage numbers and what they mean hold for any free tracker.
