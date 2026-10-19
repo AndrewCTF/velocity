@@ -6,6 +6,118 @@ ones in [`launch-2026-10.md`](launch-2026-10.md): first person, short sentences,
 say what is rough. These words never appear: Gotham, Palantir, world monitor,
 dashboard, "N live feeds", "AI-powered", "situational awareness".
 
+## High-ceiling versions (read this first)
+
+Added 2026-10-19 after the operator's verdict on the long posts: they won't blow
+up. That's right. The long posts are niche-sub posts: a good one gets a few
+hundred upvotes and some stars. A post that reaches the front of a big sub
+needs things they don't have:
+
+- **A picture or a video.** In big subs almost everything that takes off is
+  visual. A text essay tops out in a niche sub.
+- **A title that makes people feel something.** The long posts' titles explain.
+  These use a villain (paywalled history), a before/after, or a surprise, and
+  every claim in them is true.
+- **The plug in the comments, not the post.** Big subs remove self-promotion,
+  but "what software is this?" always gets asked. Answering it honestly, with
+  the disclosure, is the 20%.
+- **Timing.** A replay of something that is in the news this week beats
+  anything here. When an airspace closure or shipping incident hits the news,
+  record the replay within 24 to 48 hours and post that instead.
+- **An account that isn't filtered.** Nothing blows up if automod removes it.
+  Let the account cool first (see the rules below), and check every post
+  logged out at 30 minutes.
+
+Never fake the votes, the comments or the "what software is this?" question.
+
+Assets these need, none of which exist yet except the GIF:
+
+- The Heathrow side-by-side (`heathrow-2025-03-21-replay.mp4`, recorded
+  2026-10-17 per `launch-2026-10.md`, not in the repo).
+- A 30-second, 24-hour time-lapse of Europe from the replay at 3600x, with
+  the UI panels hidden.
+- A clean density map of the ship archive: dots on a dark basemap, no UI. The
+  existing screenshots carry the console chrome and the event labels, which is
+  the look the July threads called "AI slop". Don't use them for these.
+- `docs/media/tour-replay.gif` (exists) for r/selfhosted.
+
+### A. r/aviation (video)
+
+```
+Heathrow the day before the substation fire vs the day of. Every plane over London, replayed at 600x.
+```
+
+```
+First: Thursday 20 March 2025. Then: Friday 21 March, after the North Hyde substation fire cut Heathrow's power overnight. Same window, same speed. Watch the approach stream west of London just stop.
+
+Replayed from a public ADS-B archive that goes back to January 2024. How it's made is in the comments.
+```
+
+Your own first comment:
+
+```
+How it's made: community ADS-B sites publish a history file for every half hour, and adsb.lol and adsb.fi have them back to January 2024. I replayed those files in Velocity, a free self-hosted tracker I build (with a lot of help from Claude Code): https://github.com/AndrewCTF/velocity
+```
+
+### B. r/interestingasfuck or r/Damnthatsinteresting (video)
+
+Both remove self-promotion. Nothing about the tool goes in the post.
+
+```
+24 hours of every plane over Europe, squeezed into 30 seconds
+```
+
+When someone asks what it's made with:
+
+```
+I made it with a self-hosted tracker I build, called Velocity. It records public ADS-B data and can replay any day: https://github.com/AndrewCTF/velocity
+```
+
+### C. r/dataisbeautiful [OC] (image; r/MapPorn later)
+
+The sub requires a comment naming the data source and the tool, which is the
+plug. The ship archive has gaps and ends 2026-10-10, so the title says "about
+two months" and the comment gives the real range.
+
+```
+[OC] About two months of free ship-tracking data. The oceans look empty because every receiver is on shore.
+```
+
+Required source comment:
+
+```
+Data: AIS positions from free, no-key sources (ShipXplorer, OpenWaters, VesselFinder), recorded August to October 2026, with gaps. Free AIS comes from shore receivers with roughly 20 to 40 nautical miles of range, which is why open water is blank: when I queried six open-ocean boxes directly, both providers returned zero ships. Satellite AIS covers the oceans but is paid.
+
+Tool: recorded by Velocity, a self-hosted tracker I build (https://github.com/AndrewCTF/velocity), rendered with matplotlib.
+```
+
+### D. r/selfhosted (GIF)
+
+```
+Flightradar24 now charges to see flights older than 12 hours. My home server has kept every flight and ship it's seen since August.
+```
+
+```
+132 million positions in 27 GB. Drag the slider and the whole map rewinds.
+
+- docker compose up, no API keys, no account
+- planes, ships and satellites from public feeds, plus your own ADS-B receiver if you have one
+- phone alerts (ntfy, Discord, webhook) when something enters an area you pick
+- retention is a disk budget you set, not a subscription
+
+What's rough: ocean coverage is thin because free AIS is shore-based, the 3D globe wants a decent GPU (there's a 2D view), and I built it with a lot of help from Claude Code.
+
+AGPL, link in the first comment. Ask me anything about the storage. One bug grew a 49 GB SQLite WAL file, and the story is in the comments if anyone wants it.
+```
+
+### E. r/ClaudeAI (sharper title for post 4, same body)
+
+```
+Claude Code kept "tidying up" my code and quietly undoing my decisions. So I made every decision a failing test.
+```
+
+---
+
 ## Before posting any of these
 
 The account history is the biggest risk, not the copy. See the post-mortem in
