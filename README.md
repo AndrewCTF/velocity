@@ -1,97 +1,78 @@
 # Velocity
 
-**A live map you can rewind, that tells you where every contact came from.**
-
-There is no shortage of dashboards that draw aircraft and ships on a globe.
-Nearly all of them are stateless viewers of somebody else's API: they show you
-this instant, they cannot show you last Tuesday, and they render whatever the
-upstream asserts without saying who saw it or how long ago. Velocity is
-self-hosted and keyless like those, and then does the two things they don't.
-
-**It keeps history you own.** Flightradar24 gates replay at 7 days free,
-MarineTraffic cut its free window to 24 hours, ADS-B Exchange killed its free
-API tier outright, and a self-hosted tool just doesn't have that problem. The
-archive is a Postgres + TimescaleDB hypertable (`positions`, 6 hour chunks,
-columnar compression segmented by id, plus an hourly `positions_hourly`
-rollup); migrating the old SQLite file copied 55,352,047 rows at ~120k rows/s
-and the compressed hypertable measured 13.46x smaller, 11,300,810,752 bytes
-down to 839,786,496. Velocity records position history to your own disk for as
-long as you give it room, with a scrubber to rewind to any past moment, and
-SQLite remains the keyless fallback when no `HISTORY_PG_DSN` is set. No
-account, no API key, nobody who can paywall, filter or cut off your archive.
-
-**It scores what it shows you.** Anyone can upload whatever they like to a
-crowd-sourced ADS-B aggregator; a contact appearing on a map is not evidence it
-was ever broadcast. So every contact carries which independent sources reported
-it, how many agreed, and how old the fix actually is — with the confidence rule
-written out rather than implied. Cached sources report the age of the _data_,
-not the age of the response, so nothing sits on the map looking live because it
-was fresh when we fetched it this morning. `/api/status/provenance` gives you
-the same picture per source, including how many contacts each one is alone in
-seeing.
-
-On top of that: live aircraft, ships, satellites, GPS jamming, dark vessels,
-TFR airspace, military bases, naval warnings, earthquakes, outages and conflict
-events, correlated on the server instead of leaving you to eyeball six tabs.
-
-Honest scope, since this is a tool for people who check things: coverage is
-whatever the public feeds give you, it is not uniform, and the console tells
-you where it is thin rather than drawing a confident empty ocean.
-
-And once you've found something worth keeping, it stays evidence: a
-chain-of-custody **evidence locker** hashes every capture (a URL snapshot, an
-upload, a feed freeze) with SHA-256 and an append-only custody log, then rolls a
-case up into a self-contained **HTML / PPTX report** where every claim carries
-its provenance. All of it keyless, all of it on your disk.
-
-It also runs as an MCP server, so an AI agent can query the same live feeds
-instead of guessing from its training cut-off — everything it returns is
-labelled as automated output, not sold as "AI insight."
-
-[Quick start](#quick-start) · [The apps](#the-apps) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
+A self-hosted live map of aircraft, ships and satellites that records what it
+sees, so you can rewind to any past moment. No API keys, no account.
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
 [![Version](https://img.shields.io/github/v/release/AndrewCTF/velocity?label=release&color=blue)](https://github.com/AndrewCTF/velocity/releases/latest)
 [![Tests](https://img.shields.io/badge/tests-3276%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
-[![ISO/IEC 27001:2022 controls mapped, self-assessed](<https://img.shields.io/badge/ISO%2FIEC%2027001%3A2022-controls%20mapped%20(self--assessed)-informational.svg>)](docs/security/isms/statement-of-applicability.md)
-[![OWASP ASVS 5.0 L2 self-assessed](https://img.shields.io/badge/OWASP%20ASVS%205.0-L2%20self--assessed-informational.svg)](docs/security/asvs-l2-assessment.md)
 
 <p align="center">
   <img src="docs/media/hero-replay.gif" alt="Live world view, fly-in to Europe, an aircraft selected with its owned track, then the last hour rewound on the replay scrubber" width="900">
 </p>
-<p align="center"><i>One take, real data: the live world → Europe → click an aircraft → its dossier and owned track → rewind the last hour.</i></p>
+<p align="center"><i>One take, real data: the live world, zoom to Europe, click an aircraft, see its track, rewind the last hour.</i></p>
 
-The short version, against the trackers you already use (free tiers, as of
-July 2026):
+```bash
+git clone https://github.com/AndrewCTF/velocity.git && cd velocity
+docker compose up          # then open http://localhost:8080
+```
 
-|                | History you can replay                                          | Self-hosted | Account / API key | Who owns the archive |
-| -------------- | --------------------------------------------------------------- | ----------- | ----------------- | -------------------- |
-| **Velocity**   | Unlimited — bounded by your disk, scrubbable to any past moment | Yes         | None              | You                  |
-| Flightradar24  | 7 days on the free tier                                         | No          | Account           | Them                 |
-| MarineTraffic  | 24 hours free (down from 72)                                    | No          | Account           | Them                 |
-| ADS-B Exchange | Free API tier discontinued                                      | No          | Paid API          | Them                 |
+## Why it exists
 
-Live coverage is the same community feeder data everywhere; the columns above
-are the paywall. Each cell is checkable on the vendors' own pricing pages.
+Free trackers only let you look back a little: Flightradar24 gives 7 days of
+replay on the free tier, MarineTraffic 24 hours, and ADS-B Exchange dropped its
+free API. Velocity pulls the same public feeds and writes every position to
+your own disk, so the history is yours.
 
-> **Before you get excited:** it's a single-analyst tool. Live _derived_ state —
-> the current incident list, AOI selections, watch-officer briefs — lives in
-> memory and clears on restart; what you deliberately keep is durable (see
-> [Scope and limits](#scope-and-limits)): the position-history archive, the
-> local ontology store (objects, case files, situations) and the evidence
-> locker's custody chain all persist to disk. AIS is densest over Northern
-> Europe (global coverage is sparser and terrestrial-biased), and the 3D
-> satellite mode is a VRAM hog.
+|                | History you can replay            | Self-hosted | Account / API key | Who owns the archive |
+| -------------- | --------------------------------- | ----------- | ----------------- | -------------------- |
+| **Velocity**   | As much as your disk holds        | Yes         | None              | You                  |
+| Flightradar24  | 7 days on the free tier           | No          | Account           | Them                 |
+| MarineTraffic  | 24 hours free (down from 72)      | No          | Account           | Them                 |
+| ADS-B Exchange | Free API tier discontinued        | No          | Paid API          | Them                 |
 
-> **Use at your own risk.** No warranty; the authors take no responsibility for
-> your use of this tool or the data it pulls. Velocity scrapes third-party
-> sources that have not authorised it — **their** terms bind **you**, the
-> requests come from **your** IP, and rate limits, bans, and legal exposure are
-> yours to absorb. Feeds are often incomplete, delayed, or spoofed, and the AI
-> summaries can be confidently wrong. Not for safety-of-life, navigation, or any
-> use where being wrong hurts someone. Read [`DISCLAIMER.md`](./DISCLAIMER.md)
-> before you run it.
+Free tiers as of July 2026; each cell is checkable on the vendor's pricing page.
+
+## What it does
+
+- **Records history.** Every position goes into SQLite by default, or
+  Postgres/TimescaleDB if you set `HISTORY_PG_DSN`. The default keeps a rolling
+  window; set `ARCHIVE_MODE=1` to keep everything. A scrubber at the bottom
+  rewinds the map to any moment you recorded.
+- **Says where each contact came from.** Every aircraft and ship shows which
+  feeds reported it, how many agreed, and how old the position is, so a stale
+  fix doesn't look live. `/api/status/provenance` gives the same per feed.
+- **Puts more on the same map.** GPS jamming, ships with AIS switched off,
+  flight restrictions, military bases, naval warnings, earthquakes, internet
+  outages and conflict events.
+- **Keeps evidence.** Captures get a SHA-256 hash and an append-only custody
+  log, and a case exports to an HTML or PPTX report that cites its sources.
+- **Talks to AI agents.** It runs as an MCP server, so an agent can ask about
+  live traffic instead of guessing. Anything automated is labelled as such.
+
+[Quick start](#quick-start) · [The apps](#the-apps) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
+
+## Limits
+
+- It's built for one person, not a team.
+- Coverage is whatever the public feeds see. It's good over Europe and North
+  America and thin elsewhere; ship data is densest around Northern Europe. The
+  map tells you where coverage is thin.
+- Some live state (current incidents, area selections, briefs) clears on
+  restart. History, saved objects, cases and the evidence log stay on disk. See
+  [Scope and limits](#scope-and-limits).
+- The 3D satellite view needs a lot of GPU memory.
+
+**Use at your own risk.** No warranty; the authors take no responsibility for
+how you use this tool or the data it pulls. Velocity pulls from third-party
+sources that have not authorised it: their terms apply to you, the requests
+come from your IP, and rate limits, bans and legal exposure are yours. Feeds can
+be incomplete, delayed or spoofed, and AI summaries can be wrong. Don't use it
+for navigation, safety-of-life, or anything where being wrong hurts someone.
+Read [`DISCLAIMER.md`](./DISCLAIMER.md) before you run it. Security
+self-assessments: [ISO/IEC 27001:2022 controls](docs/security/isms/statement-of-applicability.md),
+[OWASP ASVS 5.0 L2](docs/security/asvs-l2-assessment.md).
 
 ## Prerequisites
 
