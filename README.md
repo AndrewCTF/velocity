@@ -27,7 +27,7 @@ your own disk, so the history is yours.
 
 |                | History you can replay            | Self-hosted | Account / API key | Who owns the archive |
 | -------------- | --------------------------------- | ----------- | ----------------- | -------------------- |
-| **Velocity**   | As much as your disk holds        | Yes         | None              | You                  |
+| **Velocity**   | As much as you choose to keep     | Yes         | None              | You                  |
 | Flightradar24  | 7 days on the free tier           | No          | Account           | Them                 |
 | MarineTraffic  | 24 hours free (down from 72)      | No          | Account           | Them                 |
 | ADS-B Exchange | Free API tier discontinued        | No          | Paid API          | Them                 |
