@@ -188,7 +188,7 @@ export function HomeView(): JSX.Element {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* activity feed */}
         <div className="lg:col-span-8 space-y-2">
-          <div className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">
+          <div className="k-band">
             Recent builds
           </div>
           <div className="rounded-md border border-line-2 bg-bg-1 overflow-hidden">

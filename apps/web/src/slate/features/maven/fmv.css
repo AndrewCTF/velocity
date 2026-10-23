@@ -1,0 +1,997 @@
+/* fmv.css: the reference video surface (header, toolbar, telemetry, panes,
+   timeline, detections legend, context menu, nomination list, detection
+   chip), transcribed from the copy page's builders in its own 1920 x 1080
+   frame units and scaled with `zoom` (Fmv.tsx). Colours and sizes are the
+   copy's. Classes are prefixed under .mfv so the shell's rules cannot reach in. */
+
+.mfv {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #0e1414;
+  color: #e6eaea;
+  font:
+    400 13px/1.25 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+}
+.mfv *,
+.mfv *::before {
+  box-sizing: border-box;
+}
+.mfv .st {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.mfv .st > * {
+  position: absolute;
+}
+.mfv svg {
+  fill: currentColor;
+}
+.mfv button,
+.mfv input {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.mfv input {
+  cursor: text;
+}
+.mfv button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.mfv button:focus-visible {
+  outline: 1px solid #4c90f0;
+  outline-offset: 1px;
+}
+
+/* M2/M15 header row (0..24) and toolbar (24..64) */
+.mfv .top {
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 24px;
+  background: #0f1515;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 8px 0 9px;
+}
+.mfv .top .logo {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: #f3f5f5;
+}
+.mfv .top .logo svg {
+  width: 16px;
+  height: 16px;
+}
+.mfv .top .pill {
+  width: 37px;
+  height: 18px;
+  border-radius: 9px;
+  background: #cf3b45;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-left: 12px;
+}
+.mfv .top .pill svg {
+  width: 12px;
+  height: 12px;
+}
+.mfv .top .fttl {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f3f5f5;
+  white-space: nowrap;
+  min-width: 150px;
+}
+.mfv .top .sh {
+  width: 14px;
+  height: 14px;
+  color: #dde2e3;
+}
+.mfv .top > button {
+  color: #e6eaea;
+}
+.mfv .top .fchip {
+  height: 19px;
+  padding: 0 7px;
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
+  background: #161e1e;
+  border: 1px solid #2a3234;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.mfv .top .fchip.live {
+  background: transparent;
+  border-color: transparent;
+  color: #d9535c;
+}
+.mfv .top .srch {
+  margin-left: auto;
+  width: 138px;
+  height: 19px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  border: 1px solid #2a3234;
+  border-radius: 2px;
+  color: #c6cdd0;
+}
+.mfv .top .srch svg {
+  width: 14px;
+  height: 14px;
+}
+.mfv .top .srch input {
+  flex: 1;
+  min-width: 0;
+  color: #e6eaea;
+  font-size: 13px;
+}
+.mfv .top .srch input::placeholder {
+  color: #9aa5a8;
+  opacity: 1;
+}
+.mfv .row2 {
+  left: 0;
+  top: 24px;
+  right: 0;
+  height: 40px;
+  background: #161f1e;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding-left: 28px;
+}
+.mfv .row2 .ib {
+  width: 49px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: #c6cdd0;
+}
+.mfv .row2 .ib svg {
+  width: 17px;
+  height: 17px;
+}
+.mfv .row2 .ib.on {
+  color: #5b8fd9;
+}
+.mfv .row2 .tag {
+  width: 59px;
+  height: 27px;
+  margin: 0 4px 0 -4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 9px;
+  border-radius: 2px;
+  background: #2a3a5a;
+  color: #c6cdd0;
+  font-weight: 600;
+}
+.mfv .row2 .tag.on {
+  background: #3a60b0;
+  color: #fff;
+}
+.mfv .row2 .tag svg {
+  width: 15px;
+  height: 15px;
+}
+.mfv .row2 .ts {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: #dde2e3;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.mfv .row2 .rt {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+}
+.mfv .row2 .rt .ib {
+  width: 30px;
+}
+.mfv .row2 .cube {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: #2e8250;
+  border-radius: 3px;
+  color: #e9fff1;
+}
+.mfv .row2 .cube.off {
+  background: #2a3234;
+}
+.mfv .row2 .cube svg {
+  width: 16px;
+  height: 16px;
+}
+.mfv .row2 .bolt {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #5a3a3e;
+  color: #fff;
+  margin: 0 6px;
+}
+.mfv .row2 .bolt.on {
+  background: #cf3b45;
+}
+.mfv .row2 .bolt svg {
+  width: 11px;
+  height: 11px;
+}
+.mfv .row2 .aif {
+  width: 74px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  background: #3a4040;
+  border-radius: 2px;
+  font-size: 11px;
+  color: #e6eaea;
+}
+
+/* panes */
+.mfv .pane {
+  overflow: hidden;
+  background: #0e1414;
+}
+.mfv .pv {
+  position: relative;
+  overflow: hidden;
+}
+.mfv .pst {
+  position: absolute;
+}
+.mfv .pst img {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  user-select: none;
+}
+.mfv .pst .ovl {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.mfv .pst .hit {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+.mfv .brk {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+.mfv .mhd {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 40px;
+  padding: 4px 10px;
+  background: linear-gradient(#0e141499, #0e141400);
+  pointer-events: none;
+  text-shadow: 0 0 3px #000;
+}
+.mfv .mhd b {
+  display: block;
+  font-size: 12px;
+  color: #fff;
+}
+.mfv .mhd span {
+  font-size: 9.5px;
+  color: #e6eaea;
+}
+.mfv .omap {
+  position: absolute;
+  left: 248px;
+  top: 2px;
+  height: 21px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border-radius: 11px;
+  background: #242c2eee;
+  box-shadow: 0 0 0 1px #3a4446;
+  font-size: 12px;
+  color: #e6eaea;
+}
+.mfv .omap svg {
+  width: 13px;
+  height: 13px;
+  color: #c6cdd0;
+}
+.mfv .omap svg:last-child {
+  width: 8px;
+  height: 8px;
+}
+.mfv .mmenu {
+  position: absolute;
+  left: 248px;
+  top: 28px;
+  width: 205px;
+  padding: 4px 0;
+  background: #242c2e;
+  border-radius: 3px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6);
+}
+.mfv .mmenu > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 35px;
+  padding: 0 12px;
+  font-size: 15px;
+  color: #e6eaea;
+}
+.mfv .mmenu > button svg {
+  width: 18px;
+  height: 18px;
+  color: #c6cdd0;
+}
+.mfv .mmenu > button svg:last-child:not(:first-child) {
+  width: 9px;
+  height: 9px;
+  margin-left: auto;
+}
+.mfv .mmenu > button.on,
+.mfv .mmenu > button:hover:not(:disabled) {
+  background: #323a3c;
+}
+.mfv .mmenu .sub {
+  position: absolute;
+  left: 209px;
+  top: 70px;
+  width: 220px;
+  padding: 4px 0;
+  background: #242c2e;
+  border-radius: 3px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6);
+}
+.mfv .mmenu .sub button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 35px;
+  padding: 0 12px;
+  font-size: 15px;
+  color: #e6eaea;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mfv .mmenu .sub button svg {
+  width: 16px;
+  height: 16px;
+  color: #5b8fd9;
+  flex: none;
+}
+.mfv .mmenu .sub button:hover {
+  background: #323a3c;
+}
+.mfv .mmenu .none {
+  display: block;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #9aa5a8;
+}
+.mfv .inset {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  width: 187px;
+  height: 87px;
+  padding: 2px 0 0 1px;
+  background: #0e1414;
+  border-left: 1px solid #2a3234;
+}
+.mfv .inset .fp {
+  position: absolute;
+  left: 70px;
+  top: 26px;
+  width: 48px;
+  height: 32px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #0006;
+  pointer-events: none;
+}
+.mfv .nopl {
+  position: absolute;
+  font-size: 15px;
+  color: #9aa5a8;
+  margin: 0;
+}
+
+/* M27 detection chip */
+.mfv .dchip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 8px 10px;
+  background: #363e44;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.mfv .dchip b {
+  display: block;
+  font-size: 17px;
+  font-weight: 700;
+  color: #f6f7f7;
+}
+.mfv .dchip small {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #c1c8cc;
+}
+.mfv .dchip small i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #aab2b6;
+}
+
+/* M21 context menu */
+.mfv .scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+}
+.mfv .ctx {
+  z-index: 5;
+  width: 324px;
+  padding: 6px 0;
+  background: #242c2e;
+  border-radius: 3px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6);
+}
+.mfv .ctx button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 16px);
+  margin: 0 8px;
+  height: 45px;
+  padding: 0 12px;
+  font-size: 17.5px;
+  color: #e6eaea;
+  border-radius: 2px;
+}
+.mfv .ctx button svg {
+  width: 19px;
+  height: 19px;
+  color: #e6eaea;
+  flex: none;
+}
+.mfv .ctx button.hl,
+.mfv .ctx button:hover {
+  background: #323a3c;
+}
+.mfv .ctx .end {
+  margin-left: auto;
+}
+.mfv .ctx .end svg {
+  width: 22px;
+  height: 22px;
+  color: #c6cdd0;
+}
+.mfv .ctx .na {
+  display: block;
+  padding: 10px 20px 10px 51px;
+  font-size: 15px;
+  color: #6d777a;
+}
+.mfv .ctx hr {
+  border: 0;
+  height: 1px;
+  background: #3a4446;
+  margin: 4px 0;
+}
+.mfv .dbg {
+  z-index: 3;
+  margin: 0;
+  padding: 6px 8px;
+  background: rgba(14, 20, 20, 0.85);
+  border: 1px solid #3a4446;
+  font:
+    11px/1.4 "Source Code Pro",
+    monospace;
+  color: #d9c48a;
+  pointer-events: none;
+}
+
+/* left column (0..374) */
+.mfv .lp {
+  left: 0;
+  top: 64px;
+  bottom: 0;
+  width: 374px;
+  background: #252d2f;
+  display: flex;
+  flex-direction: column;
+  border-right: 9px solid #131d1e;
+}
+.mfv .mm {
+  position: relative;
+  height: 181px;
+  flex: none;
+  background: #1c2426;
+  overflow: hidden;
+}
+.mfv .mmh {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 34px;
+  display: flex;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(14, 20, 20, 0.62);
+  text-shadow: 0 0 3px #000;
+  pointer-events: none;
+}
+.mfv .mmh svg {
+  width: 11px;
+  height: 11px;
+  margin-top: 4px;
+}
+.mfv .mmh b {
+  display: block;
+  font-size: 12px;
+  color: #fff;
+}
+.mfv .mmh small {
+  font-size: 9px;
+  color: #dde2e3;
+}
+.mfv .mmf {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 165px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  background: rgba(14, 20, 20, 0.85);
+}
+.mfv .mmf button {
+  width: 27px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: #7fb5e8;
+}
+.mfv .mmf button svg {
+  width: 14px;
+  height: 14px;
+}
+.mfv .tel,
+.mfv .nom {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 10px 0 10px;
+}
+.mfv .lp .h {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #e6eaea;
+}
+.mfv .lp .h > svg {
+  width: 15px;
+  height: 15px;
+}
+.mfv .nom .h > svg {
+  color: #7fb5e8;
+}
+.mfv .lp .h .end {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+}
+.mfv .lp .h .end button {
+  color: #c6cdd0;
+}
+.mfv .lp .h .end svg {
+  width: 13px;
+  height: 13px;
+}
+.mfv .tel .ac {
+  display: block;
+  width: 300px;
+  height: 140px;
+  margin: 30px auto 0;
+  overflow: visible;
+}
+.mfv .tel .nm {
+  text-align: center;
+  font-size: 11.5px;
+  color: #7d878a;
+  font-style: italic;
+  margin-top: 4px;
+}
+.mfv .tel .fkv {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  row-gap: 6px;
+  margin-top: 16px;
+  padding-left: 10px;
+  font-size: 13px;
+  color: #e6eaea;
+}
+.mfv .tel .fkv > span:nth-child(even) {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.mfv .tel .tg {
+  width: 26px;
+  height: 14px;
+  border-radius: 7px;
+  background: #4a5456;
+  position: relative;
+}
+.mfv .tel .tg.on {
+  background: #3a60b0;
+}
+.mfv .tel .tg i {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+}
+.mfv .tel .tg.on i {
+  left: 14px;
+}
+.mfv .tel .sec {
+  margin: 26px 0 0 10px;
+  font-size: 13px;
+  color: #9aa5a8;
+  letter-spacing: 0.03em;
+}
+.mfv .nom .r {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.mfv .nom .wb {
+  margin-left: auto;
+  height: 27px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #6a7578;
+  border-radius: 2px;
+  font-size: 12.5px;
+}
+.mfv .nom .wb svg {
+  width: 12px;
+  height: 12px;
+}
+.mfv .nom .nt {
+  height: 27px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  background: #286ec4;
+  border-radius: 2px;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.mfv .nom .nt svg {
+  width: 15px;
+  height: 15px;
+}
+.mfv .nom .bd {
+  width: 110px;
+  height: 26px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 8px;
+  background: #1c2426;
+  border-radius: 2px;
+  font-size: 12.5px;
+}
+.mfv .nom .bd i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: #d2495a;
+}
+.mfv .nom .lst {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9.5px;
+}
+.mfv .nom .it {
+  width: 355px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 10px;
+  background: #2e3638;
+  border: 1.5px solid #3a4244;
+  border-radius: 2px;
+}
+.mfv .nom .it.on,
+.mfv .nom .it:hover {
+  background: #363f41;
+}
+.mfv .nom .it > svg {
+  width: 24px;
+  height: 24px;
+  color: #e0505e;
+  flex: none;
+}
+.mfv .nom .it b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #f3f5f5;
+}
+.mfv .nom .it small {
+  font-size: 11.5px;
+  color: #9aa5a8;
+}
+.mfv .nom .none {
+  font-size: 13px;
+  color: #9aa5a8;
+}
+.mfv .vs {
+  flex: none;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 10px;
+  background: #2e3638;
+  font-size: 13px;
+  color: #e6eaea;
+}
+.mfv .vs svg {
+  width: 14px;
+  height: 14px;
+}
+.mfv .vs svg:last-child {
+  width: 9px;
+  height: 9px;
+  margin-left: auto;
+}
+.mfv .vset {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #2e3638;
+  font-size: 13px;
+}
+.mfv .vset input {
+  all: revert;
+}
+
+/* M23/M26 timeline (942..1080) */
+.mfv .ftl {
+  left: 0;
+  bottom: 0;
+  height: 138px;
+  background: #252d2f;
+}
+.mfv .ftl > * {
+  position: absolute;
+}
+.mfv .ftl .box {
+  top: 15px;
+  width: 85px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding-left: 7px;
+  background: #1c2426;
+  border-radius: 2px;
+  font-size: 12px;
+}
+.mfv .ftl .box i {
+  font-style: normal;
+  color: #7d878a;
+  margin-left: 5px;
+}
+.mfv .ftl .tr {
+  top: 15px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: #e6eaea;
+}
+.mfv .ftl .tr button {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.mfv .ftl .tr svg {
+  width: 13px;
+  height: 13px;
+  color: #dde2e3;
+}
+.mfv .ftl .tr .pp {
+  width: 79px;
+  height: 24px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding-left: 14px;
+  background: #3a60b0;
+  border-radius: 2px;
+  color: #fff;
+  font-size: 12.5px;
+}
+.mfv .ftl .tr .pp svg {
+  width: 12px;
+  height: 12px;
+  color: #fff;
+}
+.mfv .ftl .tr .lv {
+  height: 22px;
+  padding: 0 10px 0 22px;
+  border-radius: 11px;
+  background: #cf3b45;
+  color: #fff;
+  font-weight: 600;
+  position: relative;
+}
+.mfv .ftl .tr .lv::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+}
+.mfv .ftl .tick {
+  top: 44px;
+  width: 60px;
+  text-align: center;
+  font-size: 9.5px;
+  color: #aab3b6;
+}
+.mfv .ftl .cov {
+  top: 68px;
+  height: 49px;
+  /* unrecorded time (before the archive starts) is hatched, as the copy draws it */
+  background: repeating-linear-gradient(135deg, #34494f 0 2px, #2a3d43 2px 5px);
+  overflow: hidden;
+}
+.mfv .ftl .cov i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.mfv .ftl .cov i.rec {
+  background: #3a5560;
+}
+.mfv .ftl .cov i.gap {
+  background: repeating-linear-gradient(135deg, #34494f 0 2px, #2a3d43 2px 5px);
+}
+.mfv .ftl .cur {
+  top: 116px;
+  width: 49px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  background: #3a7096;
+  color: #fff;
+  font-size: 9.5px;
+}
+.mfv .ftl .cur::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 13px;
+  width: 4px;
+  height: 50px;
+  background: #5c98b4;
+}
+.mfv .ftl .err {
+  top: 84px;
+  font-size: 12px;
+  color: #f5d98a;
+}
+
+/* M24 legend */
+.mfv .leg {
+  z-index: 2;
+  width: 137px;
+  min-height: 133px;
+  padding: 6px 10px 8px;
+  background: #242c2e;
+}
+.mfv .leg .h {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: #9aa5a8;
+  height: 24px;
+}
+.mfv .leg .h button {
+  margin-left: auto;
+  color: #c6cdd0;
+}
+.mfv .leg .h svg {
+  width: 11px;
+  height: 11px;
+}
+.mfv .leg label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 23.5px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.mfv .leg label input {
+  all: revert;
+  width: 14px;
+  height: 14px;
+  accent-color: #3a60b0;
+}
+.mfv .leg label b {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 11.5px;
+}
+.mfv .leg p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #9aa5a8;
+}

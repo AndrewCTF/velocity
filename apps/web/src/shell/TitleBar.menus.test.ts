@@ -4,7 +4,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // The menu bar shipped as six buttons that set a `menu` state nothing read: no
-// dropdown was ever rendered, so File / Edit / View / Collect / Window / Help
+// dropdown was ever rendered, so File / Edit / View / Collect / Window / Help (now File / Edit / View / Support)
 // highlighted on click and did nothing else. Chrome that looks like the most
 // recognisable control in a window and is inert teaches the operator to
 // distrust the rest of it.
@@ -24,7 +24,7 @@ describe("title-bar menus", () => {
   });
 
   it("gives every menu a non-empty item list", () => {
-    for (const m of ["File", "Edit", "View", "Collect", "Window", "Help"]) {
+    for (const m of ["File", "Edit", "View", "Support"]) {
       const block = new RegExp(`\\b${m}: \\[([\\s\\S]*?)\\n  \\],`).exec(bar);
       const body = block?.[1] ?? "";
       expect(body, `${m} has no entry in MENU_ITEMS`).not.toBe("");

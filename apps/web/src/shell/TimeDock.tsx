@@ -3,6 +3,7 @@ import * as Cesium from "cesium";
 import { Icon } from "../normal/Icon.js";
 import { apiFetch } from "../transport/http.js";
 import { useSelection, useTime } from "../state/stores.js";
+import { useSituationFocus } from "../state/situationFocus.js";
 import { usePolReplay } from "../state/polReplayStore.js";
 import { encodeRewind, isRewindId, parseRewind } from "../state/rewindLink.js";
 import {
@@ -12,6 +13,7 @@ import {
 } from "../globe/HistoryPlayback.js";
 import { CoverageStrip, type Coverage } from "../timeline/CoverageStrip.js";
 import { toast } from "./toast.js";
+import { TimelinePanel } from "./TimelinePanel.js";
 
 // TimeDock — THE transport. Built from docs/mockups/console-2026-08
 // (`12-map-replay.html`) and fed by the same density/events endpoints the old
@@ -76,6 +78,12 @@ const pad = (n: number): string => String(n).padStart(2, "0");
 function stamp(ms: number): string {
   const d = new Date(ms);
   return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} Z`;
+}
+function hoursText(ms: number): string {
+  const h = ms / 3_600_000;
+  if (h < 1) return `${Math.max(1, Math.round(h * 60))} min`;
+  const r = Math.round(h);
+  return `${r} hour${r === 1 ? "" : "s"}`;
 }
 function tickLabel(ms: number): string {
   const d = new Date(ms);
@@ -154,6 +162,18 @@ export function TimeDock({
   const [playbackInfo, setPlaybackInfo] = useState<PlaybackInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [replayDay, setReplayDay] = useState("");
+  // The transport and replay controls fold behind the clock in the frame's
+  // gutter, so the frame reads as a Gantt. Folded, not removed: the controls
+  // stay mounted, and space / L keep working.
+  const [tools, setTools] = useState(false);
+  // The transport and replay rows under the Timeline panel (its widget icon).
+  // Hidden, not unmounted, so space / L keep working.
+  const [ctl, setCtl] = useState(false);
+  const dayRef = useRef<HTMLInputElement | null>(null);
+  const sitRows = useSituationFocus((st) => st.rows);
+  const sitOrigin = useSituationFocus((st) => st.origin);
+  const sitPick = useSituationFocus((st) => st.pick);
+  const selectedId = useSelection((st) => st.selectedEntityId);
   const [replayTime, setReplayTime] = useState("00:00");
   const [minDay, setMinDay] = useState(FALLBACK_MIN_DAY);
   const maxDay = isoDay(Date.now());
@@ -488,8 +508,11 @@ export function TimeDock({
 
   const ticks = useMemo(() => {
     const out: Array<{ pct: number; label: string }> = [];
-    for (let i = 0; i <= 6; i++)
-      out.push({ pct: (i / 6) * 100, label: tickLabel(from + (span * i) / 6) });
+    for (let i = 0; i < 12; i++)
+      out.push({
+        pct: (i / 12) * 100,
+        label: tickLabel(from + (span * i) / 12),
+      });
     return out;
   }, [from, span]);
 
@@ -503,18 +526,18 @@ export function TimeDock({
   const laneRows = useMemo(
     () =>
       lanes.map((lane) => (
-        <div key={lane.id} className="relative h-[14px] border-t border-line">
-          {/* The label rides OVER the left of the track rather than taking a
-              gutter out of it, so a mark at 30% of the hour lines up with the
-              30% tick above it and the 30% density bar below it. */}
-          <span className="mono pointer-events-none absolute inset-y-0 left-0 z-1 flex items-center gap-[5px] bg-bg-1/90 pl-[10px] pr-[7px] text-[10px] uppercase tracking-[0.5px] text-txt-3">
+        <div key={lane.id} className="tdock-row">
+          {/* A Gantt row: the name in the gutter, the marks in the track. Every
+              row (lanes, density, hour axis) shares the same gutter, so a mark
+              at 30% of the window still lines up with the 30% tick. */}
+          <span className="tdock-gutter">
             <i
-              className="h-[6px] w-[6px] shrink-0 rounded-full"
+              className="h-[8px] w-[8px] shrink-0 rounded-[1px]"
               style={{ background: lane.color || "var(--warn)" }}
             />
             {lane.label}
           </span>
-          <span className="absolute inset-0">
+          <span className="tdock-track">
             {lane.events.map((ev, i) => {
               const pct = ((ev.t - from) / span) * 100;
               if (pct < 0 || pct > 100) return null;
@@ -524,7 +547,7 @@ export function TimeDock({
                   type="button"
                   title={`${lane.label}: ${ev.label}`}
                   onClick={() => seek(ev.t)}
-                  className="absolute top-[3px] h-[8px] w-[2px]"
+                  className="absolute top-[3px] h-[18px] w-[3px]"
                   style={{
                     left: `${pct}%`,
                     background: lane.color || "var(--warn)",
@@ -662,253 +685,406 @@ export function TimeDock({
     goLive,
   ]);
 
-  return (
-    <div className="select-none text-[12px]">
-      {/* Transport. One filled primary, a red Live, and every control the old
-          dock hid behind an unadvertised key. */}
-      <div className="flex h-[30px] items-center gap-[3px] px-[10px]">
-        <span className="mono min-w-[96px] text-[13px] tracking-[0.3px] text-accent-fg">
-          {stamp(clockMs)}
-        </span>
-        <span className="flex-1" />
-        <TBtn label="Jump to start" onClick={() => seek(from)}>
-          <Icon name="step-b" className="h-3 w-3" />
-        </TBtn>
-        <TBtn
-          label="Rewind"
-          onClick={() =>
-            setMultiplier(Math.max(1, Math.min(maxMultiplier, multiplier / 10)))
-          }
-        >
-          <Icon name="rewind" className="h-3 w-3" />
-        </TBtn>
-        <TBtn label="Back 15 seconds" onClick={() => seek(clockMs - 15_000)}>
-          <Icon name="back-15" className="h-3 w-3" />
-          15s
-        </TBtn>
-        <TBtn label="Step back" onClick={() => seek(clockMs - span / 240)}>
-          <Icon name="frame-b" className="h-3 w-3" />
-        </TBtn>
-        <button
-          type="button"
-          onClick={togglePlay}
-          title="Play or pause (space)"
-          className="mx-[2px] flex h-5 items-center gap-1 rounded-sm bg-accent px-3 text-[12px] text-(--on-accent) hover:brightness-110"
-        >
-          <Icon name={playing ? "pause" : "play"} className="h-3 w-3" />
-          {playing ? "Pause" : "Play"}
-        </button>
-        <TBtn label="Step forward" onClick={() => seek(clockMs + span / 240)}>
-          <Icon name="frame-f" className="h-3 w-3" />
-        </TBtn>
-        <TBtn label="Forward 15 seconds" onClick={() => seek(clockMs + 15_000)}>
-          15s
-          <Icon name="fwd-15" className="h-3 w-3" />
-        </TBtn>
-        <TBtn
-          label="Fast forward"
-          onClick={() =>
-            setMultiplier(Math.min(maxMultiplier, multiplier * 10))
-          }
-        >
-          <Icon name="fast-forward" className="h-3 w-3" />
-        </TBtn>
-        <button
-          type="button"
-          onClick={goLive}
-          aria-pressed={live}
-          title="Return to live (L)"
-          className={`ml-[2px] h-5 rounded-sm px-[10px] text-[12px] ${
-            live ? "bg-bg-3 text-txt-1" : "bg-alert text-(--on-alert)"
-          }`}
-        >
-          Live
-        </button>
-        {/* Needs a camera to read, so the 2D console (no viewer) has none. */}
-        {viewer && (
-          <TBtn label="Copy rewind link" onClick={copyRewindLink}>
-            <Icon name="link" className="h-3 w-3" />
-          </TBtn>
-        )}
-        <span className="flex-1" />
-        <div className="flex overflow-hidden rounded-sm border border-line-2">
-          {SPEEDS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setMultiplier(Math.min(maxMultiplier, s))}
-              disabled={s > maxMultiplier}
-              aria-pressed={multiplier === s}
-              title={
-                s > maxMultiplier
-                  ? `capped at ${maxMultiplier}x while replaying the upstream archive`
-                  : `${s}x`
-              }
-              className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 disabled:opacity-40 ${
-                multiplier === s
-                  ? "bg-accent text-(--on-accent)"
-                  : "text-txt-2 hover:bg-(--hover)"
-              }`}
-            >
-              {s}x
-            </button>
-          ))}
+  // The open situation's Gantt (slate/SlateSituations publishes it): one row
+  // per action, a bar from its start to its stated end (a tick when it states
+  // none), the picked or selected row filled, and an HOURS axis from the
+  // situation's hour 0. Only the rows, the bars and the axis are new here; the
+  // replay Gantt below is unchanged and moves into the clock popover.
+  const sitHours = useMemo(() => {
+    if (sitOrigin === null) return 24;
+    const last = Math.max(
+      0,
+      ...sitRows.map((r) => ((r.end ?? r.start) - sitOrigin) / 3_600_000),
+    );
+    return Math.max(24, Math.ceil(last / 24) * 24);
+  }, [sitRows, sitOrigin]);
+  const situationGantt =
+    sitRows.length > 0 && sitOrigin !== null ? (
+      <>
+        <div className="tdock-gantt tdock-sit">
+          {sitRows.map((r) => {
+            const on = r.id === sitPick || r.id === selectedId;
+            const x = ((r.start - sitOrigin) / 3_600_000 / sitHours) * 100;
+            const w =
+              r.end === null
+                ? null
+                : ((r.end - r.start) / 3_600_000 / sitHours) * 100;
+            return (
+              <div key={r.id} className={`tdock-row${on ? " on" : ""}`}>
+                <button
+                  type="button"
+                  className="tdock-gutter"
+                  title={r.label}
+                  onClick={() => useSituationFocus.getState().setPick(r.id)}
+                >
+                  {r.label}
+                </button>
+                <span className="tdock-track">
+                  <i
+                    className={`tdock-bar${w === null ? " tick" : ""}`}
+                    style={{
+                      left: `${Math.max(0, Math.min(100, x))}%`,
+                      ...(w !== null
+                        ? { width: `${Math.max(0, Math.min(100 - x, w))}%` }
+                        : {}),
+                    }}
+                  />
+                  {on && w !== null && (
+                    <span
+                      className="tdock-dur"
+                      style={{ left: `calc(${Math.min(100, x + w)}% + 9px)` }}
+                    >
+                      ~{hoursText(r.end! - r.start)}
+                    </span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </div>
-        <div className="ml-2 flex overflow-hidden rounded-sm border border-line-2">
-          {WINDOWS.map((w) => (
-            <button
-              key={w.id}
-              type="button"
-              onClick={() => setWindowSec(w.sec)}
-              aria-pressed={windowSec === w.sec}
-              className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 ${
-                windowSec === w.sec
-                  ? "bg-accent text-(--on-accent)"
-                  : "text-txt-2 hover:bg-(--hover)"
-              }`}
-            >
-              {w.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Day/time replay — pick a UTC instant to run the world back from.
-          Bounded by the earliest day the upstream heatmap actually covers. */}
-      <div className="flex h-[26px] items-center gap-[6px] border-t border-line px-[10px]">
-        <span className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3">
-          replay from
-        </span>
-        <input
-          type="date"
-          value={replayDay}
-          min={minDay}
-          max={maxDay}
-          aria-label="Replay start day"
-          title={
-            earliestAvailableDay
-              ? `Replay a UTC day · own archive (aircraft + vessels) available from ${earliestAvailableDay} · aircraft continue further back from the upstream archive`
-              : `Replay a UTC day · keyless back to ${minDay} (aircraft, upstream archive)`
-          }
-          onChange={(e) => {
-            setReplayDay(e.target.value);
-            applyReplayStart(e.target.value, replayTime);
-          }}
-          className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-hidden focus:border-accent-line scheme-dark"
-        />
-        <input
-          type="time"
-          value={replayTime}
-          aria-label="Replay start time (UTC)"
-          onChange={(e) => {
-            setReplayTime(e.target.value);
-            if (replayDay) applyReplayStart(replayDay, e.target.value);
-          }}
-          className="mono text-[10px] tabular-nums px-1.5 py-1 rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-hidden focus:border-accent-line scheme-dark"
-        />
-        <span className="mono text-[10px] text-txt-4">
-          {loading
-            ? "loading…"
-            : playbackInfo
-              ? playbackInfo.label
-              : `keyless back to ${minDay}`}
-          {ownershipChip
-            ? ` · ${ownershipChip}`
-            : ` · ${retentionLabel(retentionHours)} own-archive buffer`}
-        </span>
-        {replayDayBeforeAvailable && (
-          <span
-            className="mono text-[10px] text-txt-4"
-            title="The byte cap already pruned own-archive positions older than this. Aircraft still replay from the upstream archive; vessels have no upstream fallback."
-          >
-            vessels unavailable before {earliestAvailableDay} (own archive only)
-          </span>
-        )}
-      </div>
-
-      {/* Coverage — two rows: the own archive's real recorded-fix density per
-          hour (CoverageStrip, existing component, unchanged), and which days
-          the upstream heatmap actually covers (here-is-some-feedback-cuddly-
-          pond.md §1.2 "in a second row, upstream availability"). Both sit
-          directly under the day/time picker, same as Timeline.tsx used to. */}
-      <div className="flex flex-col gap-[3px] border-t border-line px-[10px] py-[4px]">
-        <CoverageStrip windowHours={retentionHours} onCoverage={setCoverage} />
-        <UpstreamAvailabilityRow days={upstreamDays} />
-      </div>
-
-      {/* Tick ruler. */}
-      <div className="relative h-[22px] border-t border-line">
-        {ticks.map((t) => (
-          <span key={t.pct}>
-            <i
-              className="absolute top-0 h-[5px] w-px bg-bg-4"
-              style={{ left: `${t.pct}%` }}
-            />
+        <span className="tdock-grid" aria-hidden />
+        <span className="tdock-axlabel">HOURS</span>
+        <span className="tdock-axis">
+          {Array.from({ length: 12 }, (_, i) => (
             <span
-              className="mono absolute top-[5px] translate-x-[3px] text-[10px] text-txt-3"
-              style={{ left: `${t.pct}%` }}
+              key={i}
+              className="tdock-tick"
+              style={{ left: `${(i / 12) * 100}%` }}
             >
-              {t.label}
+              {Math.round((sitHours / 12) * i)}
             </span>
+          ))}
+        </span>
+      </>
+    ) : null;
+
+  // The replay Gantt: one named row per lane, the density row that is also
+  // the scrub surface, gridlines and the clock-time axis. In the frame by
+  // default; inside the clock popover when the open situation owns the frame.
+  const replayGantt = (
+    <>
+      <div className="tdock-gantt">
+        {laneRows}
+        <div className="tdock-row">
+          <span className="tdock-gutter">Detections</span>
+          <div
+            ref={strip}
+            role="slider"
+            tabIndex={0}
+            aria-label="Scrub replay position"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(playPct)}
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              onScrub(e);
+            }}
+            onPointerMove={(e) => {
+              if (e.buttons === 1) onScrub(e);
+            }}
+            className="tdock-track cursor-ew-resize"
+          >
+            {densityBars}
+            {/* The stamp hugs whichever side of the playhead has room.
+                  Centred on the line, it hung half outside the dock at the live
+                  end, which is where the playhead sits every time the console
+                  is opened. */}
+            <span
+              className="pointer-events-none absolute inset-y-0 w-[2px] bg-mag"
+              style={{ left: `${playPct}%` }}
+            >
+              <span
+                className={`mono absolute top-[2px] whitespace-nowrap rounded-[1px] bg-mag px-[5px] text-[10px] text-(--on-mag) ${
+                  playPct > 88
+                    ? "right-[3px]"
+                    : playPct < 6
+                      ? "left-[3px]"
+                      : "-translate-x-1/2"
+                }`}
+              >
+                {stamp(clockMs)}
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <span className="tdock-grid" aria-hidden />
+      {/* Hour axis. Its label states the range actually loaded, not
+            `now − window`, and how many bins it holds. */}
+      <span
+        className="tdock-axlabel"
+        title={`${live ? "Live" : "Replay"} · ${tickLabel(from)} to ${tickLabel(to)} Z · ${bars.length} bins`}
+      >
+        UTC
+      </span>
+      <span className="tdock-axis">
+        {ticks.map((t) => (
+          <span
+            key={t.pct}
+            className="tdock-tick"
+            style={{ left: `${t.pct}%` }}
+          >
+            {t.label}
           </span>
         ))}
-      </div>
+      </span>
+    </>
+  );
 
-      {/* One NAMED row per lane, which is what the reference does. All the
-          lanes used to share a single 10px unlabelled band of 4px triangles:
-          193 incidents and 200 signal events in the same hour drew as one
-          undifferentiated sawtooth and nothing said which colour meant what. */}
-      {laneRows}
-
-      {/* Density is the drag surface. */}
-      <div
-        ref={strip}
-        role="slider"
-        tabIndex={0}
-        aria-label="Scrub replay position"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(playPct)}
-        onPointerDown={(e) => {
-          e.currentTarget.setPointerCapture(e.pointerId);
-          onScrub(e);
-        }}
-        onPointerMove={(e) => {
-          if (e.buttons === 1) onScrub(e);
-        }}
-        className="relative h-[34px] cursor-ew-resize border-t border-line bg-bg-0"
-      >
-        {densityBars}
-        {/* The stamp hugs whichever side of the playhead has room. Centred on
-            the line, it hung half outside the dock at the live end, which is
-            where the playhead sits every time the console is opened. */}
-        <span
-          className="pointer-events-none absolute inset-y-0 w-[2px] bg-mag"
-          style={{ left: `${playPct}%` }}
-        >
-          <span
-            className={`mono absolute top-[2px] whitespace-nowrap rounded-[1px] bg-mag px-[5px] text-[10px] text-(--on-mag) ${
-              playPct > 88
-                ? "right-[3px]"
-                : playPct < 6
-                  ? "left-[3px]"
-                  : "-translate-x-1/2"
-            }`}
-          >
+  return (
+    <div className="tdock select-none text-[12px]">
+      <div className="tdock-strip" data-open={tools} data-ctl={ctl}>
+        <TimelinePanel
+          lanes={lanes}
+          from={from}
+          span={span}
+          clockMs={clockMs}
+          playing={playing}
+          onPlay={togglePlay}
+          seek={seek}
+          onFit={() => setWindowSec(WINDOWS[WINDOWS.length - 1]!.sec)}
+          controls={ctl}
+          onControls={() => setCtl((v) => !v)}
+          onReplayDay={() => {
+            setCtl(true);
+            requestAnimationFrame(() => {
+              dayRef.current?.focus();
+              try {
+                dayRef.current?.showPicker?.();
+              } catch {
+                /* showPicker needs a user gesture in some browsers; focus is enough */
+              }
+            });
+          }}
+          onClose={() => setTools(false)}
+        />
+        {/* Transport. One filled primary, a red Live, and every control the old
+          dock hid behind an unadvertised key. */}
+        <div className="tdock-ctl h-[30px] items-center gap-[3px] px-[10px]">
+          <span className="mono min-w-[96px] text-[13px] tracking-[0.3px] text-accent-fg">
             {stamp(clockMs)}
           </span>
-        </span>
-      </div>
+          <span className="flex-1" />
+          <TBtn label="Jump to start" onClick={() => seek(from)}>
+            <Icon name="step-b" className="h-3 w-3" />
+          </TBtn>
+          <TBtn
+            label="Rewind"
+            onClick={() =>
+              setMultiplier(
+                Math.max(1, Math.min(maxMultiplier, multiplier / 10)),
+              )
+            }
+          >
+            <Icon name="rewind" className="h-3 w-3" />
+          </TBtn>
+          <TBtn label="Back 15 seconds" onClick={() => seek(clockMs - 15_000)}>
+            <Icon name="back-15" className="h-3 w-3" />
+            15s
+          </TBtn>
+          <TBtn label="Step back" onClick={() => seek(clockMs - span / 240)}>
+            <Icon name="frame-b" className="h-3 w-3" />
+          </TBtn>
+          <button
+            type="button"
+            onClick={togglePlay}
+            title="Play or pause (space)"
+            className="mx-[2px] flex h-5 items-center gap-1 rounded-sm bg-accent px-3 text-[12px] text-(--on-accent) hover:brightness-110"
+          >
+            <Icon name={playing ? "pause" : "play"} className="h-3 w-3" />
+            {playing ? "Pause" : "Play"}
+          </button>
+          <TBtn label="Step forward" onClick={() => seek(clockMs + span / 240)}>
+            <Icon name="frame-f" className="h-3 w-3" />
+          </TBtn>
+          <TBtn
+            label="Forward 15 seconds"
+            onClick={() => seek(clockMs + 15_000)}
+          >
+            15s
+            <Icon name="fwd-15" className="h-3 w-3" />
+          </TBtn>
+          <TBtn
+            label="Fast forward"
+            onClick={() =>
+              setMultiplier(Math.min(maxMultiplier, multiplier * 10))
+            }
+          >
+            <Icon name="fast-forward" className="h-3 w-3" />
+          </TBtn>
+          <button
+            type="button"
+            onClick={goLive}
+            aria-pressed={live}
+            title="Return to live (L)"
+            className={`ml-[2px] h-5 rounded-sm px-[10px] text-[12px] ${
+              live ? "bg-bg-3 text-txt-1" : "bg-alert text-(--on-alert)"
+            }`}
+          >
+            Live
+          </button>
+          {/* Needs a camera to read, so the 2D console (no viewer) has none. */}
+          {viewer && (
+            <TBtn label="Copy rewind link" onClick={copyRewindLink}>
+              <Icon name="link" className="h-3 w-3" />
+            </TBtn>
+          )}
+          <span className="flex-1" />
+          <div className="flex overflow-hidden rounded-sm border border-line-2">
+            {SPEEDS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setMultiplier(Math.min(maxMultiplier, s))}
+                disabled={s > maxMultiplier}
+                aria-pressed={multiplier === s}
+                title={
+                  s > maxMultiplier
+                    ? `capped at ${maxMultiplier}x while replaying the upstream archive`
+                    : `${s}x`
+                }
+                className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 disabled:opacity-40 ${
+                  multiplier === s
+                    ? "bg-accent text-(--on-accent)"
+                    : "text-txt-2 hover:bg-(--hover)"
+                }`}
+              >
+                {s}x
+              </button>
+            ))}
+          </div>
+          <div className="ml-2 flex overflow-hidden rounded-sm border border-line-2">
+            {WINDOWS.map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                onClick={() => setWindowSec(w.sec)}
+                aria-pressed={windowSec === w.sec}
+                className={`mono h-5 border-r border-line-2 px-2 text-[12px] last:border-r-0 ${
+                  windowSec === w.sec
+                    ? "bg-accent text-(--on-accent)"
+                    : "text-txt-2 hover:bg-(--hover)"
+                }`}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      <div className="flex h-5 items-center gap-3 border-t border-line px-[10px] text-[12px] text-txt-3">
-        {/* States the range actually loaded, not `now − window`. */}
-        <span>
-          {live ? "Live" : "Replay"} &middot; {tickLabel(from)} to{" "}
-          {tickLabel(to)} Z
-        </span>
-        <span className="flex-1" />
-        <span>{bars.length} bins</span>
+        {/* Day/time replay — pick a UTC instant to run the world back from.
+          Bounded by the earliest day the upstream heatmap actually covers. */}
+        <div className="tdock-ctl h-[28px] items-center gap-[6px] border-t border-line px-[10px]">
+          <span className="text-[13px] text-txt-2">Replay from</span>
+          <input
+            ref={dayRef}
+            type="date"
+            value={replayDay}
+            min={minDay}
+            max={maxDay}
+            aria-label="Replay start day"
+            title={
+              earliestAvailableDay
+                ? `Replay a UTC day · own archive (aircraft + vessels) available from ${earliestAvailableDay} · aircraft continue further back from the upstream archive`
+                : `Replay a UTC day · keyless back to ${minDay} (aircraft, upstream archive)`
+            }
+            onChange={(e) => {
+              setReplayDay(e.target.value);
+              applyReplayStart(e.target.value, replayTime);
+            }}
+            className="mono text-[11px] tabular-nums px-1.5 py-[2px] rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-hidden focus:border-accent-line scheme-dark"
+          />
+          <input
+            type="time"
+            value={replayTime}
+            aria-label="Replay start time (UTC)"
+            onChange={(e) => {
+              setReplayTime(e.target.value);
+              if (replayDay) applyReplayStart(replayDay, e.target.value);
+            }}
+            className="mono text-[11px] tabular-nums px-1.5 py-[2px] rounded-sm border border-line bg-bg-2 text-txt-1 focus:outline-hidden focus:border-accent-line scheme-dark"
+          />
+          <span className="min-w-0 truncate text-[12px] text-txt-2">
+            {loading
+              ? "loading…"
+              : playbackInfo
+                ? playbackInfo.label
+                : `keyless back to ${minDay}`}
+            {ownershipChip
+              ? ` · ${ownershipChip}`
+              : ` · ${retentionLabel(retentionHours)} own-archive buffer`}
+          </span>
+          {replayDayBeforeAvailable && (
+            <span
+              className="shrink-0 text-[12px] text-txt-2"
+              title="The byte cap already pruned own-archive positions older than this. Aircraft still replay from the upstream archive; vessels have no upstream fallback."
+            >
+              vessels unavailable before {earliestAvailableDay} (own archive
+              only)
+            </span>
+          )}
+          {/* Coverage — the own archive's recorded-fix density per hour and
+            which days the upstream heatmap covers. Their axis is the archive's
+            span, not the window above, so they sit beside the picker that
+            reaches into them rather than in the Gantt. */}
+          <div className="ml-auto flex w-[38%] min-w-[220px] flex-col gap-[3px]">
+            <CoverageStrip
+              windowHours={retentionHours}
+              onCoverage={setCoverage}
+            />
+            <UpstreamAvailabilityRow days={upstreamDays} />
+          </div>
+        </div>
+        {/* The replay Gantt the open situation displaced from the frame. Behind
+            the widget toggle with the transport, so the open panel is the
+            Timeline and nothing else. */}
+        {sitRows.length > 0 && ctl && (
+          <div className="tdock-tl">{replayGantt}</div>
+        )}
       </div>
+      {/* The Gantt, as the reference timeline draws it: one named row per
+          lane (the lanes used to share one unlabelled 10px band where 193
+          incidents and 200 signal events drew as one sawtooth), the density
+          row that is also the scrub surface, gridlines through every track and
+          the hour axis under them. Every row shares one gutter, so a mark at
+          30% of the window lines up with the 30% tick. */}
+      {sitRows.length > 0 ? (
+        <div className="tdock-tl">
+          {situationGantt}
+          <button
+            type="button"
+            className="tdock-clock"
+            aria-expanded={tools}
+            aria-label="Playback and replay controls"
+            title="Playback and replay controls"
+            onClick={() => setTools((v) => !v)}
+          >
+            <Icon name="clock" className="h-[14px] w-[14px]" />
+            <span className="tabular-nums">
+              {stamp(clockMs).replace(" Z", "")}
+            </span>
+            <i className={live ? "bg-ok" : "bg-warn"} aria-hidden />
+          </button>
+        </div>
+      ) : (
+        <div className="tdock-tl">
+          {replayGantt}
+          <button
+            type="button"
+            className="tdock-clock"
+            aria-expanded={tools}
+            aria-label="Playback and replay controls"
+            title="Playback and replay controls"
+            onClick={() => setTools((v) => !v)}
+          >
+            <Icon name="clock" className="h-[14px] w-[14px]" />
+            <span className="tabular-nums">
+              {stamp(clockMs).replace(" Z", "")}
+            </span>
+            <i className={live ? "bg-ok" : "bg-warn"} aria-hidden />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

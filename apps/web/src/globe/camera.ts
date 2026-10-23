@@ -1,6 +1,7 @@
 import * as Cesium from "cesium";
 import type { Chokepoint } from "../registry/chokepoints.js";
 import { useSelection } from "../state/stores.js";
+import { useSettings, validHomeView } from "../state/settings.js";
 
 // Camera helpers. All slews respect prefers-reduced-motion via the duration arg
 // passed by the caller (0 = instant set).
@@ -54,6 +55,16 @@ export function flyToPosition(
   });
 }
 
+// Eye altitude at which a nadir view spans `widthM` of ground across the
+// frame's WIDER axis (Cesium's PerspectiveFrustum.fov is the wider axis's
+// angle). Solved from the frustum for the same reason as globalAltitude
+// below: a hardcoded height frames differently on every window shape.
+export function altitudeForWidth(viewer: Cesium.Viewer, widthM: number): number {
+  const frustum = viewer.camera.frustum as Cesium.PerspectiveFrustum;
+  const fov = frustum.fov ?? Cesium.Math.toRadians(60);
+  return widthM / 2 / Math.tan(fov / 2);
+}
+
 // Eye altitude at which the Earth's disk spans `fill` of the frame's SHORTER
 // axis. The old global view was a hardcoded 20-22 Mm, which at this window's
 // frustum put the disk across 56% of the map height and left the rest black —
@@ -85,8 +96,12 @@ export function globalAltitude(viewer: Cesium.Viewer, fill = 0.9): number {
 }
 
 export function flyToGlobal(viewer: Cesium.Viewer, durationSec = 1.0): void {
+  // Settings · Map defaults home view wins over the built-in whole-globe frame.
+  const home = validHomeView(useSettings.getState().homeView);
   viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(20, 35, globalAltitude(viewer)),
+    destination: home
+      ? Cesium.Cartesian3.fromDegrees(home.lon, home.lat, home.height)
+      : Cesium.Cartesian3.fromDegrees(20, 35, globalAltitude(viewer)),
     duration: durationSec,
     orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
   });

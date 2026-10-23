@@ -42,6 +42,7 @@ describe("settings store", () => {
       leftRailExpanded: false,
       corroboratedOnly: false,
       adaptiveLayerGovernor: true,
+      homeView: null,
     });
   });
 
@@ -85,27 +86,3 @@ describe("settings store", () => {
   });
 });
 
-describe("dashboardMode store", () => {
-  beforeEach(() => {
-    stubStorage();
-    vi.resetModules();
-  });
-
-  it("defaults to professional (pro) when unset", async () => {
-    const { useDashboardMode } = await import("./dashboardMode.js");
-    expect(useDashboardMode.getState().mode).toBe("professional");
-  });
-
-  it('honors an explicit stored "normal" choice', async () => {
-    localStorage.setItem("velocity.dashboardMode", "normal");
-    vi.resetModules();
-    const { useDashboardMode } = await import("./dashboardMode.js");
-    expect(useDashboardMode.getState().mode).toBe("normal");
-  });
-
-  it("persists setMode", async () => {
-    const { useDashboardMode } = await import("./dashboardMode.js");
-    useDashboardMode.getState().setMode("normal");
-    expect(localStorage.getItem("velocity.dashboardMode")).toBe("normal");
-  });
-});

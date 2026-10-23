@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 
 from app import upstream
@@ -145,16 +146,30 @@ async def gp(
         # here. Measured 2026-08-21: celestrak answers our own UA and a Chrome UA
         # identically, including for the 403 below. Left in place because
         # changing two things at once is how you learn nothing.
-        r = await get_client().get(
-            url,
-            params={"GROUP": group, "FORMAT": "tle"},
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-                )
-            },
-        )
+        try:
+            r = await get_client().get(
+                url,
+                params={"GROUP": group, "FORMAT": "tle"},
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+                    )
+                },
+            )
+        except httpx.HTTPError as exc:
+            # Unreachable (connect timeout, DNS): serve the last good copy rather
+            # than a bare 500; only a cold disk is an outage.
+            cached = _read_disk(group)
+            if cached is not None:
+                text, fetched_at = cached
+                return {
+                    "group": group,
+                    "items": _parse_tle(text),
+                    "fetched_at": fetched_at,
+                    "stale": True,
+                }
+            raise HTTPException(502, "celestrak unreachable") from exc
         if r.status_code == 403 and _NOT_MODIFIED in r.text:
             # NOT a block. CelesTrak answers a repeat request inside its 2h
             # publish window with 403 and the body

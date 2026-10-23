@@ -18,6 +18,7 @@ import { CablesAdapter } from "./adapters/CablesAdapter.js";
 import { SatelliteAdapter } from "./adapters/SatelliteAdapter.js";
 import { MilSymbolAdapter } from "./adapters/MilSymbolAdapter.js";
 import { AreaAdapter } from "./adapters/AreaAdapter.js";
+import { useLayerStyles, opacityMul } from "../layer-editor/layerStyleStore.js";
 
 // AOI-aware bbox helper used by all adapters that accept a bbox query.
 function aoiBboxQuery(): string | null {
@@ -338,6 +339,7 @@ export class LayerCompositor {
   ) {}
 
   private unsubAoi: (() => void) | null = null;
+  private unsubStyles: (() => void) | null = null;
 
   start(): void {
     this.unsubscribe = this.registry.subscribe((e) => {
@@ -355,6 +357,12 @@ export class LayerCompositor {
     for (const d of this.registry.list()) {
       if (this.registry.isEnabled(d.id)) this.spawn(d);
     }
+    // Layer-editor opacity: re-dim the changed layers in place.
+    this.unsubStyles = useLayerStyles.subscribe((st, prev) => {
+      for (const [id, base] of this.desiredOpacity) {
+        if (st.overrides[id] !== prev.overrides[id]) this.setOpacity(id, base);
+      }
+    });
     // Re-poll all bbox-aware adapters when the AOI changes.
     this.unsubAoi = useAoi.subscribe(() => {
       for (const [, a] of this.adapters) {
@@ -374,6 +382,8 @@ export class LayerCompositor {
     this.unsubscribe = null;
     this.unsubAoi?.();
     this.unsubAoi = null;
+    this.unsubStyles?.();
+    this.unsubStyles = null;
     for (const id of [...this.adapters.keys()]) this.kill(id);
   }
 
@@ -407,8 +417,10 @@ export class LayerCompositor {
         _c: Cesium.EntityCollection,
         added: Cesium.Entity[],
       ): void => {
-        const opacity = this.desiredOpacity.get(d.id);
-        if (opacity == null || opacity >= 1) return;
+        const base = this.desiredOpacity.get(d.id);
+        if (base == null) return;
+        const opacity = base * opacityMul(d.id);
+        if (opacity >= 1) return;
         for (const e of added) applyEntityOpacity(e, opacity);
       };
       ds.entities.collectionChanged.addEventListener(onChanged);
@@ -429,14 +441,16 @@ export class LayerCompositor {
     useFeeds.getState().setFeed({ id, label: id, status: "unknown" });
   }
 
-  private setOpacity(id: string, opacity: number): void {
+  private setOpacity(id: string, base: number): void {
     // CustomDataSource doesn't have a single opacity knob, so we walk the
     // entities and set billboard/point alpha (and a collectionChanged
     // listener installed at spawn() applies the same to entities added by
     // later polls). Polyline cables override.
-    this.desiredOpacity.set(id, opacity);
+    this.desiredOpacity.set(id, base);
     const a = this.adapters.get(id);
     if (!a) return;
+    // Layer-editor override (layerStyleStore) multiplies the descriptor opacity.
+    const opacity = base * opacityMul(id);
     // Aircraft icons render as batched primitives off graphics-less entities, so
     // the entity walk below can't dim them — the adapter exposes setLayerOpacity
     // to re-tint the primitive collection. No-op for adapters without it.
@@ -591,6 +605,17 @@ export class LayerCompositor {
           ctx.viewer,
           mobile ? 2000 : 6000,
           mobile ? 2000 : 20000,
+          mobile,
+        );
+        refreshOnMove = true;
+      } else if (d.id === "hazards.nasa.firms") {
+        // 83k fires in a VIIRS day. The backend ranks by FRP, so a capped view
+        // holds back the WEAKEST detections (and says how many), never a random
+        // subset; zooming in loads every fire on screen.
+        bboxQuery = viewportQuery(
+          ctx.viewer,
+          mobile ? 3000 : 20000,
+          mobile ? 2000 : 10000,
           mobile,
         );
         refreshOnMove = true;

@@ -71,7 +71,7 @@ export function EnginePicker({
   return (
     <div>
       <div
-        className="flex gap-1.5"
+        className="flex flex-wrap gap-1.5"
         role="radiogroup"
         aria-label="Local AI engine"
       >

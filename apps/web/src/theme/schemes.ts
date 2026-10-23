@@ -40,9 +40,16 @@ export interface Scheme {
 
 export const SCHEMES: readonly Scheme[] = [
   {
+    id: "slate",
+    label: "Slate",
+    hint: "The default, and the new interface (work in progress): green-grey substrate, Source Sans 3 and the new workspace layout.",
+    family: "dark",
+    swatch: { bg: "#181c20", panel: "#222e2e", accent: "#1876b6" },
+  },
+  {
     id: "dark",
     label: "Carbon",
-    hint: "The default. IBM Carbon's Gray 100: neutral greys, blue 60 for interaction.",
+    hint: "IBM Carbon's Gray 100: neutral greys, blue 60 for interaction.",
     family: "dark",
     swatch: { bg: "#161616", panel: "#262626", accent: "#0f62fe" },
   },
@@ -52,13 +59,6 @@ export const SCHEMES: readonly Scheme[] = [
     hint: "GitHub Primer's dark theme. Cool blue-black, the operations-room look.",
     family: "dark",
     swatch: { bg: "#010409", panel: "#161b22", accent: "#1f6feb" },
-  },
-  {
-    id: "slate",
-    label: "Slate",
-    hint: "Radix slate with a teal accent, so blue stays a data colour.",
-    family: "dark",
-    swatch: { bg: "#111113", panel: "#212225", accent: "#12a594" },
   },
   {
     id: "amber",

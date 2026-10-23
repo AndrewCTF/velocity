@@ -279,7 +279,7 @@ export function AlertsPanel({
       >
         <header className="px-4 py-3 border-b border-line-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="mono text-[11px] tracking-[1px] uppercase text-txt-0">
+            <div className="text-[11px] tracking-[1px] uppercase text-txt-0">
               Alerts
             </div>
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5">

@@ -144,7 +144,7 @@ export function CoaCards({
         <div className="flex items-center gap-1.5 mb-1.5">
           <StatusDot tone={side === "enemy" ? "alert" : "accent"} />
           <span
-            className={`mono text-[10px] tracking-[0.6px] uppercase ${meta.cls}`}
+            className={`text-[10px] tracking-[0.6px] uppercase ${meta.cls}`}
           >
             {meta.text}
           </span>

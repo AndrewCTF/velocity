@@ -3,6 +3,7 @@ import * as Cesium from "cesium";
 import { MapboxTerrainProvider } from "@macrostrat/cesium-martini";
 import { isMobileDevice } from "../shell/device.js";
 import { useSettings } from "../state/settings.js";
+import { useTheme } from "../state/theme.js";
 import type { LayerRegistry } from "../registry/LayerRegistry.js";
 import {
   useTime,
@@ -28,8 +29,10 @@ import {
   getDrawController,
 } from "./draw.js";
 import { useContextMenu } from "./contextMenuStore.js";
+import { useMaven } from "./mavenStore.js";
 import { installAnnotations } from "./AnnotationLayer.js";
 import { installControl } from "./ControlLayer.js";
+import { installDetected } from "./DetectedLayer.js";
 import { installWatchboxes } from "./WatchboxLayer.js";
 import { installCaptures } from "./CaptureLayer.js";
 import { installDetections } from "./DetectLayer.js";
@@ -326,6 +329,29 @@ export const THIRD_PARTY_BASEMAPS: Record<
       "Sentinel-2 cloudless by EOX IT Services GmbH (Contains modified Copernicus Sentinel data)",
   },
 };
+
+const PHOTO_BASEMAPS: ReadonlySet<ImageryMode> = new Set<ImageryMode>([
+  "3d-sat",
+  "google-3d",
+  "apple-sat",
+  "esri-imagery",
+  "usgs-imagery",
+  "eox-s2",
+]);
+
+function dimBasemap(
+  scene: Cesium.Scene,
+  layer: Cesium.ImageryLayer,
+  scheme: string,
+  mode: ImageryMode,
+): void {
+  const dim = scheme === "slate" && PHOTO_BASEMAPS.has(mode);
+  layer.brightness = dim ? 0.4 : 1.0;
+  layer.saturation = dim ? 0.7 : 1.0;
+  // Ground atmosphere paints a pale blue haze over the whole disk from orbit,
+  // which undoes the dimming; it stays on for every undimmed basemap.
+  scene.globe.showGroundAtmosphere = !dim;
+}
 
 function buildThirdPartyBasemap(
   def: ThirdPartyBasemapDef,
@@ -717,7 +743,14 @@ export function GlobeCanvas({
     }
     scene.fog.enabled = true;
     scene.fog.density = 0.0002;
-    scene.globe.enableLighting = false;
+    // Real sun shading (the subsolar point from the viewer clock) at globe
+    // scale only: below ~6,500 km everything is fully lit, so regional and
+    // street views read the same day or night; the terminator fades in by
+    // 12,000 km. Under requestRenderMode the terminator only moves when a frame
+    // is drawn, so a slow tick below keeps it current.
+    scene.globe.enableLighting = true;
+    scene.globe.lightingFadeOutDistance = 6_500_000;
+    scene.globe.lightingFadeInDistance = 12_000_000;
     scene.globe.showGroundAtmosphere = true;
 
     // Full-resolution close-up. requestRenderMode stays true (these only change
@@ -1000,6 +1033,27 @@ export function GlobeCanvas({
       // Clicking empty globe is the "clear everything" gesture — retire the
       // search pin too so it doesn't linger after the operator moves on.
       if (!id) useSearchTarget.getState().setTarget(null);
+      // In the map workspace an empty-map click also reads the point out
+      // (coordinate popover); anywhere else, or on an object, it closes.
+      const maven = useMaven.getState();
+      if (!id && maven.on) {
+        const cart = viewer.camera.pickEllipsoid(
+          click.position,
+          scene.globe.ellipsoid,
+        );
+        if (cart) {
+          const c = Cesium.Cartographic.fromCartesian(cart);
+          const rect = viewer.canvas.getBoundingClientRect();
+          maven.setPop({
+            x: rect.left + click.position.x,
+            y: rect.top + click.position.y,
+            lat: Cesium.Math.toDegrees(c.latitude),
+            lon: Cesium.Math.toDegrees(c.longitude),
+          });
+          return;
+        }
+      }
+      if (maven.pop) maven.setPop(null);
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     // Right-click an entity → "Search around" (expand its 2-hop links in the
@@ -1059,6 +1113,8 @@ export function GlobeCanvas({
     const detachAnnotations = installAnnotations(viewer);
     // Territorial-control layer: hatched controlled/contested areas + front lines.
     const detachControl = installControl(viewer);
+    // Detected-anchorage footprint (Case files → Detected in view).
+    const detachDetected = installDetected(viewer);
     // Geofence/watchbox AOIs + client-side enter/exit/loiter evaluator.
     const detachWatchbox = installWatchboxes(viewer);
     // Captured observations (YOLO detections pinned from cams/panos).
@@ -1119,8 +1175,14 @@ export function GlobeCanvas({
     }
     onViewerReady?.(viewer);
     setViewerState(viewer);
+    // The sun moves a quarter degree a minute; one frame a minute keeps the
+    // globe-scale terminator honest without leaving requestRenderMode.
+    const sunTimer = window.setInterval(() => {
+      if (!viewer.isDestroyed()) scene.requestRender();
+    }, 60_000);
 
     return () => {
+      window.clearInterval(sunTimer);
       handler.destroy();
       scene.postRender.removeEventListener(onPostRender);
       window.clearInterval(govTimer);
@@ -1143,6 +1205,7 @@ export function GlobeCanvas({
       setDrawController(null);
       detachAnnotations();
       detachControl();
+      detachDetected();
       detachWatchbox();
       detachCaptures();
       detachDetections();
@@ -1231,6 +1294,7 @@ export function GlobeCanvas({
       oldLayers.push(scene.imageryLayers.get(i));
     }
     const swapInLayer = (layer: Cesium.ImageryLayer): void => {
+      dimBasemap(scene, layer, useTheme.getState().mode, imageryMode);
       scene.imageryLayers.add(layer);
       for (const old of oldLayers) scene.imageryLayers.remove(old, true);
     };
@@ -1449,6 +1513,20 @@ export function GlobeCanvas({
       stackGenRef.current++;
     };
   }, [imageryMode, ionToken, enableGoogle3D, googleApiKey]);
+
+  // Slate draws photographic basemaps darkened (brightness .4, saturation .7,
+  // the reference frames' filter) so the category icons and labels read over
+  // them. On the Cesium layer, not a CSS filter: a canvas filter would darken
+  // the icons too. The base is layer 0; date overlays above it stay untouched.
+  const scheme = useTheme((s) => s.mode);
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || viewer.isDestroyed()) return;
+    const base = viewer.scene.imageryLayers.get(0);
+    if (!base) return;
+    dimBasemap(viewer.scene, base, scheme, imageryMode);
+    viewer.scene.requestRender();
+  }, [scheme, imageryMode]);
 
   useEffect(() => {
     const v = viewerRef.current;

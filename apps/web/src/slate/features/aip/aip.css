@@ -1,0 +1,103 @@
+/* AIP copy (gotham/aip/features-a.html lines 1-11, plus the font and
+   box-sizing rules it inherits from gotham/_kit/features.css), scoped under
+   .sl-aip. The page's :root custom properties live on the root instead. */
+.sl-aip {
+  --ink: #2e3438;
+  --mut: #6a7378;
+  --lnk: #38507e;
+  --pri: #2c64c2;
+  --line: #e4e8ea;
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #fff;
+  font:
+    400 14px/1.3 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+}
+.sl-aip * {
+  box-sizing: border-box;
+}
+.sl-aip .fr {
+  position: absolute;
+  width: 1920px;
+  height: 1080px;
+  left: 0;
+  top: 0;
+}
+.sl-aip .fr > *,
+.sl-aip .fr .a {
+  position: absolute;
+}
+.sl-aip .t {
+  white-space: nowrap;
+  line-height: 1.15;
+  color: var(--ink);
+  transform: translateY(-52%);
+}
+.sl-aip .tr {
+  transform: translate(-100%, -52%);
+}
+.sl-aip .tc {
+  transform: translate(-50%, -52%);
+}
+.sl-aip .b {
+  font-weight: 600;
+}
+.sl-aip .copy {
+  background: #fff;
+}
+.sl-aip svg.i {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex: none;
+}
+/* the app's preflight makes every svg a block; the copy's inline icons
+   (hand-off cards) flow with their sentence */
+.sl-aip svg {
+  display: inline;
+}
+
+/* App-only: hit targets over drawn controls, the composer field, wrapping
+   answer text. None of these paint anything the copy does not. */
+.sl-aip .sl-hit {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.sl-aip .sl-hit:disabled {
+  cursor: default;
+}
+.sl-aip .sl-hit:focus-visible {
+  outline: 2px solid #2c64c2;
+  outline-offset: 1px;
+}
+.sl-aip .sl-field {
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  font:
+    400 16.5px/1.15 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+  color: #2a2f33;
+}
+.sl-aip .sl-spin {
+  animation: sl-aip-spin 1.1s linear infinite;
+}
+@keyframes sl-aip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.sl-aip .sl-wrap {
+  white-space: normal;
+}

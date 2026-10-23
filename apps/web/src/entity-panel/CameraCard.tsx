@@ -122,7 +122,7 @@ export function CameraCard({
   return (
     <div className="rounded-sm border border-line bg-bg-2/60 p-2">
       <div className="mb-1 flex items-center justify-between">
-        <span className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3">
+        <span className="text-[10px] uppercase tracking-[0.7px] text-txt-3">
           live cam{isDesktop() && !hlsUrl ? " · perception ai" : ""}
         </span>
         {isDesktop() && !hlsUrl && (

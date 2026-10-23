@@ -361,10 +361,9 @@ function Section({
 }): JSX.Element {
   return (
     <section aria-label={label}>
-      <div className="mt-3 flex h-[26px] items-center border-t border-line px-[14px] pt-[6px] first:mt-0 first:border-t-0 first:pt-0">
-        <span className="truncate text-[12px] font-semibold uppercase tracking-[0.6px] text-txt-2">
-          {label}
-        </span>
+      {/* The kit's section band: sentence case, bold, no forced capitals. */}
+      <div className="k-band mt-2">
+        <span className="truncate">{label}</span>
       </div>
       {children}
     </section>

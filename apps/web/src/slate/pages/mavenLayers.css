@@ -1,0 +1,260 @@
+/* mavenLayers.css: the reference map-workspace page's layers panel (the copy's
+   `.lp` aside and its children), transcribed verbatim from its <style> block,
+   every selector scoped under .maven-layers. The block at the end only turns
+   the copy's absolutely-placed rows into a scrolling list and wires the live
+   parts. The copy's menubar, map scene, strip and selection panel are not
+   ported: the Slate shell already paints the menubar and the globe is the map. */
+
+.maven-layers {
+  --top: #0e1414;
+  --lp: #242c2e;
+  --strip: #161e1e;
+  --field: #2e3638;
+  --sel: #161e1e;
+  --band: #242c2e;
+  --box: #1c2426;
+  --btn: #282c32;
+  --edge: #2f383b;
+  --t0: #f3f5f5;
+  --t1: #dde2e3;
+  --t2: #9aa5a8;
+  --blue: #3062a4;
+  --link: #8db4ea;
+  --ok: #2f9e5f;
+  --red: #cf3b45;
+}
+.maven-layers,
+.maven-layers * {
+  box-sizing: border-box;
+}
+.maven-layers {
+  color: var(--t1);
+  font:
+    400 13.5px/1.25 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+}
+.maven-layers svg.i {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex: none;
+}
+.maven-layers .abs {
+  position: absolute;
+}
+.maven-layers {
+  position: relative;
+  width: 328px;
+  height: 1048px;
+  background: var(--lp);
+}
+.maven-layers .tabs {
+  left: 0;
+  top: 0;
+  width: 328px;
+  height: 44px;
+  background: var(--strip);
+}
+.maven-layers .tab {
+  position: absolute;
+  top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--t2);
+}
+.maven-layers .tab.on {
+  color: var(--t0);
+}
+.maven-layers .tab.on svg {
+  color: #5b8fd9;
+}
+.maven-layers .uline {
+  position: absolute;
+  left: 6px;
+  top: 38px;
+  width: 104px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--blue);
+}
+.maven-layers .search {
+  left: 8px;
+  top: 54px;
+  width: 314px;
+  height: 28px;
+  background: var(--field);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  color: var(--t2);
+  font-size: 13.5px;
+}
+.maven-layers .row {
+  position: absolute;
+  left: 0;
+  width: 328px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  font-size: 13.5px;
+  color: var(--t1);
+  white-space: nowrap;
+}
+.maven-layers .row .car {
+  position: absolute;
+  left: 11px;
+  color: var(--t2);
+}
+.maven-layers .row .car svg {
+  width: 9px;
+  height: 9px;
+}
+.maven-layers .row .ic {
+  position: absolute;
+  left: 30px;
+  color: #b6bfc2;
+}
+.maven-layers .row .tx {
+  position: absolute;
+  left: 52px;
+}
+.maven-layers .row .dot {
+  position: absolute;
+  left: 282px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c9d0d2;
+}
+.maven-layers .row .bad {
+  position: absolute;
+  left: 302px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--ok);
+  display: grid;
+  place-items: center;
+  color: #e9fff1;
+}
+.maven-layers .row .bad svg {
+  width: 10px;
+  height: 10px;
+}
+.maven-layers .row .eo {
+  position: absolute;
+  left: 302px;
+  color: var(--t2);
+}
+.maven-layers .row.sel {
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 2px 0 0 #c9a64a;
+}
+.maven-layers .bm {
+  left: 0;
+  top: 1006px;
+  width: 328px;
+  height: 42px;
+  background: var(--strip);
+  display: flex;
+  align-items: center;
+  font-size: 12.5px;
+  color: var(--t2);
+}
+.maven-layers .bm .sw {
+  position: absolute;
+  left: 64px;
+  top: 11px;
+  width: 30px;
+  height: 20px;
+  border-radius: 2px;
+}
+
+/* live wiring: the panel fills its host, rows flow and scroll, controls are buttons */
+.maven-layers {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.maven-layers button {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.maven-layers button:focus-visible {
+  outline: 1px solid #5b8fd9;
+  outline-offset: -1px;
+}
+.maven-layers .tab:hover,
+.maven-layers .row:hover {
+  color: var(--t0);
+}
+.maven-layers .row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.maven-layers .search input {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+  color: var(--t0);
+  font-size: 13.5px;
+}
+.maven-layers .search input::placeholder {
+  color: var(--t2);
+  opacity: 1;
+}
+.maven-layers .search {
+  width: auto;
+  right: 6px;
+}
+.maven-layers .list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 90px;
+  bottom: 42px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.maven-layers .list .row {
+  position: relative;
+  width: 100%;
+}
+.maven-layers .list .row .tx {
+  right: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.maven-layers .list .row .dot {
+  left: auto;
+  right: 40px;
+}
+.maven-layers .list .row .bad,
+.maven-layers .list .row .eo {
+  left: auto;
+  right: 9px;
+}
+.maven-layers .list .row.kid .ic {
+  left: 44px;
+}
+.maven-layers .list .row.kid .tx {
+  left: 66px;
+}
+.maven-layers .list .empty {
+  padding: 10px 14px;
+  color: var(--t2);
+}
+.maven-layers .bm {
+  width: auto;
+  right: 0;
+  top: auto;
+  bottom: 0;
+}
+.maven-layers .bm .sw {
+  background: #2d4a5c;
+}

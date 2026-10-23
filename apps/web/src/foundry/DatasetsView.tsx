@@ -180,8 +180,8 @@ function ChecksSection({ datasetId }: { datasetId: string }): JSX.Element {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">
+      <div className="k-band">
+        <span>
           Data health
         </span>
         {failing > 0 ? (

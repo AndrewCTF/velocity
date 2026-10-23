@@ -1,0 +1,41 @@
+/* Map right-click menu, from the reference page frame G28 (features-a.html
+   lines 113-119): panel #1b2227 / #2d383e, 36 px rows, 18 px sprite icons at
+   22 px, 15.5 px labels at 49 px, a 224 px rule between the groups. */
+.gx-cmenu {
+  position: fixed;
+  z-index: var(--z-dropdown, 60);
+  width: 257px;
+  padding: 10px 0;
+  background: #1b2227;
+  border: 1px solid #2d383e;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  font: 400 15.5px/20px "Source Sans 3", "Segoe UI", sans-serif;
+}
+.gx-cmenu .gx-it {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 36px;
+  padding: 8px 0 0 49px;
+  color: #f1f4f6;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.gx-cmenu .gx-it svg {
+  position: absolute;
+  left: 22px;
+  top: 9px;
+  color: #cfd8dd;
+}
+.gx-cmenu .gx-it:hover,
+.gx-cmenu .gx-it:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+.gx-cmenu .gx-sep {
+  margin: 0 16px;
+  width: 224px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.14);
+}

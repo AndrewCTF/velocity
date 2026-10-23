@@ -6,6 +6,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { MavenLayers } from "./slate/pages/MavenLayers.js";
+import { LayerEditorPanel } from "./layer-editor/LayerEditorPanel.js";
 import { X } from "lucide-react";
 import * as Cesium from "cesium";
 import { useUiMode, type UiMode } from "./state/uiMode.js";
@@ -14,7 +16,6 @@ import type { RailItem } from "./shell/LeftIconRail.js";
 import { AppSurface } from "./shell/AppSurface.js";
 import { useAppView, APP_META } from "./state/appView.js";
 import { useGeoScope } from "./state/geoScope.js";
-import { useDashboardMode } from "./state/dashboardMode.js";
 import { useTheme } from "./state/theme.js";
 import {
   useImagery,
@@ -69,6 +70,7 @@ import {
   openAuthedWebSocket,
 } from "./transport/http.js";
 import { Console } from "./shell/Console.js";
+import { SlateShell } from "./slate/SlateShell.js";
 import { ActionBar } from "./shell/ActionBar.js";
 import {
   REHOMED,
@@ -180,9 +182,6 @@ export function App(): JSX.Element {
   );
 
   // View preset (design §6.0/§7): the single console shell renders for every mode;
-  // 'professional' = Command (dense, layers open), 'normal' = Field (a lighter
-  // landing — map foregrounded, flyout closed). Same components, different defaults.
-  const fieldPreset = useDashboardMode((s) => s.mode) === "normal";
 
   // Inbox unread badge (design §6.5) — non-archived, unread alerts.
   const alerts = useAlerts((s) => s.alerts);
@@ -200,6 +199,7 @@ export function App(): JSX.Element {
   // here" (right-click) brings the Video app forward — instead of re-keying a tab.
   const setApp = useAppView((s) => s.setApp);
   const activeApp = useAppView((s) => s.app);
+  const scheme = useTheme((s) => s.mode);
   // The four named panels live beside the map, so a request for one from a
   // full-bleed app has to bring the map back with it (see Console's
   // `onPanelWhileBleed`). Stable identity so Console's key binding is not
@@ -242,7 +242,18 @@ export function App(): JSX.Element {
         id: "layers",
         icon: "layers",
         label: "Layers",
-        content: <LayersPanel registry={registry} viewer={viewer} />,
+        content:
+          scheme === "slate" ? (
+            <MavenLayers registry={registry} viewer={viewer} />
+          ) : (
+            <LayersPanel registry={registry} viewer={viewer} />
+          ),
+      },
+      {
+        id: "layer-style",
+        icon: "sliders",
+        label: "Style",
+        content: <LayerEditorPanel />,
       },
       {
         id: "search-objects",
@@ -289,7 +300,7 @@ export function App(): JSX.Element {
         group: "more",
       },
     ],
-    [registry, viewer],
+    [registry, viewer, scheme],
   );
 
   // Right rail = CONTEXT only (what's selected / happening). Tasking, Targeting
@@ -322,9 +333,7 @@ export function App(): JSX.Element {
     return { homed, rest };
   };
   const leftHomed = byHome(railItems, "panel");
-  // fieldPreset used to decide whether a flyout auto-opened. The four panels
-  // are permanently visible now, so it picks WHICH one starts active.
-  const initialPanel: LeftPanelId = fieldPreset ? "info" : "layers";
+  const initialPanel: LeftPanelId = "layers";
   const leftPanels: Partial<Record<LeftPanelId, React.ReactNode>> = {
     layers: leftHomed.homed.get("layers"),
     find: leftHomed.homed.get("find"),
@@ -350,10 +359,23 @@ export function App(): JSX.Element {
     series: <SeriesPanel viewer={viewer} />,
   };
 
+  // Slate (the default scheme) renders the reference workspace page as the
+  // shell; every other scheme keeps the grid console. Same props, same slots.
+  // Phones keep the phone-first console; the Slate shell is desktop-only for now.
+  const Shell = scheme === "slate" && !phone ? SlateShell : Console;
+
   return (
     <>
       <AlertSubscriber />
-      <Console
+      <Shell
+        chrome={{
+          viewer,
+          classification: config?.classification ?? "UNCLAS",
+          inbox: inboxUnread,
+          onOpenAlerts: () => setAlertsOpen(true),
+          onOpenInbox: () => setInboxOpen(true),
+          onOpenSettings: () => setSettingsOpen(true),
+        }}
         systemState={
           <TitleBar
             viewer={viewer}
@@ -425,12 +447,17 @@ export function App(): JSX.Element {
                   Both are null/viewer-safe and pointer-scoped so they never
                   block globe interaction. */}
               <GlobeTheater viewer={viewer} />
-              {!phone && <GlobeOverlays viewer={viewer} />}
+              {/* The Slate map is the reference's bare map: no legend, scale
+                  or cursor readouts. */}
+              {!phone && scheme !== "slate" && (
+                <GlobeOverlays viewer={viewer} />
+              )}
               {(!phone || phoneTools) && <GlobeToolbar viewer={viewer} />}
               <PhoneMapButtons viewer={viewer} />
               <MapToolPanels viewer={viewer} />
               {!phone && <CopControl viewer={viewer} registry={registry} />}
               <AuthNotice />
+              {/* Kept on Slate too: it is a security notice, dismissible once. */}
               <OpenModeBanner open={Boolean(config?.openMode)} />
               <AgentConsole viewer={viewer} />
               <Omnibar viewer={viewer} registry={registry} />
@@ -556,6 +583,13 @@ export function CopControl({
   registry: LayerRegistry;
 }): JSX.Element | null {
   const [open, setOpen] = useState(false);
+  // A menu item can open the panel without the floating toggle (Slate's View
+  // menu, where the toggle is not drawn).
+  useEffect(() => {
+    const toggle = (): void => setOpen((v) => !v);
+    window.addEventListener("velocity:cop-toggle", toggle);
+    return () => window.removeEventListener("velocity:cop-toggle", toggle);
+  }, []);
   const [maps, setMaps] = useState<SavedMap[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [followingId, setFollowingId] = useState<string | null>(null);
@@ -828,6 +862,7 @@ export function CopControl({
       <button
         type="button"
         title="Shared common operational picture (save, load, or follow a named map)"
+        data-cop-toggle=""
         onClick={() => setOpen((v) => !v)}
         className={`mono text-[10px] px-2 py-1 border rounded-sm bg-bg-1/90 ${followingId ? "border-accent-line text-accent" : "border-line text-txt-1 hover:border-accent-line hover:text-accent"}`}
       >
@@ -872,6 +907,7 @@ export function OpenModeBanner({
       return false;
     }
   });
+  const [expanded, setExpanded] = useState(false);
   if (!open || dismissed) return null;
   const close = (): void => {
     setDismissed(true);
@@ -881,13 +917,36 @@ export function OpenModeBanner({
       /* storage disabled — banner just reappears next load */
     }
   };
+  // Folded to a chip until asked: the heads-up stays on screen without a
+  // paragraph over the map. The chip opens the full sentence and its dismiss.
+  if (!expanded)
+    return (
+      <PhoneNotice>
+        <div className="map-banner flex justify-center px-3 pointer-events-none">
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            aria-expanded={false}
+            title="This server answers compute and model requests without authentication"
+            className="pointer-events-auto flex h-6 items-center gap-1.5 rounded-sm border border-warn bg-bg-1/95 px-2 mono text-[10px] uppercase tracking-[0.6px] text-warn"
+          >
+            Open mode
+          </button>
+        </div>
+      </PhoneNotice>
+    );
   return (
     <PhoneNotice>
       <div className="map-banner flex justify-center px-3 pointer-events-none">
         <div className="pointer-events-auto flex items-center gap-2 bg-bg-1/95 border border-warn rounded-sm px-3 py-1.5 shadow-lg max-w-xl">
-          <span className="mono text-[10px] uppercase tracking-[0.6px] text-warn">
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            aria-expanded
+            className="mono text-[10px] uppercase tracking-[0.6px] text-warn"
+          >
             Open mode
-          </span>
+          </button>
           <span className="text-[11px] text-txt-2 leading-snug">
             Compute/LLM endpoints are served without authentication (keyless +
             ALLOW_UNAUTHENTICATED). Fine for a trusted local box; set API_KEY or

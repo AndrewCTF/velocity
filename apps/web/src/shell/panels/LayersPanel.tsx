@@ -3,11 +3,7 @@ import type * as Cesium from "cesium";
 import type { LayerRegistry } from "../../registry/LayerRegistry.js";
 import { Icon } from "../../normal/Icon.js";
 import { LayerRail } from "../../layer-rail/LayerRail.js";
-import {
-  useLayerCounts,
-  rowCount,
-  rowState,
-} from "../../layer-rail/useLayerCounts.js";
+import { useLayerCounts, rowState } from "../../layer-rail/useLayerCounts.js";
 import {
   tierOf,
   TIER_META,
@@ -200,16 +196,9 @@ export function LayersPanel({
             const on = rows.filter((r) => rowEnabled(registry, r)).length;
             const total = rows.length;
             const open = openIds[folder.id] ?? folder.defaultOpen ?? on > 0;
-            const peak = Math.max(
-              1,
-              ...rows.map((r) => rowCount(counts, r.layerIds)),
-            );
             return (
               <section key={folder.id} aria-label={folder.label}>
-                <div
-                  data-layer-folder
-                  className="mt-3 flex h-[26px] items-center gap-[6px] border-t border-line px-[14px] pt-[6px] first:mt-0 first:border-t-0 first:pt-0"
-                >
+                <div data-layer-folder className="k-band">
                   <button
                     type="button"
                     onClick={() => toggleOpen(folder.id)}
@@ -218,17 +207,11 @@ export function LayersPanel({
                   >
                     <Icon
                       name={open ? "chevron-down" : "chevron-right"}
-                      className="h-3 w-3 shrink-0 text-txt-3"
+                      className="h-3 w-3 shrink-0 text-txt-2"
                     />
-                    <Icon
-                      name={folder.icon}
-                      className="h-3 w-3 shrink-0 text-txt-3"
-                    />
-                    <span className="truncate text-[12px] font-semibold uppercase tracking-[0.6px] text-txt-2">
-                      {folder.label}
-                    </span>
+                    <span className="truncate">{folder.label}</span>
                   </button>
-                  <span className="mono text-[12px] tabular-nums text-txt-3">
+                  <span className="k-n tabular-nums">
                     {on} of {total}
                   </span>
                   <button
@@ -248,9 +231,7 @@ export function LayersPanel({
                 {open &&
                   rows.map((row) => {
                     const en = rowEnabled(registry, row);
-                    const n = rowCount(counts, row.layerIds);
                     const st = rowState(counts, row.layerIds, en);
-                    const frac = peak > 0 ? n / peak : 0;
                     const tier = rowTier(row.layerIds);
                     return (
                       <button
@@ -259,15 +240,15 @@ export function LayersPanel({
                         onClick={() => toggleRow(registry, row)}
                         aria-pressed={en}
                         data-layer-row
-                        className="flex h-(--g-row-2) w-full items-center gap-2 px-[14px] text-left hover:bg-(--hover)"
+                        className="flex h-[29px] w-full items-center gap-[10px] pl-[30px] pr-[14px] text-left hover:bg-(--hover)"
                       >
                         <Icon
                           name={row.icon}
-                          className={`h-3 w-3 shrink-0 ${en ? "text-accent-fg" : "text-txt-3"}`}
+                          className={`h-4 w-4 shrink-0 ${en ? "text-txt-0" : "text-txt-2"}`}
                         />
                         <span className="min-w-0 flex-1">
                           <span
-                            className={`block truncate text-[12px] ${en ? "text-txt-0" : "text-txt-1"}`}
+                            className={`block truncate text-[15px] ${en ? "text-txt-0" : "text-txt-1"}`}
                           >
                             {row.label}
                           </span>
@@ -276,8 +257,8 @@ export function LayersPanel({
                       not only in a filter. It is the one fact that decides how
                       much of the rest of the row to believe. */}
                         <TierMark tier={tier} />
-                        {/* A count and a bar, never the word "on". The bar carries the
-                      magnitude the word threw away.
+                        {/* A count, never the word "on". (The magnitude bar beside it
+                      went 2026-10-23 for the reference's plain list rows.)
                       Four states, not two. `off`, `pending`, `empty` and `live`
                       used to collapse into a blank and a lone em dash, so a
                       layer that answered zero and a layer that never answered
@@ -285,7 +266,7 @@ export function LayersPanel({
                       nothing. A quiet source is information; a source that never
                       loaded is a fault; they cannot share a glyph. */}
                         <span
-                          className={`mono w-[46px] shrink-0 text-right text-[12px] tabular-nums ${
+                          className={`w-[52px] shrink-0 text-right text-[14px] tabular-nums ${
                             st.state === "live"
                               ? "text-txt-1"
                               : st.state === "empty"
@@ -308,17 +289,6 @@ export function LayersPanel({
                                 ? "0"
                                 : st.n.toLocaleString()}
                         </span>
-                        <span
-                          className="relative h-[10px] w-[36px] shrink-0 overflow-hidden rounded-[1px] bg-bg-0"
-                          aria-hidden="true"
-                        >
-                          <i
-                            className={`absolute inset-y-0 left-0 block ${en ? "bg-accent" : "bg-bg-4"}`}
-                            style={{
-                              width: `${Math.max(en && n > 0 ? 3 : 0, Math.min(100, frac * 100))}%`,
-                            }}
-                          />
-                        </span>
                         {/* An eye, not a sliding pill. The pill was 26px of iOS in a
                       Blueprint console, and it stated a second time what the
                       accent icon and the accent bar already state. Its width is
@@ -326,7 +296,7 @@ export function LayersPanel({
                       `Humanitarian disa…` in a 336px panel. */}
                         <Icon
                           name={en ? "eye" : "eye-off"}
-                          className={`h-3 w-3 shrink-0 ${en ? "text-accent-fg" : "text-txt-4"}`}
+                          className={`h-4 w-4 shrink-0 ${en ? "text-txt-1" : "text-txt-3"}`}
                         />
                       </button>
                     );
