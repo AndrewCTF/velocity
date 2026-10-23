@@ -821,6 +821,64 @@
   --scroll-thumb-hover: rgba(255, 255, 255, 0.22);
 }
 
+/* Measured dark: colours mode-sampled from Palantir Gotham workspace frames
+   (rxKghrZU5w8 t231/t78, 2021; gotham/_kit/gotham-shell.css), type Source Sans 3
+   per gotham/_kit/METHOD.md. Not a Blueprint scheme: the sampled greys are greener
+   than the published ramp, so it carries no `blueprint` claim. Substrate = rail,
+   bg-1 = situation panel, bg-2 = card, bg-3 = section band, hover = card footer,
+   accent = confirm card, alert = hostile symbol, banner = classification bar.
+   Text ramp sampled from the same frames (menu, body, kbd, search placeholder). */
+:root[data-theme="measured"] {
+  color-scheme: dark;
+  --bg-0: #181c20;
+  --bg-1: #1c282a;
+  --bg-2: #222e2e;
+  --bg-3: #2e383a;
+  --bg-4: #323e40;
+  --panel-bg: #1c282a;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --txt-0: #f1f4f5;
+  --txt-1: #e4e9ea;
+  --txt-2: #dfe5e7;
+  --txt-3: #a9b3b8;
+  --txt-4: #a9b3b8;
+  --accent: #1876b6;
+  --accent-dim: rgba(24, 118, 182, 0.22);
+  --accent-line: rgba(24, 118, 182, 0.6);
+  --accent-fg: #8ac4ee;
+  --warn: #ec9a3c;
+  --warn-bg: rgba(236, 154, 60, 0.16);
+  --warn-line: rgba(236, 154, 60, 0.4);
+  --warn-fg: #fbb360;
+  --alert: #d93a46;
+  --alert-bg: rgba(217, 58, 70, 0.16);
+  --alert-line: rgba(217, 58, 70, 0.4);
+  --alert-fg: #fa999c;
+  --ok: #32a467;
+  --ok-bg: rgba(50, 164, 103, 0.16);
+  --ok-line: rgba(50, 164, 103, 0.38);
+  --ok-fg: #72ca9b;
+  --mag: #d946ef;
+  --mag-dim: rgba(217, 70, 239, 0.16);
+  --mag-line: rgba(217, 70, 239, 0.5);
+  --mag-fg: #f0a8f8;
+  --sev-low: #dfe5e7;
+  --on-accent: #ffffff;
+  --on-mag: var(--ink-dark);
+  --on-alert: #ffffff;
+  --on-ok: var(--ink-dark);
+  --on-warn: var(--ink-dark);
+  --hover: #2e3a3c;
+  --cls-unclas-bg: #526472;
+  --cls-unclas-fg: #ffffff;
+  --cls-exercise-bg: #4c3a2a;
+  --cls-exercise-fg: #fbd065;
+  --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+}
+
 /* Scrollbars follow the scheme. These were hardcoded white alphas, so on a
    light scheme the thumb was invisible against the track it needed to sit on.
    `--scroll-thumb` is set per family and consumed by the rules below. */

@@ -23,7 +23,8 @@ export type SchemeId =
   | "bp-dark"
   | "bp-turquoise"
   | "bp-indigo"
-  | "bp-light";
+  | "bp-light"
+  | "measured";
 
 export interface Scheme {
   id: SchemeId;
@@ -135,6 +136,13 @@ export const SCHEMES: readonly Scheme[] = [
     family: "light",
     blueprint: true,
     swatch: { bg: "#edeff2", panel: "#f6f7f9", accent: "#215db0" },
+  },
+  {
+    id: "measured",
+    label: "Measured dark",
+    hint: "Green-grey substrate and Source Sans 3, sampled from reference workspace frames.",
+    family: "dark",
+    swatch: { bg: "#181c20", panel: "#222e2e", accent: "#1876b6" },
   },
 ];
 
