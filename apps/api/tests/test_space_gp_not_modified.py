@@ -140,3 +140,27 @@ async def test_not_modified_with_no_disk_copy_still_502s(monkeypatch) -> None:
             await space.gp(group="active", limit=10)
     finally:
         await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_unreachable_upstream_serves_disk_copy_or_502(monkeypatch, tmp_path) -> None:
+    """A connect timeout was an unhandled 500; it must fall back like the 403 does."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("timed out", request=request)
+
+    client = _client(handler)
+    monkeypatch.setattr(upstream, "_CLIENT", client)
+    try:
+        with pytest.raises(HTTPException) as cold:
+            await space.gp(group="active", limit=10)
+        assert cold.value.status_code == 502
+
+        (tmp_path / "active.tle").write_text(_TLE, encoding="utf-8")
+        upstream.cache.invalidate("celestrak:active")
+        warm = await space.gp(group="active", limit=10)
+    finally:
+        await client.aclose()
+
+    assert warm["count"] == 1
+    assert warm["stale"] is True
