@@ -23,8 +23,7 @@ export type SchemeId =
   | "bp-dark"
   | "bp-turquoise"
   | "bp-indigo"
-  | "bp-light"
-  | "measured";
+  | "bp-light";
 
 export interface Scheme {
   id: SchemeId;
@@ -41,9 +40,16 @@ export interface Scheme {
 
 export const SCHEMES: readonly Scheme[] = [
   {
+    id: "slate",
+    label: "Slate",
+    hint: "The default. Green-grey substrate and Source Sans 3, sampled from reference workspace frames.",
+    family: "dark",
+    swatch: { bg: "#181c20", panel: "#222e2e", accent: "#1876b6" },
+  },
+  {
     id: "dark",
     label: "Carbon",
-    hint: "The default. IBM Carbon's Gray 100: neutral greys, blue 60 for interaction.",
+    hint: "IBM Carbon's Gray 100: neutral greys, blue 60 for interaction.",
     family: "dark",
     swatch: { bg: "#161616", panel: "#262626", accent: "#0f62fe" },
   },
@@ -53,13 +59,6 @@ export const SCHEMES: readonly Scheme[] = [
     hint: "GitHub Primer's dark theme. Cool blue-black, the operations-room look.",
     family: "dark",
     swatch: { bg: "#010409", panel: "#161b22", accent: "#1f6feb" },
-  },
-  {
-    id: "slate",
-    label: "Slate",
-    hint: "Radix slate with a teal accent, so blue stays a data colour.",
-    family: "dark",
-    swatch: { bg: "#111113", panel: "#212225", accent: "#12a594" },
   },
   {
     id: "amber",
@@ -136,13 +135,6 @@ export const SCHEMES: readonly Scheme[] = [
     family: "light",
     blueprint: true,
     swatch: { bg: "#edeff2", panel: "#f6f7f9", accent: "#215db0" },
-  },
-  {
-    id: "measured",
-    label: "Measured dark",
-    hint: "Green-grey substrate and Source Sans 3, sampled from reference workspace frames.",
-    family: "dark",
-    swatch: { bg: "#181c20", panel: "#222e2e", accent: "#1876b6" },
   },
 ];
 

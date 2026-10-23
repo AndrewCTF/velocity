@@ -92,9 +92,7 @@ export function AppRouter(): JSX.Element {
 }
 
 // The "/" route now renders the SINGLE Gotham console shell (App) for every mode
-// (design §6.0 — the parallel "Normal" shell is retired). dashboardMode selects a
-// view PRESET of that one shell: 'professional' = Command (dense, all apps),
-// 'normal' = Field (a lighter landing). App reads the mode and adapts.
+// (design §6.0 — the parallel "Normal" shell and its Field preset are retired).
 function DashboardRoute(): JSX.Element {
   return <App />;
 }

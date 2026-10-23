@@ -15,13 +15,15 @@ import { isSchemeId, SCHEMES, type SchemeId } from "../theme/schemes.js";
 export type ThemeMode = SchemeId;
 
 const LS_KEY = "velocity.theme";
+export const DEFAULT_SCHEME: SchemeId = "slate";
 
 function read(): SchemeId {
   try {
     const v = localStorage.getItem(LS_KEY);
-    return isSchemeId(v) ? v : "dark";
+    if (v === "measured") return "slate"; // renamed 2026-10-23
+    return isSchemeId(v) ? v : DEFAULT_SCHEME;
   } catch {
-    return "dark";
+    return DEFAULT_SCHEME;
   }
 }
 

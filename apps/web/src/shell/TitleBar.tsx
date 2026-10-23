@@ -29,7 +29,6 @@ import {
   useTime,
 } from "../state/stores.js";
 import { BASEMAP_OPTIONS } from "../globe/basemaps.js";
-import { useDashboardMode } from "../state/dashboardMode.js";
 import { useFloatingPanels } from "../state/floatingPanels.js";
 import { usePalette } from "../state/palette.js";
 import { useSettings } from "../state/settings.js";
@@ -244,17 +243,6 @@ const MENU_ITEMS: Record<(typeof MENUS)[number], MenuItem[]> = {
       run: () => useImagery.getState().setMode(b.value),
       ...(b.unavailable ? { disabled: b.unavailable } : {}),
     })),
-    {
-      label: "Command layout",
-      sep: true,
-      on: () => useDashboardMode.getState().mode === "professional",
-      run: () => useDashboardMode.getState().setMode("professional"),
-    },
-    {
-      label: "Field layout",
-      on: () => useDashboardMode.getState().mode === "normal",
-      run: () => useDashboardMode.getState().setMode("normal"),
-    },
     {
       label: "Reset to top-down",
       sep: true,

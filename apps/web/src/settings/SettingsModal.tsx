@@ -5,10 +5,6 @@ import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { apiFetch } from "../transport/http.js";
 import { KeysPanel } from "./KeysPanel.js";
-import {
-  useDashboardMode,
-  type DashboardMode,
-} from "../state/dashboardMode.js";
 import { useSettings } from "../state/settings.js";
 import {
   MAP_QUALITIES,
@@ -123,11 +119,6 @@ export function SettingsModal({
           <SchemePicker />
 
           <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
-            Dashboard
-          </div>
-          <DashboardToggle />
-
-          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
             Aircraft motion
           </div>
           <DeadReckonToggle />
@@ -240,49 +231,6 @@ function SchemePicker(): JSX.Element {
   );
 }
 
-// Switch between the new approachable "Normal" dashboard (default) and the dense
-// "Professional" COP. Persisted via the dashboardMode store; the "/" route
-// re-renders into the chosen shell. The map/globe is identical between them.
-function DashboardToggle(): JSX.Element {
-  const mode = useDashboardMode((s) => s.mode);
-  const setMode = useDashboardMode((s) => s.setMode);
-  const opts: { id: DashboardMode; label: string; hint: string }[] = [
-    {
-      id: "professional",
-      label: "Professional",
-      hint: "Dense, full-tool COP (default)",
-    },
-    { id: "normal", label: "Normal", hint: "Clean, guided layout" },
-  ];
-  return (
-    <div
-      className="flex gap-1.5"
-      role="radiogroup"
-      aria-label="Dashboard layout"
-    >
-      {opts.map((o) => {
-        const on = mode === o.id;
-        return (
-          <button
-            key={o.id}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => setMode(o.id)}
-            className={`flex-1 text-left rounded-sm border px-2.5 py-2 transition-colors ${
-              on
-                ? "border-accent-line bg-accent-dim text-txt-0"
-                : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
-            }`}
-          >
-            <div className="mono text-[11px] font-medium">{o.label}</div>
-            <div className="mono text-[10px] text-txt-3 mt-0.5">{o.hint}</div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 // FlightRadar24-style dead-reckoning toggle. OFF by default — the map shows real
 // ADS-B fixes only. When ON, aircraft glide forward along their last reported

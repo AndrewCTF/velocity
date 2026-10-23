@@ -3,8 +3,6 @@
 // read/written automatically — unknown/missing keys fall back to the default,
 // so the blob is forward/backward compatible across versions.
 //
-// The dashboard layout choice keeps its own store (state/dashboardMode.ts) for
-// back-compat with its existing consumers; every other preference lives here.
 import { create } from "zustand";
 import type { MapQuality } from "../globe/qualityPresets";
 

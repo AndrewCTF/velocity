@@ -14,7 +14,6 @@ import type { RailItem } from "./shell/LeftIconRail.js";
 import { AppSurface } from "./shell/AppSurface.js";
 import { useAppView, APP_META } from "./state/appView.js";
 import { useGeoScope } from "./state/geoScope.js";
-import { useDashboardMode } from "./state/dashboardMode.js";
 import { useTheme } from "./state/theme.js";
 import {
   useImagery,
@@ -167,9 +166,6 @@ export function App(): JSX.Element {
   );
 
   // View preset (design §6.0/§7): the single console shell renders for every mode;
-  // 'professional' = Command (dense, layers open), 'normal' = Field (a lighter
-  // landing — map foregrounded, flyout closed). Same components, different defaults.
-  const fieldPreset = useDashboardMode((s) => s.mode) === "normal";
 
   // Inbox unread badge (design §6.5) — non-archived, unread alerts.
   const alerts = useAlerts((s) => s.alerts);
@@ -309,9 +305,7 @@ export function App(): JSX.Element {
     return { homed, rest };
   };
   const leftHomed = byHome(railItems, "panel");
-  // fieldPreset used to decide whether a flyout auto-opened. The four panels
-  // are permanently visible now, so it picks WHICH one starts active.
-  const initialPanel: LeftPanelId = fieldPreset ? "info" : "layers";
+  const initialPanel: LeftPanelId = "layers";
   const leftPanels: Partial<Record<LeftPanelId, React.ReactNode>> = {
     layers: leftHomed.homed.get("layers"),
     find: leftHomed.homed.get("find"),
