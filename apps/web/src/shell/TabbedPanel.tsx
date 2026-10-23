@@ -4,11 +4,9 @@ import { ErrorBoundary } from "./ErrorBoundary.js";
 import { Icon } from "../normal/Icon.js";
 
 // Generic tabbed-panel container — used by both rails (frontend.md §4).
-// Tab strip (.tabs/.tab) follows the Cobalt/Ink mockup: a flex row on bg-1 with
-// a line-2 bottom hairline; each tab is mono 10px, line-divided, ~30px tall. The
-// active tab lifts to txt-0 on bg-2 with a flush 2px accent underline (an
-// absolutely-positioned bar at bottom -1px spanning the tab). Inactive tabs sit
-// at txt-3 and lift to txt-1 on hover.
+// Tab strip = the kit's panel tab row (ui/kit.css `.k-ptabs`/`.k-ptab`, copied
+// from the reference workspace): 44px, 15px sans, the selected tab in
+// accent-fg with a 3px underline.
 //
 // Motion: a subtle opacity fade animates panel swaps. Honors
 // prefers-reduced-motion — when reduced, the swap is instant (no transition).
@@ -109,7 +107,9 @@ export function TabbedPanel({
           aria-label={ariaLabel ?? "Panel tabs"}
           // overflow-x-auto + hidden scrollbar: with 7 tabs the strip can exceed the
           // rail width, so it scrolls horizontally instead of CLIPPING the last tabs.
-          className="flex items-stretch flex-none border-b border-line-2 bg-bg-1 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
+          // The kit's panel tab row (`.k-ptabs` / `.k-ptab`, ui/kit.css): 15px
+          // sans, accent underline on the selected tab.
+          className="k-ptabs flex-none overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
         >
           {tabs.map((t) => {
             const isActive = t.id === active?.id;
@@ -134,13 +134,7 @@ export function TabbedPanel({
                   });
                 }}
                 onKeyDown={onTabKeyDown}
-                className={[
-                  "relative mono text-[10px] tracking-[0.4px] px-2 py-[9px] border-r border-line",
-                  "flex items-center gap-1.5 whitespace-nowrap",
-                  isActive
-                    ? "text-txt-0 bg-bg-2"
-                    : "text-txt-3 hover:text-txt-1",
-                ].join(" ")}
+                className="k-ptab whitespace-nowrap"
                 style={
                   reduced
                     ? undefined
@@ -152,12 +146,6 @@ export function TabbedPanel({
               >
                 {t.icon}
                 <span>{t.label}</span>
-                {isActive && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute left-0 right-0 -bottom-px h-[2px] bg-accent"
-                  />
-                )}
               </button>
             );
           })}
@@ -228,10 +216,8 @@ function MenuChooser({
         {active?.icon && (
           <span className="text-accent shrink-0">{active.icon}</span>
         )}
-        <span className="mono text-[10px] tracking-[0.7px] uppercase text-txt-2">
-          Panel
-        </span>
-        <span className="mono text-[12px] tracking-[0.3px] text-txt-0 flex-1 truncate">
+        <span className="text-[13px] text-txt-2">Panel</span>
+        <span className="text-[15px] text-txt-0 flex-1 truncate">
           {active?.label ?? "—"}
         </span>
         <span className="mono text-[10px] text-txt-2" aria-hidden="true">
@@ -281,7 +267,7 @@ function MenuChooser({
                     <span className="w-4 text-center shrink-0 text-accent">
                       {t.icon ?? "▸"}
                     </span>
-                    <span className="mono text-[12px] tracking-[0.3px] flex-1 truncate">
+                    <span className="text-[15px] flex-1 truncate">
                       {t.label}
                     </span>
                     {isActive && (

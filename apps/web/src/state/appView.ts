@@ -25,7 +25,11 @@ export type AppId =
   | "workflows"
   | "city"
   | "country"
-  | "markets";
+  | "markets"
+  | "models"
+  | "quiver"
+  | "vertex"
+  | "workshop";
 
 export const APP_IDS: readonly AppId[] = [
   "map",
@@ -42,6 +46,10 @@ export const APP_IDS: readonly AppId[] = [
   "city",
   "country",
   "markets",
+  "models",
+  "quiver",
+  "vertex",
+  "workshop",
 ];
 
 // chrome: 'globe' keeps the right inspector rail + timeline footer (apps designed
@@ -60,7 +68,7 @@ export const APP_META: Record<
   explorer: {
     label: "Explorer",
     hint: "Filter / aggregate the live object store",
-    chrome: "globe",
+    chrome: "full",
   },
   graph: {
     label: "Graph",
@@ -75,7 +83,7 @@ export const APP_META: Record<
   targeting: {
     label: "Targeting",
     hint: "Kill-chain board (notional)",
-    chrome: "globe",
+    chrome: "full",
   },
   video: {
     label: "Video",
@@ -86,7 +94,7 @@ export const APP_META: Record<
   reports: {
     label: "Reports",
     hint: "Case files, briefs, dossiers",
-    chrome: "globe",
+    chrome: "full",
   },
   foundry: {
     label: "Foundry",
@@ -113,6 +121,26 @@ export const APP_META: Record<
     hint: "Indices, commodities, FX, crypto · stress index · predictions",
     chrome: "full",
   },
+  models: {
+    label: "Models",
+    hint: "Local model registry: installed, catalog, presets, engine",
+    chrome: "full",
+  },
+  quiver: {
+    label: "Quiver",
+    hint: "Time-series analysis over the recorded archive",
+    chrome: "full",
+  },
+  vertex: {
+    label: "Vertex",
+    hint: "System graph: sources, feeds and layers with live counts",
+    chrome: "full",
+  },
+  workshop: {
+    label: "Workshop",
+    hint: "Build modules from live widgets",
+    chrome: "full",
+  },
 };
 
 // Grouped clusters for the top-bar app switcher (design §6.1 overhaul): the
@@ -126,7 +154,7 @@ export const APP_GROUPS: readonly {
   apps: readonly AppId[];
 }[] = [
   { id: "live", label: "Live", apps: ["map", "sim"] },
-  { id: "ai", label: "AI", apps: ["ai"] },
+  { id: "ai", label: "AI", apps: ["ai", "models"] },
   {
     id: "analyze",
     label: "Analyze",
@@ -138,9 +166,11 @@ export const APP_GROUPS: readonly {
       "video",
       "country",
       "markets",
+      "quiver",
+      "vertex",
     ],
   },
-  { id: "data", label: "Data", apps: ["foundry", "workflows"] },
+  { id: "data", label: "Data", apps: ["foundry", "workflows", "workshop"] },
   { id: "product", label: "Product", apps: ["reports"] },
   { id: "3d", label: "3D", apps: ["city"] },
 ];

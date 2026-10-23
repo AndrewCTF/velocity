@@ -22,6 +22,23 @@ import * as Cesium from "cesium";
 export function labelFor(
   text: string,
 ): Cesium.LabelGraphics.ConstructorOptions {
+  // Slate labels the map as the reference frames do: 12px semibold sans in
+  // near-white with a dark halo, no plate behind the text.
+  const slate =
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.theme === "slate";
+  if (slate)
+    return {
+      text,
+      font: '600 12px "Source Sans 3", "Segoe UI", sans-serif',
+      pixelOffset: new Cesium.Cartesian2(12, -2),
+      fillColor: Cesium.Color.fromCssColorString("#f2f5f6"),
+      outlineColor: Cesium.Color.fromCssColorString("#000000").withAlpha(0.85),
+      outlineWidth: 3,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      scaleByDistance: new Cesium.NearFarScalar(1.5e5, 1.0, 4.0e5, 0.85),
+      distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 400_000),
+    };
   return {
     text,
     font: 'bold 11px "IBM Plex Mono", monospace',

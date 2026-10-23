@@ -1,9 +1,19 @@
-import { useMemo } from "react";
+import { Suspense, lazy, useMemo } from "react";
 import * as Cesium from "cesium";
 import { TabbedPanel, type TabDef } from "../shell/TabbedPanel.js";
 import { FmvPanel } from "./FmvPanel.js";
 import { GroundReconPanel } from "../ground/GroundReconPanel.js";
 import { ImageryControl } from "../imagery/ImageryControl.js";
+import { useTheme } from "../state/theme.js";
+import { ErrorBoundary } from "../shell/ErrorBoundary.js";
+
+// Under the Slate scheme the FMV tab is the reference video surface
+// (slate/features/maven/Fmv.tsx): the imagery plate, detections, timeline.
+const MavenFmv = lazy(() =>
+  import("../slate/features/maven/Fmv.js").then((m) => ({
+    default: m.MavenFmv,
+  })),
+);
 
 // Video app (design §6.1 / §8) — full-motion video + ground recon + detections.
 // FMV (notional sensor) and street-level ground imagery share one surface.
@@ -17,9 +27,24 @@ export function VideoApp({
 }: {
   viewer: Cesium.Viewer | null;
 }): JSX.Element {
+  const slate = useTheme((s) => s.mode) === "slate";
   const tabs: TabDef[] = useMemo(
     () => [
-      { id: "fmv", label: "FMV", content: <FmvPanel viewer={viewer} /> },
+      {
+        id: "fmv",
+        label: "FMV",
+        content: slate ? (
+          <div className="relative h-full min-h-[560px]">
+            <ErrorBoundary label="FMV">
+              <Suspense fallback={null}>
+                <MavenFmv viewer={viewer} />
+              </Suspense>
+            </ErrorBoundary>
+          </div>
+        ) : (
+          <FmvPanel viewer={viewer} />
+        ),
+      },
       {
         id: "ground",
         label: "Ground recon",
@@ -27,7 +52,7 @@ export function VideoApp({
       },
       { id: "imagery", label: "Imagery", content: <ImageryControl /> },
     ],
-    [viewer],
+    [viewer, slate],
   );
   return <TabbedPanel tabs={tabs} defaultTab="fmv" ariaLabel="Video" />;
 }

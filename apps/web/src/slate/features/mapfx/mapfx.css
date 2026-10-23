@@ -1,0 +1,11 @@
+/* SVG map effects over the Cesium canvas; never take the pointer. */
+.slate-shell .sl-mapfx {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: var(--dock-clear, 0px);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}

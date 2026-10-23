@@ -25,20 +25,13 @@ export function SectionLabel({
   className?: string;
   style?: CSSProperties;
 }): JSX.Element {
+  // The kit's section band (ui/kit.css `.k-band`): a bg-3 bar, bold sans
+  // title, the count as a quiet chip. Margins from callers still apply.
   return (
-    <div
-      className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-sm border-l-[3px] ${className}`}
-      style={{
-        borderLeftColor: "var(--accent)",
-        background: "color-mix(in srgb, var(--accent) 12%, var(--panel-bg))",
-        ...style,
-      }}
-    >
-      <span className="text-[12px] font-semibold text-txt-0">{title}</span>
+    <div className={`k-band ${className}`} {...(style ? { style } : {})}>
+      <span>{title}</span>
       {count !== undefined && count !== "" && (
-        <span className="mono text-[11px] text-txt-2 tabular-nums">
-          {count}
-        </span>
+        <span className="k-n tabular-nums">{count}</span>
       )}
     </div>
   );
@@ -144,13 +137,15 @@ export function ScoreBar({ pct }: { pct: number }): JSX.Element {
 
 // ── status badge (.badge) ───────────────────────────────────────────────────
 export type BadgeTone = "alert" | "warn" | "accent" | "mag" | "ok" | "neutral";
+// Kit chip variants (ui/kit.css `.k-chip`): r/g/w are the kit's own; accent
+// and mag carry the same tint-plus-ink pairing in their own hue.
 const BADGE_TONE: Record<BadgeTone, string> = {
-  alert: "text-alert-fg bg-alert-bg border border-alert-line",
-  warn: "text-warn-fg bg-warn-bg border border-warn-line",
-  accent: "text-accent-fg bg-accent-dim border border-accent-line",
-  mag: "text-mag-fg bg-mag-dim border border-mag-line",
-  ok: "text-ok bg-ok-bg border border-ok-line",
-  neutral: "text-txt-3 border border-line",
+  alert: "r",
+  warn: "w",
+  accent: "bg-accent-dim! text-accent-fg!",
+  mag: "bg-mag-dim! text-mag-fg!",
+  ok: "g",
+  neutral: "",
 };
 export function Badge({
   tone = "neutral",
@@ -162,9 +157,7 @@ export function Badge({
   className?: string;
 }): JSX.Element {
   return (
-    <span
-      className={`mono text-[11px] tracking-[0.5px] uppercase px-[7px] py-[3px] rounded-sm whitespace-nowrap ${BADGE_TONE[tone]} ${className}`}
-    >
+    <span className={`k-chip ${BADGE_TONE[tone]} ${className}`}>
       {children}
     </span>
   );
@@ -179,10 +172,10 @@ export function KV({
   className?: string;
 }): JSX.Element {
   return (
-    <div
-      className={`grid items-baseline gap-x-3 gap-y-[5px] text-[12px] ${className}`}
-      style={{ gridTemplateColumns: "minmax(0, auto) minmax(0, 1fr)" }}
-    >
+    // The kit's key/value grid (`.k-kv`) without its own padding: KV sits
+    // inside panels that already pad, and kit.css is unlayered, so a caller's
+    // utility could not take the padding back off.
+    <div className={`k-kv items-baseline ${className}`} style={{ padding: 0 }}>
       {children}
     </div>
   );
@@ -201,15 +194,15 @@ export function KVRow({
   // is treated as no verdict at all.
   title?: string;
 }): JSX.Element {
-  // Field key = sentence-case label voice (readable, not shouted); the VALUE
-  // keeps the mono/tabular machine voice so figures still align and scan.
+  // Field key = muted sentence-case label; the VALUE is bright sans with
+  // tabular figures, so numbers still align (kit `.k-kv`).
   return (
     <>
-      <span className="text-[11px] text-txt-2" {...(title && { title })}>
+      <span className="k" {...(title && { title })}>
         {k}
       </span>
       <span
-        className={`mono text-right min-w-0 wrap-break-word ${warn ? "text-alert-fg" : "text-txt-0"}`}
+        className={`v min-w-0 tabular-nums ${warn ? "text-alert-fg!" : ""}`}
         {...(title && { title })}
       >
         {v}

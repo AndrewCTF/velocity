@@ -719,7 +719,7 @@ export function MonitorsTab({ datasetId }: { datasetId: string }): JSX.Element {
       </div>
 
       <div className="space-y-1.5">
-        <div className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">
+        <div className="k-band">
           Events
         </div>
         {!selectedId ? (

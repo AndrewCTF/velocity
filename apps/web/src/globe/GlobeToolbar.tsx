@@ -26,6 +26,7 @@ import {
   draftBase,
 } from "../annotations/annotationStore.js";
 import { Icon } from "../normal/Icon.js";
+import { useTheme } from "../state/theme.js";
 import {
   MAP_TOOL_PANELS,
   openMapToolPanel,
@@ -128,6 +129,10 @@ export function GlobeToolbar({
   const setTool = useMapTools((s) => s.setTool);
   const measure = useMapTools((s) => s.measure);
   const area = useMapTools((s) => s.area);
+  // The Slate shell has no floating tool column: its tools live in the menu
+  // bar (Edit / View), and the map workspace draws its own columns. The
+  // arming effect and the readout below stay, so the menu items still work.
+  const slate = useTheme((s) => s.mode) === "slate";
 
   // Arm / disarm the active draw tool against the shared controller whenever the
   // selected tool changes. Each arming is self-re-arming (measure/annotate stay
@@ -499,7 +504,10 @@ export function GlobeToolbar({
         className="on-dark pointer-events-auto flex flex-col rounded-md border border-line-2 overflow-hidden shadow-[0_8px_30px_-12px_rgba(0,0,0,0.85)]"
         role="toolbar"
         aria-label="Map tools"
-        style={{ background: "rgba(9,12,18,0.94)" }}
+        style={{
+          background: "rgba(9,12,18,0.94)",
+          ...(slate ? { display: "none" } : {}),
+        }}
       >
         <GroupLabel>Tools</GroupLabel>
         {TOOLS.map((t) => {

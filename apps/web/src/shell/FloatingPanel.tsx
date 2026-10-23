@@ -137,20 +137,20 @@ export function FloatingPanel({
 
   return (
     <div
-      className="absolute z-(--z-overlay) pointer-events-auto flex flex-col rounded-md border border-line-2 overflow-hidden shadow-2xl"
+      className="absolute z-(--z-overlay) pointer-events-auto flex flex-col border border-line-2 bg-bg-1 overflow-hidden shadow-2xl"
       style={{
         left: rect.x,
         top: rect.y,
         width: rect.w,
         height: rect.h,
-        background: "rgba(9,12,18,0.97)",
+        background: "var(--bg-1)",
       }}
       role="dialog"
       aria-label={title}
     >
       <div
         onPointerDown={onDragDown}
-        className="flex items-center gap-1.5 px-2 h-8 shrink-0 border-b border-line-2 bg-bg-1 cursor-grab active:cursor-grabbing select-none"
+        className="flex items-center gap-2 px-3 h-11 shrink-0 border-b border-line-2 bg-bg-1 cursor-grab active:cursor-grabbing select-none"
       >
         <GripVertical
           size={13}
@@ -159,7 +159,7 @@ export function FloatingPanel({
           aria-hidden
         />
         {icon && <Icon name={icon} className="w-3.5 h-3.5 text-txt-2" />}
-        <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-1 flex-1 truncate">
+        <span className="text-[15px] font-semibold text-txt-0 flex-1 truncate">
           {title}
         </span>
         <button

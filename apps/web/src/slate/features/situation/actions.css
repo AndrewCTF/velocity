@@ -1,0 +1,288 @@
+/* Situation panel card states (features-b G45 G46 G50 G52 G54). */
+.slate-shell .coa.sl-xcard {
+  cursor: default;
+  background: #161e22;
+}
+.slate-shell .sl-xcard .sl-k {
+  font-size: 13.5px;
+  color: #c4ced3;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.slate-shell .sl-xcard .sl-v {
+  font-size: 14px;
+  color: #f1f4f6;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.slate-shell .sl-xcard .sl-tt {
+  font-size: 15.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slate-shell .sl-xcard .sl-unk {
+  font-style: italic;
+  color: #8d979d;
+}
+.slate-shell .sl-xcard .sl-strip {
+  background: #232d31;
+}
+.slate-shell .sl-tile {
+  background: #2a3a46;
+  border: 1px solid #50606c;
+  border-radius: 2px;
+  color: #cfd6da;
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.02em;
+}
+.slate-shell .sl-xbtn {
+  border: 1px solid #a8b2ba;
+  border-radius: 2px;
+  color: #f1f4f6;
+  font: inherit;
+  font-size: 15.5px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  padding: 0;
+}
+.slate-shell .sl-risk {
+  background: none;
+  border: 0;
+  border-bottom: 1px dashed #f0838b;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  color: #f0838b;
+  line-height: 18px;
+  cursor: pointer;
+}
+.slate-shell .sl-riskpop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px 8px;
+  background: #32404c;
+  border-radius: 2px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  z-index: 5;
+}
+.slate-shell .sl-riskrow {
+  display: flex;
+  gap: 6px;
+  font-size: 13.5px;
+  color: #e9eef0;
+  line-height: 17px;
+}
+.slate-shell .sl-golink {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 13.5px;
+  color: #5da7ef;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.slate-shell .chip.sl-active {
+  background: #2a3236;
+  color: #cfd6da;
+  font-size: 13px;
+}
+.slate-shell .sl-status,
+.slate-shell .sl-hstatus {
+  background: #1a543c;
+  font-size: 15.5px;
+  color: #f1f6f6;
+}
+.slate-shell .sl-status > b,
+.slate-shell .sl-hstatus > b {
+  position: absolute;
+  left: 15px;
+  top: 10px;
+  font-size: 16px;
+  color: #f6f7f9;
+}
+.slate-shell .sl-resolve {
+  position: absolute;
+  right: 10px;
+  top: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #8fd6b4;
+  border-radius: 2px;
+  background: none;
+  color: #e9fff4;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.slate-shell .sl-resolve:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* Explanation cards (G46) and the inline confirm (G45). */
+.slate-shell .sl-hcard {
+  position: relative;
+  margin-left: 15px;
+  width: 407px;
+  height: 106px;
+  flex: none;
+  border: 1px solid #3c4649;
+  background: #182028;
+}
+.slate-shell .sl-hcard.ver {
+  border: 2px solid #3b9ae0;
+  height: 108px;
+}
+.slate-shell .sl-hcard > span,
+.slate-shell .sl-hcard > button {
+  white-space: nowrap;
+}
+.slate-shell .sl-ht {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f6f7f9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slate-shell .sl-hrisk {
+  font-size: 14.5px;
+  color: #f0838b;
+}
+.slate-shell .sl-hact {
+  font-size: 13.5px;
+  color: #7c878d;
+}
+.slate-shell .sl-hby {
+  font-size: 13.5px;
+  color: #b0bcc2;
+}
+.slate-shell .sl-hupdate {
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 16px;
+  color: #e5e8eb;
+  cursor: pointer;
+  text-align: center;
+}
+.slate-shell .sl-hcard.sl-hconfirm {
+  background: #1876b6;
+  border: 2px solid #4a9fe0;
+  box-shadow: 0 0 0 1px #0f4f80;
+}
+.slate-shell .sl-hq {
+  font-size: 15.5px;
+  color: #f1f6fb;
+  white-space: normal !important;
+  line-height: 20px;
+}
+.slate-shell .sl-hcancel,
+.slate-shell .sl-hverify {
+  border: 0;
+  border-radius: 2px;
+  font: inherit;
+  font-size: 16px;
+  color: #f1f6fb;
+  background: #1868a2;
+  cursor: pointer;
+}
+.slate-shell .sl-hverify {
+  background: #3280be;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px #8ec4ee;
+}
+/* G55 status toast and G56 follow-up prompt, over the map's top edge. */
+.slate-shell .sl-g55,
+.slate-shell .sl-g56 {
+  position: absolute;
+  top: 105px;
+  height: 47px;
+  border-radius: 2px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  z-index: 210;
+}
+.slate-shell .sl-g55 {
+  left: 564px;
+  width: 599px;
+  background: #0a7cc0;
+}
+.slate-shell .sl-g56 {
+  left: 544px;
+  width: 640px;
+  background: #344a58;
+}
+.slate-shell .sl-g55t {
+  font-size: 15px;
+  color: #f4fbff;
+  white-space: nowrap;
+  line-height: 20px;
+  max-width: 440px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slate-shell .sl-spin {
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: sl-spin 0.9s linear infinite;
+}
+@keyframes sl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.slate-shell .sl-g55c,
+.slate-shell .sl-g55x,
+.slate-shell .sl-g56x {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 15px;
+  color: #e5f3fc;
+  cursor: pointer;
+  line-height: 20px;
+}
+.slate-shell .sl-g56t {
+  font-size: 15.5px;
+  color: #f1f4f6;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.slate-shell .sl-g56b {
+  background: #f6f7f9;
+  color: #14202a;
+  font: inherit;
+  font-size: 15.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.slate-shell .sl-sittag {
+  background: #e9eef0;
+  color: #1c2329;
+  font-size: 15px;
+  padding: 1px 10px;
+  border-radius: 2px;
+  margin-left: auto;
+  margin-right: 14px;
+  flex: none;
+}
+.slate-shell .sl-resolvedchip {
+  background: #4d5558;
+  color: #cfd6da;
+  font-size: 15px;
+  padding: 0 10px;
+  border-radius: 2px;
+}

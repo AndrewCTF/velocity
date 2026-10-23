@@ -197,18 +197,15 @@ export function Tabs<T extends string>({
   onChange: (id: T) => void;
 }): JSX.Element {
   return (
-    <div className="flex items-center gap-0.5 border-b border-line-2">
+    <div role="tablist" className="k-ptabs">
       {tabs.map((t) => (
         <button
           key={t.id}
           type="button"
+          role="tab"
+          aria-selected={active === t.id}
           onClick={() => onChange(t.id)}
-          className={[
-            "relative px-2.5 py-1.5 text-[11px] tracking-[0.02em] -mb-px border-b-2 transition-colors",
-            active === t.id
-              ? "border-accent text-txt-0"
-              : "border-transparent text-txt-2 hover:text-txt-0",
-          ].join(" ")}
+          className="k-ptab"
         >
           {t.label}
           {t.count !== undefined && (
@@ -326,7 +323,7 @@ export function Th({
 }
 
 export function tableHeadCls(): string {
-  return "text-txt-3 mono text-[10px] uppercase tracking-[0.4px]";
+  return "text-txt-3 text-[10px] uppercase tracking-[0.4px]";
 }
 
 export const rowCls = "border-t border-line hover:bg-bg-2 transition-colors";
@@ -407,7 +404,7 @@ export function FilterChips<T extends string>({
             type="button"
             onClick={() => onChange(o.key)}
             className={[
-              "mono text-[10px] uppercase tracking-[0.4px] px-2 py-1 rounded-sm border transition-colors",
+              "text-[10px] uppercase tracking-[0.4px] px-2 py-1 rounded-sm border transition-colors",
               on
                 ? "border-accent-line bg-accent-dim text-accent-fg"
                 : empty

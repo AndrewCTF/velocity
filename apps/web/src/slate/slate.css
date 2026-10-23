@@ -1,0 +1,1120 @@
+/* slate.css: the reference workspace shell, transcribed verbatim (the kit's
+   shell stylesheet followed by the hero page's own rules), every selector
+   scoped under .slate-shell. Geometry is the copy's 1728x1080 frame; the
+   block at the end only re-anchors the right and bottom edges to the window
+   and wires the live parts. */
+
+/* kit shell */
+.slate-shell,
+.slate-shell * {
+  box-sizing: border-box;
+}
+.slate-shell {
+  margin: 0;
+}
+.slate-shell {
+  width: 1728px;
+  height: 1080px;
+  overflow: hidden;
+  position: relative;
+  background: #0b0d10;
+  color: #e4e9ea;
+  font:
+    400 15px/1.25 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+}
+.slate-shell svg.i {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex: none;
+}
+.slate-shell .a {
+  position: absolute;
+}
+.slate-shell .banner {
+  left: 0;
+  top: 0;
+  width: 1728px;
+  height: 16px;
+  background: #526472;
+  color: #e6ebef;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  display: grid;
+  place-items: center;
+}
+.slate-shell .tabsbar {
+  left: 0;
+  top: 16px;
+  width: 1728px;
+  height: 40px;
+  background: #283036;
+}
+.slate-shell .tabsbar > * {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.slate-shell .gs {
+  left: 44px;
+  width: 240px;
+  height: 26px;
+  border: 1px solid #3f4a52;
+  border-radius: 3px;
+  padding: 0 3px 0 8px;
+  color: #a9b3b8;
+  font-size: 15px;
+  justify-content: space-between;
+}
+.slate-shell .gs kbd {
+  font: 12px "Source Sans 3";
+  color: #dfe5e7;
+  border: 1px solid #5b666d;
+  border-radius: 3px;
+  padding: 0 5px;
+}
+.slate-shell .dtab {
+  height: 40px;
+  top: 0 !important;
+  transform: none !important;
+  padding: 0 10px;
+  font-size: 16px;
+  color: #e8edee;
+}
+.slate-shell .dtab.on {
+  background: #223e50;
+}
+.slate-shell .dtab .ai {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.slate-shell .dtab .ai svg {
+  width: 13px;
+  height: 13px;
+}
+.slate-shell .cnt {
+  flex-direction: column;
+  gap: 1px !important;
+  font-size: 12px;
+  color: #e3e8ea;
+}
+.slate-shell .cnt svg {
+  width: 20px;
+  height: 20px;
+}
+.slate-shell .menu {
+  left: 42px;
+  top: 56px;
+  width: 1686px;
+  height: 36px;
+  background: #1e2628;
+  font-size: 16px;
+  color: #f1f4f5;
+}
+.slate-shell .menu > * {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.slate-shell .menu .sep {
+  width: 1px;
+  height: 22px;
+  background: #3a464c;
+}
+.slate-shell .av {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+}
+.slate-shell .rail {
+  left: 0;
+  top: 56px;
+  width: 42px;
+  height: 1024px;
+  background: #181c20;
+}
+.slate-shell .rail span {
+  position: absolute;
+  left: 0;
+  width: 42px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+}
+.slate-shell .rail svg {
+  width: 20px;
+  height: 20px;
+}
+.slate-shell .rail span.on::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 1px;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #d9e0e2;
+  border-radius: 4px;
+}
+.slate-shell .map {
+  left: 42px;
+  top: 92px;
+  width: 1686px;
+  height: 988px;
+  overflow: hidden;
+}
+.slate-shell .scene {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1882px;
+  height: 1242px;
+  transform-origin: 0 0;
+}
+.slate-shell .scene img {
+  position: absolute;
+  inset: 0;
+  width: 1882px;
+  height: 1242px;
+  filter: brightness(0.4) saturate(0.7);
+}
+.slate-shell .place {
+  position: absolute;
+  color: rgba(230, 236, 240, 0.86);
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: 0.3em;
+  text-shadow: 0 1px 3px #000;
+}
+.slate-shell .glow {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(209, 58, 70, 0.52),
+    rgba(209, 58, 70, 0.2) 58%,
+    transparent 71%
+  );
+}
+.slate-shell .pin {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: #e8414c;
+  border: 2px solid #fff;
+  display: grid;
+  place-items: center;
+}
+.slate-shell .pin b {
+  transform: rotate(45deg);
+  color: #fff;
+  font-size: 15px;
+}
+.slate-shell .tlab {
+  position: absolute;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  text-shadow: 0 1px 2px #000;
+}
+.slate-shell .sym {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+.slate-shell .sym.h {
+  background: #d93a46;
+}
+.slate-shell .sym.f {
+  background: #2f7fd6;
+}
+.slate-shell .sym svg {
+  width: 15px;
+  height: 15px;
+}
+.slate-shell .slab {
+  position: absolute;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px #000;
+}
+.slate-shell .lab {
+  position: absolute;
+  color: #f2f5f6;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-shadow:
+    0 0 2px #000,
+    0 1px 2px #000;
+}
+.slate-shell .lab.pl {
+  color: #ffe3b0;
+}
+.slate-shell .lab.ae {
+  color: #cfe3ff;
+}
+.slate-shell .panel {
+  background: rgba(28, 40, 42, 0.96);
+  border: 1px solid #2c393c;
+  color: #e4e9ea;
+}
+
+/* hero page */
+.slate-shell .sit {
+  left: 57px;
+  top: 103px;
+  width: 437px;
+  height: 619px;
+}
+.slate-shell .ptabs {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 435px;
+  height: 52px;
+  background: #202a2c;
+  border-bottom: 1px solid #2c393c;
+}
+.slate-shell .ptabs .g {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 50px;
+  height: 52px;
+  border-right: 1px solid #2c393c;
+  display: grid;
+  place-items: center;
+  color: #b49cf5;
+}
+.slate-shell .ptabs .g svg {
+  width: 24px;
+  height: 24px;
+}
+.slate-shell .ptabs .t {
+  position: absolute;
+  top: 15px;
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 16px;
+  color: #e4e9ea;
+}
+.slate-shell .ptabs .t.on {
+  color: #5aa9ff;
+}
+.slate-shell .ptabs .ul {
+  position: absolute;
+  left: 60px;
+  top: 48px;
+  width: 105px;
+  height: 3px;
+  background: #5aa9ff;
+}
+.slate-shell .ttl {
+  position: absolute;
+  left: 18px;
+  top: 64px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 16.5px;
+  font-weight: 700;
+  color: #f6f8f8;
+}
+.slate-shell .ttl .bk {
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+  background: #2c4a63;
+  display: grid;
+  place-items: center;
+  color: #8fbff5;
+}
+.slate-shell .kv {
+  position: absolute;
+  left: 17px;
+  font-size: 15px;
+  display: flex;
+  gap: 0;
+}
+.slate-shell .kv .k {
+  width: 79px;
+  color: #a9b3b8;
+}
+.slate-shell .kv .v {
+  color: #f3f6f6;
+}
+.slate-shell .sev {
+  background: #42282c;
+  color: #ff7e86;
+  font-size: 14px;
+  padding: 1px 6px;
+  border-radius: 2px;
+}
+.slate-shell .band {
+  position: absolute;
+  left: 0;
+  width: 435px;
+  height: 29px;
+  background: #2e383a;
+  border-top: 1px solid #253032;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-left: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #f3f6f6;
+}
+.slate-shell .band svg {
+  width: 12px;
+  height: 12px;
+  color: #aab4b8;
+}
+.slate-shell .band .n {
+  font-weight: 400;
+  font-size: 14px;
+  color: #cfd6d8;
+  background: #3a4648;
+  padding: 0 5px;
+  border-radius: 2px;
+}
+.slate-shell .coa {
+  position: absolute;
+  left: 14px;
+  width: 408px;
+  background: #222e2e;
+  border: 1px solid #3e4a4c;
+}
+.slate-shell .coa.sel {
+  border: 2px solid #4a8fd6;
+}
+.slate-shell .coa .t1 {
+  position: absolute;
+  left: 13px;
+  top: 13px;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #f5f7f7;
+}
+.slate-shell .coa .chips {
+  position: absolute;
+  right: 10px;
+  top: 11px;
+  display: flex;
+  gap: 6px;
+}
+.slate-shell .chip {
+  font-size: 15px;
+  padding: 2px 7px;
+  background: #323e40;
+  color: #e9eeef;
+}
+.slate-shell .chip.r {
+  background: #42282c;
+  color: #ff6b75;
+}
+.slate-shell .chip.g {
+  background: #1a3a34;
+  color: #3ddc97;
+}
+.slate-shell .coa .by {
+  position: absolute;
+  left: 13px;
+  top: 38px;
+  font-size: 13.5px;
+  color: #a9b3b8;
+}
+.slate-shell .coa .ft {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 32px;
+  background: #2e3a3c;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 13px;
+  font-size: 16px;
+  color: #f5f7f7;
+}
+.slate-shell .flag {
+  width: 22px;
+  height: 15px;
+  display: inline-block;
+}
+.slate-shell .tl {
+  left: 56px;
+  top: 925px;
+  width: 1653px;
+  height: 140px;
+  background: rgba(24, 32, 38, 0.94);
+  border: 1px solid #2b3a40;
+}
+.slate-shell .tl .rows {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 1651px;
+  height: 82px;
+  background: rgba(40, 62, 66, 0.55);
+}
+.slate-shell .tl .rl {
+  position: absolute;
+  left: 22px;
+  font-size: 15.5px;
+  color: #b4bec2;
+}
+.slate-shell .tl .rl.on {
+  color: #fff;
+  font-weight: 700;
+}
+.slate-shell .tl .bar {
+  position: absolute;
+  height: 18px;
+  border: 2px solid #3d5559;
+}
+.slate-shell .tl .bar.on {
+  background: #1a6e98;
+  border-color: #1a6e98;
+}
+.slate-shell .tl .ax {
+  position: absolute;
+  top: 112px;
+  font-size: 15px;
+  color: #e4e9ea;
+}
+.slate-shell .tl .gl {
+  position: absolute;
+  top: 14px;
+  width: 1px;
+  height: 92px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.slate-shell .obj {
+  left: 1254px;
+  top: 105px;
+  width: 465px;
+  height: 965px;
+  background: #1c2228;
+  border: 1px solid #2b3338;
+}
+.slate-shell .obj .hd {
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+.slate-shell .obj .hd .ic {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  color: #eef2f3;
+}
+.slate-shell .obj .hd .ic svg {
+  width: 40px;
+  height: 40px;
+}
+.slate-shell .obj h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  color: #f6f8f8;
+}
+.slate-shell .obj .sub {
+  font-size: 15px;
+  color: #a9b3b8;
+}
+.slate-shell .obj .x {
+  position: absolute;
+  right: 18px;
+  top: 14px;
+  color: #aab4b8;
+}
+.slate-shell .okv {
+  position: absolute;
+  left: 16px;
+  display: grid;
+  grid-template-columns: 196px 1fr;
+  row-gap: 9px;
+  font-size: 15px;
+}
+.slate-shell .okv .k {
+  color: #a9b3b8;
+}
+.slate-shell .okv .v {
+  color: #f3f6f6;
+}
+.slate-shell .oband {
+  position: absolute;
+  left: 1px;
+  width: 463px;
+  height: 31px;
+  background: #2e383c;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 22px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #f3f6f6;
+}
+.slate-shell .oband svg {
+  width: 12px;
+  height: 12px;
+  color: #aab4b8;
+}
+.slate-shell .warnc {
+  position: absolute;
+  left: 16px;
+  width: 432px;
+  height: 48px;
+  background: #4c3a2a;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 14px;
+  font-size: 15.5px;
+  color: #f6f8f8;
+}
+.slate-shell .warnc svg {
+  width: 22px;
+  height: 22px;
+  color: #f5a623;
+}
+.slate-shell .chart {
+  position: absolute;
+  left: 16px;
+  width: 432px;
+  height: 165px;
+  border: 1px solid #3a464c;
+}
+.slate-shell .obs {
+  position: absolute;
+  left: 16px;
+  width: 432px;
+  height: 122px;
+  background: #203236;
+  border: 1px solid #3fa59b;
+}
+
+/* ── Live wiring ────────────────────────────────────────────────────────────
+   The copy is a fixed 1728x1080 page; the shell fills the window. Left and top
+   anchored geometry stays exactly the copy's; right and bottom edges re-anchor
+   to the window by the copy's own margins. */
+.slate-shell {
+  width: 100%;
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.slate-shell .banner,
+.slate-shell .tabsbar {
+  width: auto;
+  right: 0;
+}
+.slate-shell .menu {
+  width: auto;
+  right: 0;
+}
+.slate-shell .rail {
+  height: auto;
+  bottom: 0;
+}
+.slate-shell .map {
+  width: auto;
+  height: auto;
+  right: 0;
+  bottom: 0;
+}
+.slate-shell .obj {
+  left: auto;
+  right: 9px;
+  height: auto;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+.slate-shell .sit {
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.slate-shell .sit.sl-tall {
+  height: auto;
+  bottom: calc(1080px - 925px + 6px);
+  max-height: none;
+}
+.slate-shell .sl-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  margin-top: 52px;
+}
+.slate-shell .sl-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* the panel section fills the body, so a 100%-height panel (Data) has height */
+.slate-shell .sl-scroll {
+  display: flex;
+  flex-direction: column;
+}
+.slate-shell .sl-scroll > * {
+  flex: 1 0 auto;
+}
+
+/* Buttons and links in the chrome take the copy's span styling. */
+.slate-shell .tabsbar > button,
+.slate-shell .menu > button,
+.slate-shell .menu > span button,
+.slate-shell .menu > a {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.slate-shell .tabsbar .gs {
+  background: none;
+  cursor: text;
+  display: flex;
+}
+.slate-shell .tabsbar .dtab {
+  display: flex;
+  text-align: left;
+}
+.slate-shell .tabsbar .cnt {
+  display: flex;
+}
+.slate-shell .sl-plain {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.slate-shell .menu > button[aria-expanded="true"] {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.slate-shell .rail button,
+.slate-shell .rail a {
+  position: absolute;
+  left: 0;
+  width: 42px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.slate-shell .rail button.on::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 1px;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #d9e0e2;
+  border-radius: 4px;
+}
+
+/* Panel tab row: the copy's tabs, in flow from x 64 so any label fits. */
+.slate-shell .sl-ptabs {
+  position: absolute;
+  left: 60px;
+  top: 0;
+  height: 52px;
+  display: flex;
+  gap: 0;
+}
+.slate-shell .sl-ptabs .t {
+  position: relative;
+  top: 0;
+  height: 52px;
+  padding: 0 9px 0 4px;
+  margin-right: 6px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 16px;
+  color: #e4e9ea;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.slate-shell .sl-ptabs .t.on {
+  color: #5aa9ff;
+}
+.slate-shell .sl-ptabs .t.on::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 48px;
+  height: 3px;
+  background: #5aa9ff;
+}
+.slate-shell .sl-ptabs .n {
+  font-size: 13px;
+  color: #cfd6d8;
+  background: #3a4648;
+  padding: 0 5px;
+  border-radius: 2px;
+}
+
+/* Situation view: the copy's absolute rows, re-expressed in flow at the same
+   y (ttl 64, kv 104 and 132, bands from 169, cards from 270). */
+.slate-shell .sl-sit,
+.slate-shell .sl-sitlist {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52px;
+  bottom: 0;
+  overflow-y: auto;
+}
+.slate-shell .sl-flow {
+  position: relative !important;
+  top: auto !important;
+  left: auto;
+}
+.slate-shell .ttl.sl-flow {
+  margin: 12px 0 0 18px;
+  height: 28px;
+  min-width: 0;
+}
+.slate-shell .ttl .bk {
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  flex: none;
+}
+.slate-shell .ttl .n {
+  font-weight: 400;
+  font-size: 14px;
+  color: #cfd6d8;
+  background: #3a4648;
+  padding: 0 5px;
+  border-radius: 2px;
+}
+.slate-shell .kv.sl-flow {
+  margin-left: 17px;
+  align-items: center;
+}
+.slate-shell .sl-kv1 {
+  margin-top: 12px;
+  height: 19px;
+}
+.slate-shell .sl-kv2 {
+  margin-top: 9px;
+  height: 19px;
+}
+.slate-shell .sl-bands {
+  margin-top: 18px;
+}
+.slate-shell .band.sl-flow {
+  width: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.slate-shell .sl-cards {
+  padding: 14px 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.slate-shell .coa.sl-flow {
+  left: 14px;
+  height: 104px;
+  flex: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.slate-shell .coa .t1 {
+  right: 175px; /* clears two chips ("minutes" + "High risk") */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slate-shell .coa .ft {
+  white-space: nowrap;
+  overflow: hidden;
+}
+.slate-shell .sl-sitlist .coa.sl-flow {
+  margin-top: 12px;
+}
+.slate-shell .sl-new {
+  margin-top: 14px;
+}
+.slate-shell .sl-empty {
+  margin: 14px 18px;
+  color: #a9b3b8;
+  font-size: 15px;
+}
+.slate-shell .sl-details {
+  padding: 10px 18px;
+  font-size: 15px;
+  color: #e4e9ea;
+}
+.slate-shell .sl-details p {
+  margin: 0 0 6px;
+}
+.slate-shell .sl-mute {
+  color: #a9b3b8;
+}
+
+/* Object panel tabs. */
+.slate-shell .sl-otabs {
+  display: flex;
+  align-items: stretch;
+  height: 52px;
+  flex: none;
+  border-bottom: 1px solid #2b3338;
+}
+.slate-shell .sl-otabs button {
+  position: relative;
+  padding: 0 16px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 16px;
+  color: #e4e9ea;
+  cursor: pointer;
+}
+.slate-shell .sl-otabs button.on {
+  color: #5aa9ff;
+}
+.slate-shell .sl-otabs button.on::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 3px;
+  background: #5aa9ff;
+}
+.slate-shell .sl-otabs .x {
+  margin-left: auto;
+  color: #aab4b8;
+}
+
+/* Dropdowns (menus and the app launcher), portalled to the body. */
+.sl-pop {
+  z-index: 1000;
+  min-width: 264px;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 4px 0;
+  background: #222e2e;
+  border: 1px solid #3e4a4c;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font:
+    400 14px/1.2 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+}
+.sl-pop button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: none;
+  border: 0;
+  color: #e4e9ea;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sl-pop button:hover:not(:disabled) {
+  background: #2e3a3c;
+  color: #fff;
+}
+.sl-pop button:disabled {
+  color: #8d989c;
+  cursor: not-allowed;
+}
+.sl-pop button.sep {
+  margin-top: 4px;
+  border-top: 1px solid #3a464c;
+  padding-top: 8px;
+}
+.sl-pop .lbl {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sl-pop .hint {
+  color: #a9b3b8;
+  font-size: 12px;
+}
+.sl-pop .grp {
+  padding: 8px 12px 3px;
+  color: #a9b3b8;
+  font-size: 12px;
+}
+
+/* The live time dock takes the copy's .tl frame: 56 from the left, 19 from
+   the right, 15 off the bottom (map left is 42). */
+.slate-shell .csl2-dock {
+  margin: 0 19px 15px 14px;
+  max-height: none;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.slate-shell .tabsbar > .gs {
+  border: 1px solid #3f4a52;
+  border-radius: 3px;
+  padding: 0 3px 0 8px;
+  color: #a9b3b8;
+  justify-content: space-between;
+  font-size: 15px;
+}
+.slate-shell .sl-ptabs .t {
+  padding: 0 3px;
+  margin-right: 11px;
+}
+.slate-shell .tabsbar > .cnt {
+  font-size: 12px;
+}
+.slate-shell .sl-ptabs .t {
+  padding: 0 2px;
+  margin-right: 5px;
+  gap: 6px;
+}
+.slate-shell .sit.sl-tall {
+  bottom: calc(var(--dock-clear, 165px) + 6px);
+}
+.slate-shell .sl-hyp {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 14px;
+  padding: 10px 13px;
+  background: #222e2e;
+  border: 1px solid #3e4a4c;
+  font-size: 15px;
+  color: #f5f7f7;
+}
+.slate-shell .ttl .sl-ttlbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+.slate-shell .ttl .sl-ttlbtn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Situations panel: as tall as its content, never past the timeline (the
+   limit the taller tabs use); the situation body scrolls inside it. */
+.slate-shell .sit:not(.sl-tall) {
+  height: auto;
+  max-height: calc(100% - 103px - var(--dock-clear, 165px) - 14px);
+}
+.slate-shell .sit:not(.sl-tall) > .sl-sit,
+.slate-shell .sit:not(.sl-tall) > .sl-sitlist {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  margin-top: 52px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The reference map carries no floating chips: the analyst console opens from
+   View > Analyst console and Cmd J, the shared COP from View > Shared COP. */
+.slate-shell button[aria-label="Open analyst console"],
+.slate-shell button[data-cop-toggle] {
+  display: none;
+}
+
+/* Doc tabs flow from the reference's x=359 up to the counters, ~260px each,
+   shrinking (with ellipsis) when the window is narrower than the reference. */
+.slate-shell .tabsbar > .sl-dtabs {
+  left: 359px;
+  right: 100px;
+  top: 0;
+  height: 40px;
+  transform: none;
+  gap: 10px;
+  overflow: hidden;
+}
+.slate-shell .sl-dtabs > .dtab {
+  position: static;
+  flex: 0 1 255px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* On short windows the situation body scrolls; show that it does. */
+.slate-shell .sit:not(.sl-tall) > .sl-sit,
+.slate-shell .sit:not(.sl-tall) > .sl-sitlist {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #4a585c transparent;
+}

@@ -1,3 +1,5 @@
+import { useTheme } from "../state/theme.js";
+import { useSituationFocus } from "../state/situationFocus.js";
 import { useEffect, useRef, useState } from "react";
 import * as Cesium from "cesium";
 import { useSelection } from "../state/stores.js";
@@ -57,6 +59,7 @@ function fmtKm(m: number): string {
 export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
   const selId = useSelection((s) => s.selectedEntityId);
   const deadReckon = useSettings((s) => s.aircraftDeadReckon);
+  const mono = useTheme((st) => st.mode) === "slate";
   const [center, setCenter] = useState<{
     lon: number;
     lat: number;
@@ -114,10 +117,27 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
       }
     };
 
+    // Slate labels only the contacts that matter; the one under the pointer
+    // earns its label too (PrimitiveEntityLayer quietLabels). One pick per
+    // 120 ms at most, and only under Slate, which is the only reader.
+    let lastPick = 0;
     const onMouseMove = (movement: {
       endPosition: Cesium.Cartesian2;
     }): void => {
       if (viewer.isDestroyed()) return;
+      const now = performance.now();
+      if (
+        document.documentElement.dataset.theme === "slate" &&
+        now - lastPick > 120
+      ) {
+        lastPick = now;
+        const raw = (
+          viewer.scene.pick(movement.endPosition) as
+            { id?: { id?: unknown } } | undefined
+        )?.id;
+        const hid = typeof raw?.id === "string" ? raw.id : null;
+        useSituationFocus.getState().setHover(hid);
+      }
       const cart = viewer.camera.pickEllipsoid(movement.endPosition, ell);
       if (!cart) {
         setCursor(null);
@@ -212,7 +232,14 @@ export function GlobeOverlays({ viewer }: Props): JSX.Element | null {
           <span key={l.label} className="flex items-center gap-1.5">
             <i
               className="inline-block w-[7px] h-[7px] rounded-full"
-              style={{ background: l.color }}
+              style={{
+                // Slate draws aircraft and vessels in light grey (styles.ts
+                // monoSymbology); the key says what the map paints.
+                background:
+                  mono && (l.label === "aircraft" || l.label === "vessels")
+                    ? "#e8edee"
+                    : l.color,
+              }}
             />
             {l.label}
           </span>

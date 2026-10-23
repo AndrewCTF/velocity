@@ -9,6 +9,10 @@ import {
   type ReactNode,
 } from "react";
 import { Icon } from "../normal/Icon.js";
+import { useSelection } from "../state/stores.js";
+import { AppRail } from "./AppRail.js";
+import type { SlateChrome } from "../slate/SlateShell.js";
+import { BpIcon } from "./BpIcon.js";
 import {
   LEFT_PANELS,
   RIGHT_PANELS,
@@ -24,18 +28,17 @@ import {
 // starting from the old structure keeps the old structure. The old shell stays
 // on disk untouched until this one is proven.
 //
-// The grammar, all of it measured rather than chosen (README.md in that folder
-// carries the derivation):
+// The grammar (2026-10-23), copied from the reference workspace shell the
+// operator chose as the app UI (gotham/_kit/gotham-shell.css; comments only):
 //
-//   40px  title bar     brand, menu, document, system state, marking pill
-//   32px  tab strip     four NAMED panels, each on a number key
-//   1fr   body          left panel | map | right dock, none sharing an edge
-//   auto  action bar    the query as a sentence, and the verbs on it
+//   16px  banner        the deployment marking, centred
+//   40px  tabs bar      app launcher, search, one tab per pinned app, counts
+//   36px  menu row      File..Help, the action sentence, the document line
+//   42px  rail          the four named panels as icons, each on a number key
+//   rest  map           full width; panels and the time dock FLOAT over it
 //
-// What is deliberately absent: the 26px saturated classification band (the
-// marking is a pill in the bar) and the 158px pinned timeline footer (the
-// timeline is a dock floating over the map). That is 184px of permanent chrome
-// returned to the surface whose whole job is the map.
+// The earlier console-2026-08 grammar (pill marking, named tab strip, docked
+// panel columns, bottom action bar) is in docs/mockups/console-2026-08.
 
 export interface ConsoleProps {
   /** Brand + menu + document title live left; system state lives right. */
@@ -76,15 +79,19 @@ export interface ConsoleProps {
    *  bar was fixed for; the strip is where an operator goes to get back to the
    *  map, so asking for a panel now returns them to it. */
   onPanelWhileBleed?: () => void;
+  /** Window-chrome wiring the Slate shell draws itself (slate/SlateShell);
+   *  this console takes the same values through `systemState`. */
+  chrome?: SlateChrome;
 }
 
-const PANEL_ICON: Record<LeftPanelId, "layers" | "search" | "chart" | "info"> =
-  {
-    layers: "layers",
-    find: "search",
-    histogram: "chart",
-    info: "info",
-  };
+// Blueprint glyphs for the four panels: the rail's grey group and the panel
+// tab row both draw them.
+const PANEL_BP: Record<LeftPanelId, string> = {
+  layers: "layers",
+  find: "search",
+  histogram: "horizontal-bar-chart",
+  info: "info-sign",
+};
 
 export function Console({
   brand,
@@ -107,6 +114,14 @@ export function Console({
 }: ConsoleProps): JSX.Element {
   const [left, setLeft] = useState<LeftPanelId | "more">(initialPanel);
   const [right, setRight] = useState<RightPanelId>("selection");
+  // The landing view is the map with one panel, as the reference opens. The
+  // inspector opens with a selection and closes with it; the rail's Inspector
+  // toggle opens it by hand (Series has no selection to wait for).
+  const selected = useSelection((s) => s.selectedEntityId);
+  const [rightShown, setRightShown] = useState(Boolean(selected));
+  useEffect(() => {
+    setRightShown(Boolean(selected));
+  }, [selected]);
 
   // Selecting a panel. In full-bleed the panel column does not exist, so the
   // request also has to get the operator back to a surface that has one.
@@ -175,11 +190,11 @@ export function Console({
   // 16px, then 164px, then 126px — and every one of them was wrong the moment
   // the dock's content changed height, which is exactly how the coordinate
   // readout ended up underneath it again.
-  const mapRef = useRef<HTMLElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = dockRef.current;
-    const host = mapRef.current;
+    const host = bodyRef.current;
     if (!el || !host) return;
     const apply = (): void => {
       host.style.setProperty(
@@ -193,41 +208,52 @@ export function Console({
     return () => ro.disconnect();
   }, [dock, bleed]);
 
+  const showLeft = !bleed;
+  const canRight = !bleed && rightTabs.length > 0;
+  const showRight = canRight && rightShown;
+
   return (
     <div
       className="csl2"
       style={
         {
-          // The map column already excludes both rails, so overlays inside it
-          // must not offset past them a second time.
-          "--rail-left-w": "0px",
-          "--rail-right-w": "0px",
+          // The panels float OVER the map now, so map overlays that dock past a
+          // rail (legend, toolbar, coordinate readouts) read the panel's outer
+          // width here rather than 0.
+          "--rail-left-w": showLeft ? "calc(var(--g-left) + 15px)" : "0px",
+          "--rail-right-w": showRight ? "calc(var(--g-right) + 15px)" : "0px",
         } as CSSProperties
       }
     >
+      {/* `display: contents`: TitleBar emits the banner, the tabs bar and the
+          menu row as separate grid items, so the header has no box of its own. */}
       <header className="csl2-title">
         {brand}
         {menu}
         {documentTitle}
-        {/* No spacer here. TitleBar fills this row and owns its own left/right
-            split via an internal flex-1; adding a second one pushed the brand
-            and the File/Edit menus into the middle of the bar. A slot that
-            hosts a full-width child must not also try to lay it out. */}
-        {(brand || menu || documentTitle) && !systemState ? (
-          <span style={{ flex: 1 }} />
-        ) : null}
         {systemState}
         {marking}
       </header>
 
-      <div className="csl2-tabs" role="tablist" aria-label="Map panels">
-        {LEFT_PANELS.map((p) => (
+      {/* The rail. The four named panels as icons, each on a number key; the
+          name is the accessible label and the tooltip, so the tab is still
+          found by name. */}
+      <div className="csl2-rail">
+      <div
+        className="csl2-rail-group"
+        role="tablist"
+        aria-label="Map panels"
+        aria-orientation="vertical"
+      >
+        {LEFT_PANELS.map((p, i) => (
           <button
             key={p.id}
             type="button"
             role="tab"
-            className="csl2-tab"
+            className="csl2-rtab"
+            style={{ top: 381 + i * 33 }}
             aria-selected={left === p.id && !bleed}
+            aria-label={p.label}
             title={
               bleed
                 ? `${p.label} (${p.key}) · returns to the map, which is where this panel lives`
@@ -235,10 +261,9 @@ export function Console({
             }
             onClick={() => openPanel(p.id)}
           >
-            <Icon name={PANEL_ICON[p.id]} className="h-3 w-3" />
-            {p.label}
+            <BpIcon name={PANEL_BP[p.id]} size={20} />
             {leftBadges?.[p.id] ? (
-              <span className="csl2-badge">{leftBadges[p.id]}</span>
+              <span className="csl2-rbadge">{leftBadges[p.id]}</span>
             ) : null}
           </button>
         ))}
@@ -246,33 +271,94 @@ export function Console({
           <button
             type="button"
             role="tab"
-            className="csl2-tab"
+            className="csl2-rtab"
+            style={{ top: 381 + LEFT_PANELS.length * 33 }}
             aria-selected={left === "more" && !bleed}
+            aria-label="More"
             title="Surfaces not yet re-homed"
             onClick={() => openPanel("more")}
           >
-            More<span className="csl2-badge">{extraCount}</span>
+            <BpIcon name="more" size={20} />
+            <span className="csl2-rbadge">{extraCount}</span>
           </button>
         )}
+      </div>
+        {canRight && (
+          <button
+            type="button"
+            className="csl2-rtab"
+            style={{ top: 381 + (LEFT_PANELS.length + 1) * 33 + 26 }}
+            aria-pressed={rightShown}
+            aria-label="Inspector"
+            title="Inspector: the selection and its series"
+            onClick={() => setRightShown((v) => !v)}
+          >
+            <BpIcon name="panel-stats" size={20} />
+          </button>
+        )}
+        <div className="csl2-apps">
+          <AppRail />
+        </div>
       </div>
 
       <div
         className="csl2-body"
-        data-left={bleed ? "0" : "1"}
-        data-right={bleed || rightTabs.length === 0 ? "0" : "1"}
+        ref={bodyRef}
+        data-left={showLeft ? "1" : "0"}
+        data-right={showRight ? "1" : "0"}
       >
-        {!bleed && (
-          <aside className="csl2-panel" aria-label="Left panel">
-            <div className="csl2-panel-head">
-              {left === "more"
-                ? "More"
-                : LEFT_PANELS.find((p) => p.id === left)?.label}
+        <main className="csl2-map" aria-label="Map">
+          {map}
+          {dock ? (
+            <div className="csl2-dock" ref={dockRef}>
+              {dock}
+            </div>
+          ) : null}
+        </main>
+
+        {/* App surfaces fill the span BETWEEN the floating panels, so a panel
+            never covers the app the operator just opened. */}
+        {overlay ? <div className="csl2-overlay">{overlay}</div> : null}
+
+        {showLeft && (
+          <aside className="csl2-panel csl2-panel-l" aria-label="Left panel">
+            {/* The panel's own tab row (`k-ptabs`): icon + name, 3px underline.
+                Buttons, not tabs: the rail's tablist is the one tab set, and
+                this row is the same four doors drawn where the eye already is. */}
+            <div className="csl2-ptabs">
+              <span className="csl2-ptab-g" aria-hidden>
+                <BpIcon name="people" size={24} />
+              </span>
+              {left === "more" ? (
+                <span className="csl2-ptab" aria-current="true">
+                  <BpIcon name="more" size={16} />
+                  More
+                </span>
+              ) : (
+                LEFT_PANELS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="csl2-ptab"
+                    aria-current={left === p.id ? "true" : undefined}
+                    onClick={() => openPanel(p.id)}
+                  >
+                    <BpIcon name={PANEL_BP[p.id]} size={16} />
+                    {p.label}
+                  </button>
+                ))
+              )}
               {sectioned ? (
                 <span className="csl2-panel-head-count">
                   {activeSection + 1} of {sections.length}
                 </span>
               ) : null}
             </div>
+            {/* The query as a sentence and its verbs belong to the layers it
+                filters, not to the window's menu row. */}
+            {left === "layers" && action ? (
+              <div className="csl2-action">{action}</div>
+            ) : null}
             {sectioned && (
               <div
                 className="csl2-subtabs"
@@ -299,31 +385,16 @@ export function Console({
           </aside>
         )}
 
-        <main className="csl2-map" aria-label="Map" ref={mapRef}>
-          {map}
-          {dock ? (
-            <div className="csl2-dock" ref={dockRef}>
-              {dock}
-            </div>
-          ) : null}
-          {overlay}
-        </main>
-
-        {!bleed && rightTabs.length > 0 && (
-          <aside className="csl2-panel" aria-label="Right panel">
+        {showRight && (
+          <aside className="csl2-panel csl2-panel-r" aria-label="Right panel">
             {/* The tab strip below IS this panel's header — but only when there
-                is more than one tab to strip. With `selection` the single wired
-                right panel, the strip never rendered and the column had no
-                header at all, so the one panel the operator opens deliberately
-                was the only unlabelled surface in the shell. */}
+                is more than one tab to strip. With one tab it is a title row,
+                so the panel is never an unlabelled surface. */}
             {rightTabs.length === 1 && rightTabs[0] && (
               <div className="csl2-panel-head">{rightTabs[0].label}</div>
             )}
             {rightTabs.length > 1 && (
-              <div
-                className="csl2-tabs"
-                style={{ borderBottom: "1px solid var(--line)" }}
-              >
+              <div className="csl2-tabs" role="tablist" aria-label="Inspector">
                 {rightTabs.map((p) => (
                   <button
                     key={p.id}
@@ -342,8 +413,6 @@ export function Console({
           </aside>
         )}
       </div>
-
-      {action ? <div className="csl2-action">{action}</div> : null}
     </div>
   );
 }

@@ -661,7 +661,7 @@ function TransformEditor({
           >
             <table className="w-full border-collapse">
               <thead>
-                <tr className="text-txt-3 mono text-[10px] uppercase tracking-[0.4px] bg-bg-2 sticky top-0">
+                <tr className="text-txt-3 text-[10px] uppercase tracking-[0.4px] bg-bg-2 sticky top-0">
                   {preview.schema.map((f) => (
                     <th
                       key={f.name}

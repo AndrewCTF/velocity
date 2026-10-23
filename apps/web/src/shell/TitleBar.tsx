@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
 import { Icon, type IconName } from "../normal/Icon.js";
 import { useAuth } from "../auth/AuthContext.js";
 import { isSupabaseConfigured } from "../transport/supabase.js";
@@ -37,6 +36,8 @@ import { SCHEMES } from "../theme/schemes.js";
 import { useUiMode } from "../state/uiMode.js";
 import { openMapToolPanel } from "./panels/MapToolPanels.js";
 import { toast } from "./toast.js";
+import { BpIcon } from "./BpIcon.js";
+import { APP_BADGE, APP_BP } from "./appGlyphs.js";
 import type * as Cesium from "cesium";
 
 // TitleBar — built from docs/mockups/console-2026-08 (`.titlebar`).
@@ -51,49 +52,15 @@ import type * as Cesium from "cesium";
 // entries lift to the top so the four an operator uses daily are not found by
 // reading past ten they never open.
 
-function Spark({
-  series,
-  tone,
-}: {
-  series: number[];
-  tone: string;
-}): JSX.Element | null {
-  if (series.length < 2) return null;
-  const lo = Math.min(...series),
-    hi = Math.max(...series),
-    rng = hi - lo || 1;
-  const pts = series
-    .map(
-      (v, i) =>
-        `${(i / (series.length - 1)) * 40},${12 - ((v - lo) / rng) * 10}`,
-    )
-    .join(" ");
-  return (
-    <svg
-      width="40"
-      height="12"
-      viewBox="0 0 40 12"
-      aria-hidden="true"
-      className="opacity-80"
-    >
-      <polyline points={pts} fill="none" stroke={tone} strokeWidth="1.2" />
-    </svg>
-  );
-}
+// Four menus, as the reference window has. The drawing tools (once Collect)
+// are edits to the map and live in Edit; the window items (once Window) are
+// views and live in View; Help is Support.
+export const MENUS = ["File", "Edit", "View", "Support"] as const;
 
-/** Keeps the last N samples of a live value for the sparklines. */
-function useSeries(value: number | null, n = 24): number[] {
-  const ref = useRef<number[]>([]);
-  const [, bump] = useState(0);
-  useEffect(() => {
-    if (value === null || !Number.isFinite(value)) return;
-    ref.current = [...ref.current, value].slice(-n);
-    bump((x) => x + 1);
-  }, [value, n]);
-  return ref.current;
-}
-
-const MENUS = ["File", "Edit", "View", "Collect", "Window", "Help"] as const;
+// Document tab widths and the gaps before them, as measured on the reference
+// tabs bar (235 / 260 / 265, gaps 10 / 15). Later tabs repeat the last pair.
+const TAB_W = [235, 260, 265];
+const TAB_GAP = [0, 10, 15];
 
 /** Alert-socket state as a dot. `connecting` is amber rather than green: a
  *  socket that has not opened yet is not carrying alerts. */
@@ -126,14 +93,14 @@ interface MenuItem {
   disabled?: (ctx: MenuCtx) => string | null;
 }
 
-interface MenuCtx {
+export interface MenuCtx {
   viewer: Cesium.Viewer | null | undefined;
   openAlerts: () => void;
   openInbox: () => void;
   openSettings: () => void;
 }
 
-const MENU_ITEMS: Record<(typeof MENUS)[number], MenuItem[]> = {
+export const MENU_ITEMS: Record<(typeof MENUS)[number], MenuItem[]> = {
   File: [
     {
       label: "Command palette…",
@@ -212,6 +179,36 @@ const MENU_ITEMS: Record<(typeof MENUS)[number], MenuItem[]> = {
           );
       },
     },
+    {
+      label: "Measure a distance",
+      sep: true,
+      run: () => useMapTools.getState().setTool("measure"),
+    },
+    {
+      label: "Select an area",
+      run: () => useMapTools.getState().setTool("area"),
+    },
+    {
+      label: "Drop an annotation",
+      run: () => useMapTools.getState().setTool("annotate"),
+    },
+    { label: "Stop drawing", run: () => useMapTools.getState().setTool("pan") },
+    {
+      label: "Annotations…",
+      sep: true,
+      run: () => openMapToolPanel("annotate"),
+    },
+    { label: "Watchboxes…", run: () => openMapToolPanel("watch") },
+    { label: "Field kit…", run: () => openMapToolPanel("field") },
+    {
+      label: "Task a satellite",
+      sep: true,
+      run: () => useUiMode.getState().setMode("tasking"),
+    },
+    {
+      label: "Edit the COP laydown",
+      run: () => useUiMode.getState().setMode("cop"),
+    },
   ],
   View: [
     // One item per scheme, checked when active, rather than the old two-item
@@ -284,40 +281,7 @@ const MENU_ITEMS: Record<(typeof MENUS)[number], MenuItem[]> = {
             !useSettings.getState().selectionAiEnabled,
           ),
     },
-  ],
-  Collect: [
-    {
-      label: "Measure a distance",
-      run: () => useMapTools.getState().setTool("measure"),
-    },
-    {
-      label: "Select an area",
-      run: () => useMapTools.getState().setTool("area"),
-    },
-    {
-      label: "Drop an annotation",
-      run: () => useMapTools.getState().setTool("annotate"),
-    },
-    { label: "Stop drawing", run: () => useMapTools.getState().setTool("pan") },
-    {
-      label: "Annotations…",
-      sep: true,
-      run: () => openMapToolPanel("annotate"),
-    },
-    { label: "Watchboxes…", run: () => openMapToolPanel("watch") },
-    { label: "Field kit…", run: () => openMapToolPanel("field") },
-    {
-      label: "Task a satellite",
-      sep: true,
-      run: () => useUiMode.getState().setMode("tasking"),
-    },
-    {
-      label: "Edit the COP laydown",
-      run: () => useUiMode.getState().setMode("cop"),
-    },
-  ],
-  Window: [
-    { label: "Inbox", run: (c) => c.openInbox() },
+    { label: "Inbox", sep: true, run: (c) => c.openInbox() },
     { label: "Alerts", hint: "A", run: (c) => c.openAlerts() },
     {
       label: "Analyst console",
@@ -344,7 +308,7 @@ const MENU_ITEMS: Record<(typeof MENUS)[number], MenuItem[]> = {
       run: () => useUiMode.getState().setMode(null),
     },
   ],
-  Help: [
+  Support: [
     {
       label: "Keyboard shortcuts",
       run: () =>
@@ -377,7 +341,7 @@ const MENU_ITEMS: Record<(typeof MENUS)[number], MenuItem[]> = {
 /** One icon per app. The launcher drew the same `hexagon` fourteen times, so
  *  the icon column carried no information at all and the list could only be
  *  read word by word. */
-const APP_ICON: Record<AppId, IconName> = {
+export const APP_ICON: Record<AppId, IconName> = {
   map: "globe",
   ai: "sparkle",
   explorer: "chart",
@@ -392,6 +356,10 @@ const APP_ICON: Record<AppId, IconName> = {
   city: "building",
   country: "flag",
   markets: "chart-line",
+  models: "cpu",
+  quiver: "chart-line",
+  vertex: "network",
+  workshop: "grid",
 };
 
 export function TitleBar({
@@ -459,17 +427,11 @@ export function TitleBar({
     }, 1000);
     return () => window.clearInterval(t);
   }, []);
-  const contactSeries = useSeries(counted);
-  const msSeries = useSeries(renderMs);
+  const alertCount = useAlerts((st) => st.alerts.length) || alerts;
   const [launcher, setLauncher] = useState(false);
   const activeApp = useAppView((s) => s.app);
   const setApp = useAppView((s) => s.setApp);
-  const [pinned, setPinned] = useState<AppId[]>([
-    "map",
-    "graph",
-    "explorer",
-    "reports",
-  ]);
+  const [pinned, setPinned] = useState<AppId[]>(["map", "graph", "explorer"]);
 
   const togglePin = (id: AppId): void =>
     setPinned((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -502,18 +464,115 @@ export function TitleBar({
     };
   }, [menu, launcher]);
 
+  // Every app the operator pinned is a document tab, plus the open app when it
+  // is not pinned, so the tab row always names what is on screen.
+  const tabs = pinned.includes(activeApp) ? pinned : [...pinned, activeApp];
+
   return (
     // `display: contents` — a DOM node the outside-click test can ask about,
-    // with no box of its own, so the header's flex layout is unchanged.
+    // with no box of its own. Its children are the shell's grid items: banner,
+    // tabs bar, menu row and document line (console.css grid areas).
     <div ref={barRef} className="contents">
-      <span className="flex items-center gap-[7px] pr-[14px] text-[13px] font-semibold tracking-[0.2px] text-txt-0">
-        <Icon name="hexagon" className="h-4 w-4 text-accent-fg" />
-        Velocity
-      </span>
+      {/* The deployment's own marking from /api/config (settings.classification),
+          as the full-width band of the reference shell. Never a literal. */}
+      <div className="csl2-banner" data-kind={exercise ? "exercise" : "unclas"}>
+        {exercise ? "EXERCISE" : classification}
+      </div>
+
+      <div className="csl2-tabsbar">
+        {/* Rail-top glyph: home to the map. The live contact count and frame
+            cost ride in its tooltip; the bar itself carries no gauges, as the
+            reference bar carries none. */}
+        <button
+          type="button"
+          className="csl2-home"
+          onClick={() => setApp("map")}
+          aria-label="Map"
+          title={`Map · ${counted.toLocaleString()} contacts in view${
+            renderMs !== null ? ` · ${renderMs.toFixed(1)} ms a frame` : ""
+          }`}
+        >
+          <BpIcon name="globe" size={20} />
+        </button>
+        <button
+          type="button"
+          className="csl2-search"
+          onClick={() => usePalette.getState().setOpen(true)}
+          aria-label="Search and commands"
+          title="Search objects, places and commands (Ctrl K)"
+        >
+          <span>Search…</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+        {/* The apps, behind one launcher; the pinned ones are also tabs. */}
+        <button
+          type="button"
+          className="csl2-launch"
+          onClick={(e) => {
+            setAnchor(anchorFrom(e.currentTarget));
+            setLauncher((v) => !v);
+          }}
+          aria-expanded={launcher}
+          aria-label="All apps"
+          title="All apps"
+        >
+          <BpIcon name="applications" size={16} />
+        </button>
+        {tabs.map((id, i) => (
+          <button
+            key={id}
+            type="button"
+            className="csl2-dtab"
+            style={{
+              width: TAB_W[i] ?? 260,
+              marginLeft: TAB_GAP[i] ?? 15,
+            }}
+            aria-current={id === activeApp ? "page" : undefined}
+            title={APP_META[id]?.hint}
+            onClick={() => setApp(id)}
+          >
+            <span
+              className="csl2-dtab-ico"
+              style={{ background: APP_BADGE[id] ?? "#5f6b7c" }}
+              aria-hidden
+            >
+              <BpIcon name={APP_BP[id] ?? "application"} size={13} />
+            </span>
+            <span className="truncate">{APP_META[id]?.label ?? id}</span>
+          </button>
+        ))}
+
+        {/* Icon over count, as the reference stacks them: the alert ticker
+            and the triage inbox. */}
+        <div className="csl2-sys">
+          <button
+            type="button"
+            className="csl2-cnt"
+            onClick={onOpenAlerts}
+            title="Alerts: the live rule-hit ticker"
+            aria-label={`Alerts, ${alertCount}`}
+          >
+            <BpIcon name="comment" size={20} />
+            <span>{alertCount}</span>
+          </button>
+          {onOpenInbox && (
+            <button
+              type="button"
+              className="csl2-cnt"
+              onClick={onOpenInbox}
+              title="Inbox: alerts triaged into unread, working and done"
+              aria-label={`Inbox, ${inbox}`}
+            >
+              <BpIcon name="inbox" size={20} />
+              <span>{inbox}</span>
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Real words. File / Edit / View is the single most recognisable thing
           about a window and it costs 30px once. */}
-      <nav className="relative flex items-center" aria-label="Application">
+      <nav className="csl2-menu" aria-label="Application">
         {MENUS.map((m) => (
           <div key={m} className="relative">
             <button
@@ -534,7 +593,7 @@ export function TitleBar({
               }}
               aria-expanded={menu === m}
               aria-haspopup="menu"
-              className={`h-[30px] rounded-sm px-[9px] text-[12px] ${
+              className={`h-[28px] rounded-sm px-[9px] text-[16px] ${
                 menu === m
                   ? "bg-(--hover) text-txt-0"
                   : "text-txt-1 hover:bg-(--hover)"
@@ -600,58 +659,6 @@ export function TitleBar({
         ))}
       </nav>
 
-      {/* The apps, behind one launcher rather than fifteen tabs in the bar. */}
-      <button
-        type="button"
-        onClick={(e) => {
-          setAnchor(anchorFrom(e.currentTarget));
-          setLauncher((v) => !v);
-        }}
-        aria-expanded={launcher}
-        className="ml-2 flex h-6 items-center gap-[6px] rounded-sm px-2 text-[12px] text-txt-1 hover:bg-(--hover)"
-      >
-        <Icon name="grid" className="h-3 w-3" />
-        {APP_META[activeApp]?.label ?? "Apps"}
-        <Icon name="chevron-down" className="h-3 w-3" />
-      </button>
-
-      {/* The document line. It used to be a hardcoded amber square, a fixed
-          title and a green check reading "Saved" — three pieces of chrome that
-          were true of nothing. It said Saved on a console that saves nothing,
-          which is the fabricated-state failure this repo bans in the map and
-          had left sitting in the window frame.
-
-          Now: what you are looking at, whether the clock is live or held, and
-          whether the alert socket is actually up. Every value is read from the
-          store that owns it. */}
-      <span
-        className="ml-3 flex min-w-0 flex-1 items-center justify-center gap-2"
-        title={
-          playing
-            ? "The clock is running at real time; contacts advance as fixes arrive."
-            : "The clock is held. Contacts stay at the fix they had when you paused."
-        }
-      >
-        <span
-          className={`h-[10px] w-[10px] shrink-0 rounded-[1px] ${playing ? "bg-ok" : "bg-warn"}`}
-          aria-hidden
-        />
-        <span className="truncate text-[13px] font-semibold text-txt-0">
-          {documentTitle ?? APP_META[activeApp]?.label ?? "Live map"}
-        </span>
-        <span className="mono shrink-0 tabular-nums text-[12px] text-txt-2">
-          {clock}
-        </span>
-        <span className="shrink-0 text-[12px] text-txt-3">
-          {playing ? "live" : "held"}
-        </span>
-        <span
-          className={`h-[6px] w-[6px] shrink-0 rounded-full ${WS_DOT[ws] ?? "bg-bg-4"}`}
-          title={`Alert socket: ${ws}`}
-          aria-label={`Alert socket ${ws}`}
-        />
-      </span>
-
       {launcher &&
         anchor &&
         createPortal(
@@ -700,78 +707,75 @@ export function TitleBar({
           document.body,
         )}
 
-      <span
-        className="flex shrink-0 items-center gap-[6px] px-2 text-[12px] text-txt-2"
-        title="Contacts counted in the current view"
-      >
-        <span className="mono tabular-nums text-txt-1">
-          {counted.toLocaleString()}
-        </span>
-        <Spark series={contactSeries} tone="var(--accent-fg)" />
-      </span>
-      {renderMs !== null && (
-        <span
-          className="flex shrink-0 items-center gap-[6px] px-2 text-[12px] text-txt-2"
-          title="Cost of a painted frame. Under requestRenderMode a frame is only drawn when something asks for one, so renders-per-second reads low on an idle globe that is perfectly fast. Frame COST is the honest signal; 16.7 ms is one 60 Hz frame."
-        >
-          <span
-            className={`mono tabular-nums ${renderMs > 16.7 ? "text-warn-fg" : "text-txt-1"}`}
-          >
-            {renderMs.toFixed(1)} ms
-          </span>
-          <Spark
-            series={msSeries}
-            tone={renderMs > 16.7 ? "var(--warn)" : "var(--ok)"}
-          />
-        </span>
-      )}
-      {/* Inbox, the `titlebar / inbox` slot `panels.ts` records for the old rail
-          item. It was never built, so `byHome` dropped the triage inbox and the
-          only thing left on this row was the alerts drawer, which is a different
-          surface: alerts are the live ticker, the inbox is what you have not
-          worked yet. Two slots were recorded because there are two things. */}
-      {onOpenInbox && (
+      {/* The document line, centred as the reference has it. What you are
+          looking at, whether the clock is live or held, and whether the alert
+          socket is up; every value read from the store that owns it. It once
+          was a hardcoded amber square, a fixed title and "Saved" on a console
+          that saves nothing. The star is the app pin the tabs bar shows. */}
+      <div className="csl2-mid">
         <button
           type="button"
-          onClick={onOpenInbox}
-          title="Inbox: alerts triaged into unread, working and done"
-          className="flex h-6 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-(--hover)"
+          className="csl2-star"
+          aria-pressed={pinned.includes(activeApp)}
+          aria-label={
+            pinned.includes(activeApp)
+              ? `Unpin ${APP_META[activeApp]?.label ?? activeApp} from the tabs`
+              : `Pin ${APP_META[activeApp]?.label ?? activeApp} to the tabs`
+          }
+          title="Pin this app to the tabs bar"
+          onClick={() => togglePin(activeApp)}
         >
-          <Icon name="inbox" className="h-3 w-3" />
-          {inbox > 0 && <span className="mono text-accent-fg">{inbox}</span>}
+          <BpIcon
+            name={pinned.includes(activeApp) ? "star" : "star-empty"}
+            size={16}
+          />
         </button>
-      )}
-      <button
-        type="button"
-        onClick={onOpenAlerts}
-        title="Alerts: the live rule-hit ticker"
-        className="flex h-6 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-(--hover)"
-      >
-        <Icon name="bell" className="h-3 w-3" />
-        {alerts > 0 && <span className="mono text-alert-fg">{alerts}</span>}
-      </button>
+        <span className="csl2-mid-ico" aria-hidden>
+          <BpIcon name={APP_BP[activeApp] ?? "application"} size={11} />
+        </span>
+        {/* The title, then the clock state as a dot: live green, held amber,
+            and the alert socket in the tooltip. Every value is read from the
+            store that owns it. */}
+        <button
+          type="button"
+          className="csl2-mid-title"
+          onClick={(e) => {
+            setAnchor(anchorFrom(e.currentTarget));
+            setLauncher((v) => !v);
+          }}
+          aria-expanded={launcher}
+          title={`${playing ? "Live" : "Held"} · ${clock} · alert socket ${ws}. Open another app.`}
+        >
+          <span className="truncate">
+            {documentTitle ?? APP_META[activeApp]?.label ?? "Live map"}
+          </span>
+          <BpIcon name="chevron-down" size={12} className="text-(--csl2-mute)" />
+        </button>
+        <span
+          className={`h-[6px] w-[6px] shrink-0 rounded-full ${playing ? WS_DOT[ws] ?? "bg-bg-4" : "bg-warn"}`}
+          aria-label={`${playing ? "live" : "held"}, alert socket ${ws}`}
+        />
+      </div>
 
-      <SignInChip />
-
-      <button
-        type="button"
-        onClick={onOpenSettings}
-        title="Settings: dashboard, aircraft motion and API keys"
-        className="flex h-6 items-center gap-[5px] rounded-sm px-2 text-[12px] text-txt-2 hover:bg-(--hover)"
-      >
-        <Icon name="settings" className="h-3 w-3" />
-        Settings
-      </button>
-
-      {/* The marking, as a pill. A full-width saturated band was 26px of screen
-          spent on one word, and the loudest thing on a data surface. */}
-      <span
-        className="csl2-clas ml-2"
-        data-kind={exercise ? "exercise" : "unclas"}
-      >
-        <Icon name="shield" className="h-3 w-3" />
-        {exercise ? "EXERCISE" : classification}
-      </span>
+      <div className="csl2-doc">
+        <SignInChip />
+        <span className="csl2-vsep" aria-hidden />
+        {/* The deployment's marking from /api/config, as the reference's
+            right-hand shield. Never a literal. */}
+        <span className="csl2-marking">
+          <BpIcon name="shield" size={16} />
+          {exercise ? "EXERCISE" : classification}
+        </span>
+        <button
+          type="button"
+          className="csl2-refresh"
+          onClick={() => window.location.reload()}
+          aria-label="Reload the console"
+          title="Reload the console"
+        >
+          <BpIcon name="refresh" size={16} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -781,16 +785,7 @@ export function TitleBar({
 function SignInChip(): JSX.Element | null {
   const { user, loading, signOut } = useAuth();
   if (!isSupabaseConfigured || loading) return null;
-  if (!user) {
-    return (
-      <Link
-        to="/login"
-        className="flex h-6 shrink-0 items-center rounded-sm border border-accent-line px-2 text-[12px] text-accent-fg hover:bg-(--hover)"
-      >
-        Sign in
-      </Link>
-    );
-  }
+  if (!user) return null; // the dashboard is gated behind /login
   // The visible word is the action (ASVS V7.4.4): a chip showing only the email
   // did not say that clicking it ends the session. The account stays in the
   // tooltip and the accessible name. Same width budget as the email it

@@ -1,5 +1,9 @@
 import {
   Building2,
+  Cpu,
+  LayoutGrid,
+  LineChart,
+  Network,
   Crosshair,
   Database,
   FileText,
@@ -39,6 +43,10 @@ const APP_ICONS: Record<AppId, LucideIcon> = {
   city: Building2,
   country: Flag,
   markets: TrendingUp,
+  models: Cpu,
+  quiver: LineChart,
+  vertex: Network,
+  workshop: LayoutGrid,
 };
 
 // Top-bar app switcher (design §6.1 grammar #3 — app-plural, not a tab pile).

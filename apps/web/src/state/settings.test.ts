@@ -42,6 +42,7 @@ describe("settings store", () => {
       leftRailExpanded: false,
       corroboratedOnly: false,
       adaptiveLayerGovernor: true,
+      homeView: null,
     });
   });
 

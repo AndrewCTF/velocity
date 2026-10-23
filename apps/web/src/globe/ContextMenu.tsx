@@ -1,6 +1,8 @@
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { useContextMenu } from "./contextMenuStore.js";
 import { pointActions } from "./mapActions.js";
+import { BpIcon } from "../shell/BpIcon.js";
+import "./contextMenu.css";
 
 // Unified map right-click menu. Pure wiring — every action dispatches to an
 // existing store/feature at the clicked ground point (shared with the AREA-box
@@ -30,33 +32,35 @@ export function ContextMenu(): JSX.Element | null {
   const items = pointActions(lat, lon);
 
   // Clamp so the menu never overflows the viewport.
-  const W = 220;
+  const W = 257;
+  const H = items.length * 36 + items.filter((i) => i.sep).length + 22;
   const left = Math.min(x, window.innerWidth - W - 8);
-  const top = Math.min(y, window.innerHeight - items.length * 28 - 40);
+  const top = Math.max(8, Math.min(y, window.innerHeight - H - 8));
 
   return (
     <div
       role="menu"
+      aria-label={`Map point ${lat.toFixed(4)}, ${lon.toFixed(4)}`}
       onClick={(e) => e.stopPropagation()}
-      className="fixed z-(--z-dropdown) rounded-sm border border-line-2 bg-bg-1/95 backdrop-blur-sm shadow-xl py-1"
-      style={{ left, top, width: W }}
+      className="gx-cmenu"
+      style={{ left, top }}
     >
-      <div className="px-3 py-1 mono text-[10px] tracking-[0.6px] uppercase text-txt-3 border-b border-line">
-        {lat.toFixed(4)}, {lon.toFixed(4)}
-      </div>
       {items.map((it) => (
-        <button
-          key={it.label}
-          type="button"
-          role="menuitem"
-          onClick={() => {
-            void it.run();
-            close();
-          }}
-          className="block w-full text-left px-3 py-1.5 text-[11px] text-txt-1 hover:bg-bg-2 hover:text-txt-0 transition-colors"
-        >
-          {it.label}
-        </button>
+        <Fragment key={it.label}>
+          {it.sep ? <div className="gx-sep" role="separator" /> : null}
+          <button
+            type="button"
+            role="menuitem"
+            className="gx-it"
+            onClick={() => {
+              void it.run();
+              close();
+            }}
+          >
+            {it.icon ? <BpIcon name={it.icon} size={18} /> : null}
+            {it.label}
+          </button>
+        </Fragment>
       ))}
     </div>
   );

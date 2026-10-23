@@ -1,0 +1,116 @@
+/* Document pins (G21) and the dossier panel (G19/G20), the copy's styling. */
+.slate-shell .sl-docpins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+.slate-shell .sl-docpin {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid #e8a04a;
+  box-shadow:
+    0 0 8px rgba(232, 160, 74, 0.55),
+    inset 0 0 6px rgba(0, 0, 0, 0.25);
+  background: rgba(10, 20, 26, 0.35);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+.slate-shell .sl-docpin.on {
+  border-color: #ffd08a;
+}
+.slate-shell .sl-dossier {
+  position: absolute;
+  right: 10px;
+  top: 103px;
+  bottom: 10px;
+  width: 463px;
+  background: #12181d;
+  border: 1px solid #2a343a;
+  z-index: 22;
+  overflow: hidden auto;
+}
+.slate-shell .sl-dossier .t {
+  white-space: nowrap;
+  line-height: 20px;
+  height: 20px;
+  letter-spacing: 0.045em;
+}
+.slate-shell .sl-dlink {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.slate-shell .sl-dsrc {
+  font-size: 15.5px;
+  color: #5da7ef;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slate-shell .sl-dband {
+  background: #2f383d;
+  border: 1px solid #475258;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 16px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #f1f4f6;
+}
+.slate-shell .sl-dprog {
+  border: 1.6px solid #6fc2bf;
+  background: rgba(14, 22, 27, 0.9);
+}
+.slate-shell .sl-dbar {
+  background: #d3d9dc;
+  border-radius: 1px;
+}
+.slate-shell .sl-dbar.run {
+  animation: sl-dslide 1.4s ease-in-out infinite alternate;
+}
+@keyframes sl-dslide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(203px);
+  }
+}
+.slate-shell .sl-dbody {
+  font-size: 15.5px;
+  line-height: 22px;
+  color: #e9eef0;
+  padding-bottom: 20px;
+}
+.slate-shell .sl-dbody p {
+  margin: 0 0 22px;
+}
+.slate-shell .sl-dbody .chip {
+  background: #345e74;
+  color: #cfe8f6;
+  border-radius: 2px;
+  padding: 1px 2px;
+  cursor: default;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.slate-shell .sl-dmute {
+  color: #9fabb2;
+}
+.slate-shell .sl-dhover {
+  background: #141a1e;
+  border: 1px solid #2c363c;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  z-index: 3;
+}

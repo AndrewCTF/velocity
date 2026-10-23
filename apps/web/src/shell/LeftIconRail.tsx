@@ -64,20 +64,20 @@ export function LeftIconRail({
           expanded ? "w-full justify-start gap-2.5 px-3" : "w-11 justify-center"
         } ${
           on
-            ? "text-accent bg-accent-dim"
+            ? "text-txt-0"
             : isFloating
               ? "text-accent/70 hover:text-accent"
               : "text-txt-3 hover:text-txt-1 hover:bg-bg-2"
         }`}
       >
-        <Icon name={it.icon} className="w-[18px] h-[18px] shrink-0" />
-        {expanded && (
-          <span className="text-[12px] tracking-[0.2px] truncate">
-            {it.label}
-          </span>
-        )}
+        <Icon name={it.icon} className="w-5 h-5 shrink-0" />
+        {expanded && <span className="text-[15px] truncate">{it.label}</span>}
         {on && (
-          <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-accent rounded-r-sm" />
+          // The reference rail's selected state: a 28px outlined square.
+          <span
+            aria-hidden
+            className={`absolute top-1/2 h-7 w-7 -translate-y-1/2 rounded-[4px] border-2 border-txt-1 ${expanded ? "left-[6px]" : "left-1/2 -translate-x-1/2"}`}
+          />
         )}
         {isFloating && (
           <span className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-accent" />
@@ -131,7 +131,7 @@ export function LeftIconRail({
       {active && (
         <div className="absolute left-full top-0 h-full w-[300px] bg-(--panel-bg) border-r border-line-2 flex flex-col z-(--z-rail) shadow-[6px_0_22px_-12px_rgba(0,0,0,0.6)]">
           <div className="flex items-center justify-between px-3 h-8 shrink-0 border-b border-line-2">
-            <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-0 flex items-center gap-1.5">
+            <span className="text-[15px] font-semibold text-txt-0 flex items-center gap-1.5">
               <Icon name={active.icon} className="w-3.5 h-3.5" />
               {active.label}
             </span>

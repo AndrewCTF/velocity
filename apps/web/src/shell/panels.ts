@@ -91,6 +91,7 @@ export const REHOMED: Readonly<Record<string, Home>> = {
   // The curated catalog and the raw registry rail were two views of ONE thing.
   // Operator: "some of them are even redundant like the landing layers tab".
   layers: { kind: "panel", panel: "layers" },
+  "layer-style": { kind: "panel", panel: "layers" },
   allsources: {
     kind: "redundant",
     with: "Layers, which gains a curated/all toggle",

@@ -144,7 +144,7 @@ ${topAlerts.length ? `<h2>Recent alerts</h2><table><tr><th>Sev</th><th>Message</
                 <div className="mono text-[32px] text-txt-0 tabular-nums leading-none">
                   {value}
                 </div>
-                <div className="mono text-[11px] uppercase tracking-[0.5px] text-txt-3 mt-1">
+                <div className="text-[11px] uppercase tracking-[0.5px] text-txt-3 mt-1">
                   {label}
                 </div>
               </div>
@@ -159,7 +159,7 @@ ${topAlerts.length ? `<h2>Recent alerts</h2><table><tr><th>Sev</th><th>Message</
         <ul className="space-y-1.5">
           {SEVERITIES.map((s) => (
             <li key={s} className="flex items-baseline gap-4">
-              <span className="mono text-[12px] uppercase tracking-[0.4px] text-txt-3 w-24">
+              <span className="text-[12px] uppercase tracking-[0.4px] text-txt-3 w-24">
                 {s}
               </span>
               <span className="mono text-[20px] text-txt-0 tabular-nums">
@@ -178,7 +178,7 @@ ${topAlerts.length ? `<h2>Recent alerts</h2><table><tr><th>Sev</th><th>Message</
               <ul className="divide-y divide-line border-y border-line">
                 {topAlerts.map((a) => (
                   <li key={a.id} className="py-2 flex items-start gap-3">
-                    <span className="mono text-[11px] uppercase text-txt-3 w-20 shrink-0">
+                    <span className="text-[11px] uppercase text-txt-3 w-20 shrink-0">
                       {a.severity}
                     </span>
                     <span className="text-[13px] text-txt-1 flex-1 leading-snug">
@@ -222,28 +222,28 @@ ${topAlerts.length ? `<h2>Recent alerts</h2><table><tr><th>Sev</th><th>Message</
           <button
             type="button"
             onClick={() => setPresenting(true)}
-            className="mono text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line"
+            className="text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line"
           >
             Present
           </button>
           <button
             type="button"
             onClick={printBrief}
-            className="mono text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line"
+            className="text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line"
           >
             Open / print
           </button>
           <button
             type="button"
             onClick={exportHtml}
-            className="mono text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line"
+            className="text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-line text-txt-2 hover:text-txt-0 hover:border-accent-line"
           >
             HTML
           </button>
           <button
             type="button"
             onClick={() => void exportPptx()}
-            className="mono text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-accent-line text-accent bg-accent-dim"
+            className="text-[10px] uppercase tracking-[0.4px] px-2 py-0.5 rounded-sm border border-accent-line text-accent bg-accent-dim"
           >
             Export PPTX
           </button>
@@ -260,7 +260,7 @@ ${topAlerts.length ? `<h2>Recent alerts</h2><table><tr><th>Sev</th><th>Message</
             key={label}
             className="border border-line rounded-sm bg-bg-1 px-3 py-2"
           >
-            <div className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3">
+            <div className="text-[10px] uppercase tracking-[0.5px] text-txt-3">
               {label}
             </div>
             <div className="mono text-[18px] text-txt-0 tabular-nums">
@@ -271,7 +271,7 @@ ${topAlerts.length ? `<h2>Recent alerts</h2><table><tr><th>Sev</th><th>Message</
       </div>
 
       <div>
-        <div className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1">
+        <div className="text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1">
           Alerts by severity
         </div>
         <div className="mono text-[11px] text-txt-2">
@@ -281,13 +281,13 @@ ${topAlerts.length ? `<h2>Recent alerts</h2><table><tr><th>Sev</th><th>Message</
 
       {topAlerts.length > 0 && (
         <div>
-          <div className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1">
+          <div className="text-[10px] uppercase tracking-[0.5px] text-txt-3 mb-1">
             Recent alerts
           </div>
           <ul className="divide-y divide-line border-y border-line">
             {topAlerts.map((a) => (
               <li key={a.id} className="py-1.5 flex items-start gap-2">
-                <span className="mono text-[10px] uppercase text-txt-3 w-14 shrink-0">
+                <span className="text-[10px] uppercase text-txt-3 w-14 shrink-0">
                   {a.severity}
                 </span>
                 <span className="text-[11px] text-txt-1 flex-1 leading-snug line-clamp-2">

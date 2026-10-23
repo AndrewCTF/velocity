@@ -153,6 +153,7 @@ export class SatelliteAdapter implements LayerAdapter {
     if (this.detached || viewer.isDestroyed()) return;
     dropVisualizers(this.ds);
     this.prim = new PrimitiveEntityLayer(viewer.scene, {
+      layerId: this.props.ctx.descriptor.id,
       poolKey: "satellite", // SGP4 pump ticks on its own cadence
       // Satellites carry no heading and a fixed accent tint; one style for all.
       styleFn: () => {

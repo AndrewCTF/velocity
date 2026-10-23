@@ -42,7 +42,7 @@ export const SCHEMES: readonly Scheme[] = [
   {
     id: "slate",
     label: "Slate",
-    hint: "The default. Green-grey substrate and Source Sans 3, sampled from reference workspace frames.",
+    hint: "The default, and the new interface (work in progress): green-grey substrate, Source Sans 3 and the new workspace layout.",
     family: "dark",
     swatch: { bg: "#181c20", panel: "#222e2e", accent: "#1876b6" },
   },

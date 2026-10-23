@@ -18,8 +18,8 @@ describe("theme default", () => {
   });
 
   it("keeps an operator's explicit choice", async () => {
-    localStorage.setItem("velocity.theme", "dark");
+    localStorage.setItem("velocity.theme", "amber");
     const { useTheme } = await import("./theme.js");
-    expect(useTheme.getState().mode).toBe("dark");
+    expect(useTheme.getState().mode).toBe("amber");
   });
 });

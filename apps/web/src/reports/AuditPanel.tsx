@@ -215,20 +215,20 @@ export function AuditPanel(): JSX.Element {
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-line-2">
-                <th className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 font-medium py-1 pr-2">
+                <th className="text-[10px] uppercase tracking-[0.5px] text-txt-3 font-medium py-1 pr-2">
                   Time (UTC)
                 </th>
-                <th className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 font-medium py-1 pr-2">
+                <th className="text-[10px] uppercase tracking-[0.5px] text-txt-3 font-medium py-1 pr-2">
                   Actor
                 </th>
-                <th className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 font-medium py-1 pr-2">
+                <th className="text-[10px] uppercase tracking-[0.5px] text-txt-3 font-medium py-1 pr-2">
                   Action
                 </th>
-                <th className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 font-medium py-1 pr-2">
+                <th className="text-[10px] uppercase tracking-[0.5px] text-txt-3 font-medium py-1 pr-2">
                   Target
                 </th>
                 {hasClassification && (
-                  <th className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 font-medium py-1">
+                  <th className="text-[10px] uppercase tracking-[0.5px] text-txt-3 font-medium py-1">
                     Classification
                   </th>
                 )}

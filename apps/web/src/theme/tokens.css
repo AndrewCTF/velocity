@@ -913,3 +913,23 @@ body,
   font-weight: 600;
   line-height: 1.1;
 }
+
+/* Slate sets UI text in one face: the reference workspace renders labels,
+   ids and readouts alike in Source Sans 3, with tabular figures where columns
+   align. `.mono`/`.micro` are layout labels here, not code; code surfaces
+   (textarea/pre editors) keep var(--font-mono) via their own classes. */
+:root[data-theme="slate"] .mono {
+  font-family: var(--font-sans);
+}
+:root[data-theme="slate"] .micro {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+:root[data-theme="slate"] textarea.mono,
+:root[data-theme="slate"] pre.mono,
+:root[data-theme="slate"] code.mono {
+  font-family: var(--font-mono);
+}

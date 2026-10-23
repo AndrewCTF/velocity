@@ -1,0 +1,48 @@
+/* Imagery half of the split document view (features copy t210). Pane origin
+   is the copy's frame (987, 92), i.e. app x 891 to the window's right edge. */
+.slate-shell .sl-imgws {
+  position: absolute;
+  left: 891px;
+  right: 0;
+  top: 92px;
+  bottom: 0;
+  min-width: 836px;
+  background: #162024;
+  overflow: hidden auto;
+  z-index: 25;
+  font:
+    400 15px/1.25 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+}
+.slate-shell .sl-imgws > *,
+.slate-shell .sl-imgws .card > *,
+.slate-shell .sl-imgws .card > div > div {
+  position: absolute;
+}
+.slate-shell .sl-imgws .card {
+  background: #162024;
+  outline: 1.5px solid #2c383e;
+  outline-offset: -1.5px;
+}
+.slate-shell .sl-imgws .t {
+  white-space: nowrap;
+  line-height: 20px;
+  height: 20px;
+  color: #e5e8eb;
+  font-size: 15px;
+  letter-spacing: 0.045em;
+}
+.slate-shell .sl-imgws .sl-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.slate-shell .sl-imgws .sl-imgempty {
+  display: grid;
+  place-items: center;
+  color: #9fabb2;
+}

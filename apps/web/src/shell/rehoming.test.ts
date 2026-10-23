@@ -27,6 +27,7 @@ const src = (p: string): string => readFileSync(resolve(HERE, "..", p), "utf8");
 const ADDRESS: Record<string, { component: string; file: string }> = {
   // ── kept as a named panel ────────────────────────────────────────────────
   layers: { component: "LayersPanel", file: "App.tsx" },
+  "layer-style": { component: "LayerEditorPanel", file: "App.tsx" },
   "search-objects": { component: "FindPanel", file: "App.tsx" },
   feeds: { component: "InfoPanel", file: "App.tsx" },
   ops: { component: "InfoPanel", file: "App.tsx" },

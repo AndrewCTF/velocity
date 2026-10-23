@@ -1,0 +1,401 @@
+/* targetBoard.css: the reference target-board page, transcribed verbatim from
+   its <style> block, every selector scoped under .target-board. The copy's
+   classification strip and menubar are not ported: the Slate shell already
+   paints the deployment's marking and the menubar above this surface. The
+   block at the end only fits the board to its host and wires the live parts. */
+
+.target-board {
+  --board: #161e20;
+  --bar: #0d1313;
+  --amber: #4a4433;
+  --purple: #583a68;
+  --plain: #262e30;
+  --t0: #f6f7f9;
+  --t1: #dfe3e6;
+  --t2: #8f99a8;
+}
+.target-board,
+.target-board * {
+  box-sizing: border-box;
+}
+.target-board {
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--board);
+  color: var(--t1);
+  font:
+    400 14px/1.3 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+}
+.target-board svg.i {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex: none;
+}
+.target-board .search {
+  width: 130px;
+  height: 24px;
+  border: 1px solid #383e47;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  color: var(--t2);
+}
+.target-board .tools {
+  height: 44px;
+  background: var(--bar);
+  border-top: 1px solid #1d2628;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 12px;
+  font-size: 15px;
+  color: var(--t1);
+}
+.target-board .add {
+  display: flex;
+  height: 30px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.target-board .add > button {
+  height: 100%;
+  background: #2f844c;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-weight: 600;
+}
+.target-board .add > button + button {
+  border-left: 1px solid #23683b;
+  padding: 0 8px;
+}
+.target-board .sf {
+  width: 150px;
+  height: 30px;
+  border: 1px solid #383e47;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--t2);
+}
+.target-board .tools .t {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.target-board .tools .rt {
+  margin-left: auto;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+.target-board .cnt {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--t2);
+}
+.target-board .cnt b {
+  color: #fff;
+  background: #cd4246;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 12px;
+}
+.target-board .cols {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  height: calc(1080px - 84px);
+}
+.target-board .col {
+  border-right: 1px solid #222c2e;
+  padding: 0 10px;
+  overflow: hidden;
+}
+.target-board .ch {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--t0);
+  text-transform: uppercase;
+}
+.target-board .ch .d {
+  width: 6px;
+  height: 12px;
+  border-radius: 2px;
+}
+.target-board .ch .n {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--t2);
+  font-weight: 400;
+}
+.target-board .ch .cl {
+  color: var(--t2);
+}
+.target-board .card {
+  position: relative;
+  margin-bottom: 10px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--tint) 0%,
+    var(--tint) 55%,
+    rgba(38, 46, 48, 0.9) 100%
+  );
+  border-left: 3px solid rgba(255, 255, 255, 0.08);
+  padding: 4px 10px 6px 10px;
+  min-height: 96px;
+}
+.target-board .card.amber {
+  --tint: var(--amber);
+}
+.target-board .card.purple {
+  --tint: var(--purple);
+}
+.target-board .card.plain {
+  --tint: var(--plain);
+}
+.target-board .card .exp {
+  font-size: 11px;
+  color: var(--t2);
+  height: 15px;
+}
+.target-board .card .exp b {
+  color: var(--t1);
+  font-weight: 600;
+}
+.target-board .card .row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.target-board .sym {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  margin-top: 6px;
+}
+.target-board .sym.c {
+  border-radius: 50%;
+  border: 2px solid var(--sc);
+  color: var(--sc);
+  background: rgba(0, 0, 0, 0.18);
+}
+.target-board .sym.dia {
+  transform: rotate(45deg);
+  width: 30px;
+  height: 30px;
+  margin: 9px 3px 0;
+  background: var(--sc);
+  border: 2px solid rgba(0, 0, 0, 0.35);
+}
+.target-board .sym.dia svg {
+  transform: rotate(-45deg);
+  color: #1c2127;
+}
+.target-board .card .ti {
+  font-size: 14px;
+  color: var(--t0);
+  margin-top: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.target-board .card .ti .id {
+  color: var(--t2);
+  margin-right: 4px;
+}
+.target-board .card .lk {
+  color: var(--t2);
+  margin: 3px 0;
+  display: flex;
+  gap: 4px;
+}
+.target-board .card .lk svg {
+  width: 12px;
+  height: 12px;
+}
+.target-board .card .ed {
+  font-size: 12.5px;
+  color: var(--t1);
+}
+.target-board .card .ms {
+  position: absolute;
+  left: 10px;
+  bottom: 3px;
+  font-size: 9px;
+  color: var(--t2);
+  letter-spacing: 0.04em;
+}
+.target-board .card .wn {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  color: #f5c84c;
+}
+.target-board .card .wn svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* live wiring: fit the host, the copy's menubar row is gone so columns take the rest */
+.target-board {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.target-board button {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.target-board button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.target-board button:focus-visible {
+  outline: 1px solid #4c90f0;
+  outline-offset: 1px;
+}
+.target-board .tools {
+  flex: none;
+  position: relative;
+}
+.target-board .tools .t:hover:not(:disabled) {
+  color: var(--t0);
+}
+.target-board .sf input {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+  color: var(--t0);
+  font-size: 15px;
+}
+.target-board .sf input::placeholder {
+  color: var(--t2);
+  opacity: 1;
+}
+.target-board .cols {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.target-board .col {
+  overflow-y: auto;
+}
+/* the copy's mid-drag column fill (t58) */
+.target-board .col.over {
+  background: #1b2c3c;
+}
+.target-board .col.bar {
+  opacity: 0.45;
+}
+.target-board .col.shut {
+  overflow: hidden;
+}
+.target-board .card {
+  cursor: pointer;
+}
+.target-board .card.on {
+  box-shadow: inset 0 0 0 1px #d946ef;
+}
+.target-board .note {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 50px;
+  z-index: 3;
+  padding: 6px 10px;
+  background: #2a2418;
+  border: 1px solid #6b5a2a;
+  color: #f5d98a;
+  font-size: 13px;
+}
+.target-board .empty {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 150px;
+  margin: 0;
+  text-align: center;
+  color: var(--t2);
+  font-size: 14px;
+  pointer-events: none;
+}
+.target-board .pop {
+  position: absolute;
+  z-index: 4;
+  top: 40px;
+  min-width: 180px;
+  padding: 4px 0;
+  background: #1c2426;
+  border: 1px solid #343e40;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.target-board .pop button {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 12px;
+  font-size: 14px;
+  color: var(--t1);
+}
+.target-board .pop button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--t0);
+}
+.target-board .detail {
+  position: absolute;
+  right: 0;
+  top: 44px;
+  bottom: 0;
+  z-index: 2;
+  width: 260px;
+  padding: 8px 8px 8px 0;
+  background: var(--board);
+  box-shadow: -8px 0 16px rgba(0, 0, 0, 0.35);
+  overflow-y: auto;
+}
+/* the Slate shell's own .sym and .cnt rules reach in here; restore the copy's */
+.target-board .sym {
+  position: static;
+  box-shadow: none;
+}
+.target-board .sym svg {
+  width: 16px;
+  height: 16px;
+}
+.target-board .tools .cnt {
+  flex-direction: row;
+  gap: 5px !important;
+  font-size: 15px;
+  color: var(--t2);
+}
+.target-board .tools .cnt svg {
+  width: 16px;
+  height: 16px;
+}
+.target-board .sym.dia {
+  border-radius: 0;
+}

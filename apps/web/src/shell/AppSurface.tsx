@@ -3,6 +3,7 @@ import * as Cesium from "cesium";
 import { useAppView, APP_META, type AppId } from "../state/appView.js";
 import { TargetKanbanPanel } from "../target-kanban/TargetKanbanPanel.js";
 import { TabbedPanel } from "./TabbedPanel.js";
+import { useTheme } from "../state/theme.js";
 
 // CityApp is the one surface that drags three + the splat renderer with it —
 // code-split so the console bundle doesn't carry a 3D engine nobody opened.
@@ -51,6 +52,51 @@ const AiHubApp = lazy(() =>
 const MarketsApp = lazy(() =>
   import("../markets/MarketsApp.js").then((m) => ({ default: m.MarketsApp })),
 );
+const ModelsApp = lazy(() =>
+  import("../models/ModelsApp.js").then((m) => ({ default: m.ModelsApp })),
+);
+const QuiverApp = lazy(() =>
+  import("../quiver/QuiverApp.js").then((m) => ({ default: m.QuiverApp })),
+);
+const VertexApp = lazy(() =>
+  import("../vertex/VertexApp.js").then((m) => ({ default: m.VertexApp })),
+);
+const WorkshopApp = lazy(() =>
+  import("../workshop/WorkshopApp.js").then((m) => ({
+    default: m.WorkshopApp,
+  })),
+);
+// The Slate scheme's targeting: the reference board page wired to the same
+// store as TargetKanbanPanel, and its watch workspace (map, recommender,
+// taskings) one click away.
+const MavenTargeting = lazy(() =>
+  import("../slate/features/maven/MavenTargeting.js").then((m) => ({
+    default: m.MavenTargeting,
+  })),
+);
+// The Slate scheme's AI app: the AIP copy (terminal, lineage, transforms,
+// registry watch manager) over the live routes; the AI hub stays one click in.
+const AipApp = lazy(() =>
+  import("../slate/features/aip/AipApp.js").then((m) => ({
+    default: m.AipApp,
+  })),
+);
+// Slate's Reports app is the Europa copy; Explorer is the PDF copy's workspace.
+const EuropaApp = lazy(() =>
+  import("../slate/features/europa/EuropaApp.js").then((m) => ({
+    default: m.EuropaApp,
+  })),
+);
+const PdfApp = lazy(() =>
+  import("../slate/features/pdf/PdfApp.js").then((m) => ({
+    default: m.PdfApp,
+  })),
+);
+const SlateFoundry = lazy(() =>
+  import("../slate/features/foundry/FoundryApp.js").then((m) => ({
+    default: m.SlateFoundry,
+  })),
+);
 const ExtractPanel = lazy(() =>
   import("../extract/ExtractPanel.js").then((m) => ({
     default: m.ExtractPanel,
@@ -93,7 +139,61 @@ export function AppSurface({
   viewer: Cesium.Viewer | null;
 }): JSX.Element | null {
   const app = useAppView((s) => s.app);
+  const scheme = useTheme((s) => s.mode);
   if (app === "map" || app === "sim") return null;
+
+  // Under Slate the board is the copied page, whose toolbar is its header.
+  if (app === "targeting" && scheme === "slate")
+    return (
+      <Suspense
+        fallback={
+          <div className="mono absolute inset-0 z-(--z-overlay) bg-bg-0 p-3 text-[12px] text-txt-2">
+            loading…
+          </div>
+        }
+      >
+        <MavenTargeting viewer={viewer} />
+      </Suspense>
+    );
+
+  if (app === "ai" && scheme === "slate")
+    return (
+      <Suspense
+        fallback={
+          <div className="mono absolute inset-0 z-(--z-overlay) bg-bg-0 p-3 text-[12px] text-txt-2">
+            loading…
+          </div>
+        }
+      >
+        <AipApp viewer={viewer} />
+      </Suspense>
+    );
+
+  if ((app === "reports" || app === "explorer") && scheme === "slate")
+    return (
+      <Suspense
+        fallback={
+          <div className="mono absolute inset-0 z-(--z-overlay) bg-bg-0 p-3 text-[12px] text-txt-2">
+            loading…
+          </div>
+        }
+      >
+        {app === "reports" ? <EuropaApp viewer={viewer} /> : <PdfApp />}
+      </Suspense>
+    );
+
+  if (app === "foundry" && scheme === "slate")
+    return (
+      <Suspense
+        fallback={
+          <div className="mono absolute inset-0 z-(--z-overlay) bg-bg-0 p-3 text-[12px] text-txt-2">
+            loading…
+          </div>
+        }
+      >
+        <SlateFoundry viewer={viewer} />
+      </Suspense>
+    );
 
   let node: ReactNode;
   switch (app) {
@@ -139,6 +239,18 @@ export function AppSurface({
       break;
     case "workflows":
       node = <WorkflowsApp />;
+      break;
+    case "models":
+      node = <ModelsApp />;
+      break;
+    case "quiver":
+      node = <QuiverApp />;
+      break;
+    case "vertex":
+      node = <VertexApp />;
+      break;
+    case "workshop":
+      node = <WorkshopApp />;
       break;
     case "city":
       node = <CityApp />;
@@ -186,7 +298,7 @@ export function AppSurface({
         </span>
       </div>
       <div
-        className={`min-h-0 flex-1 overflow-auto ${MEASURED.has(app) ? "csl2-app-measure" : ""}`}
+        className={`min-h-0 flex-1 overflow-auto ${MEASURED.has(app) && !(app === "video" && scheme === "slate") ? "csl2-app-measure" : ""}`}
       >
         <Suspense
           fallback={

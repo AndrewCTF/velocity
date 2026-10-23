@@ -1,0 +1,82 @@
+/* Satellite observation popover (features-a G18) and the progress toast
+   (G25). The copy's inline geometry, scoped. */
+.slate-shell .sl-obs-backdrop {
+  position: absolute;
+  left: 42px;
+  top: 92px;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  z-index: 210;
+  background: rgba(4, 8, 12, 0.45);
+}
+.slate-shell .sl-g18 {
+  position: relative;
+  width: 726px;
+  height: 490px;
+  background: #101618;
+  border: 1px solid #232d31;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+}
+.slate-shell .sl-g18 > *,
+.slate-shell .sl-g25 > * {
+  position: absolute;
+}
+.slate-shell .sl-g18 .t,
+.slate-shell .sl-g25 .t {
+  white-space: nowrap;
+  line-height: 20px;
+  height: 20px;
+  color: #e5e8eb;
+  font-size: 15px;
+  letter-spacing: 0.045em;
+}
+.slate-shell .sl-g18 .sl-link,
+.slate-shell .sl-g25 .sl-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+.slate-shell .sl-g18-head {
+  font-size: 17.5px;
+  font-weight: 600;
+  color: #f6f7f9;
+  line-height: 22px;
+  letter-spacing: 0.045em;
+}
+.slate-shell .sl-g18-date {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+.slate-shell .sl-g18-act {
+  border: 1px solid #8f99a8;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 9px;
+  font: inherit;
+  font-size: 13.5px;
+  color: #f1f4f6;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.slate-shell .sl-g25 {
+  position: absolute;
+  left: 614px;
+  top: 115px;
+  width: 500px;
+  height: 68px;
+  background: rgba(24, 32, 36, 0.95);
+  border: 1px solid #2c363c;
+  border-radius: 2px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  z-index: 210;
+}

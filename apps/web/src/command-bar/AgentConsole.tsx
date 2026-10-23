@@ -489,6 +489,29 @@ export function AgentConsole({
       ? "amber"
       : "green";
 
+  // ── desktop at rest: one chip, not a docked strip over the map ──
+  // The landing view is the map, as the reference opens. The strip's standing
+  // counts are the title bar's and the inbox's to show; ⌘J and View menu
+  // "Analyst console" open the full console exactly as before.
+  if (!isMobile && !expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          requestAnimationFrame(() => inputRef.current?.focus());
+        }}
+        aria-label="Open analyst console"
+        title="Analyst console (⌘J)"
+        className="on-dark map-banner flex h-7 items-center gap-2 rounded-sm border border-line-2 px-3 text-[13px] text-txt-1 hover:text-txt-0"
+        style={{ background: "rgba(9,12,18,0.92)" }}
+      >
+        <span className="text-accent-fg">▸</span> Analyst console
+        <span className="mono text-[11px] text-txt-2">⌘J</span>
+      </button>
+    );
+  }
+
   // ── mobile: a FAB opens a full-screen console ──
   if (isMobile && !open) {
     return (
@@ -970,8 +993,8 @@ export function AgentConsole({
         </span>
       </div>
 
-      {/* ── slash hints (resting desktop only) ── */}
-      {!expanded && !isMobile && (
+      {/* ── slash hints (desktop, before a run) ── */}
+      {!isMobile && !running && result === null && error === null && (
         <div className="flex gap-3 px-3 pb-2 -mt-0.5 mono text-[10px] tracking-[0.4px] text-txt-4">
           {SLASH.map((s) => (
             <button

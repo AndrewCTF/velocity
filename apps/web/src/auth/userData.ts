@@ -20,6 +20,8 @@ export const USER_DATA_KEYS = [
   "velocity.taskingQuestions",
   "velocity.inbox.read",
   "velocity.inbox.archived",
+  "velocity.quiver.cards.v1",
+  "velocity.workshop.modules.v1",
   "osint.annotations",
   // Last input time for the idle sign-out (auth/idle.ts). Cleared with the
   // rest so the next sign-in does not read a stale stamp and end at once.
@@ -36,6 +38,8 @@ export const DEVICE_PREF_KEYS = [
   "velocity.degradedDismissed",
   "velocity.lowEndDismissed",
   "velocity.openModeDismissed",
+  "velocity.layerStyles.v1",
+  "velocity.devNoLogin", // dev-server-only login skip for headless screenshots (sessionStorage)
   "csl.leftW",
   "csl.rightW",
 ] as const;
