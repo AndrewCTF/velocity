@@ -29,6 +29,7 @@ import {
 import { useContextMenu } from "./contextMenuStore.js";
 import { installAnnotations } from "./AnnotationLayer.js";
 import { installControl } from "./ControlLayer.js";
+import { installDetected } from "./DetectedLayer.js";
 import { installWatchboxes } from "./WatchboxLayer.js";
 import { installCaptures } from "./CaptureLayer.js";
 import { installDetections } from "./DetectLayer.js";
@@ -1054,6 +1055,8 @@ export function GlobeCanvas({
     const detachAnnotations = installAnnotations(viewer);
     // Territorial-control layer: hatched controlled/contested areas + front lines.
     const detachControl = installControl(viewer);
+    // Detected-anchorage footprint (Case files → Detected in view).
+    const detachDetected = installDetected(viewer);
     // Geofence/watchbox AOIs + client-side enter/exit/loiter evaluator.
     const detachWatchbox = installWatchboxes(viewer);
     // Captured observations (YOLO detections pinned from cams/panos).
@@ -1137,6 +1140,7 @@ export function GlobeCanvas({
       setDrawController(null);
       detachAnnotations();
       detachControl();
+      detachDetected();
       detachWatchbox();
       detachCaptures();
       detachDetections();

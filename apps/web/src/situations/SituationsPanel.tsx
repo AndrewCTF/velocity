@@ -12,6 +12,7 @@ import {
   type BadgeTone,
 } from "../shell/instruments.js";
 import { ControlSection } from "./ControlSection.js";
+import { DetectedSituation } from "./DetectedSituation.js";
 
 // Left-rail list of the analyst's Situations (Gotham case files). Click one to
 // open its detail in the Selection tab (EntityPanel delegates on a situation: id)
@@ -53,6 +54,7 @@ export function SituationsPanel({ viewer }: Props = {}): JSX.Element {
   return (
     <div className="p-3 space-y-3">
       <ControlSection viewer={viewer ?? null} />
+      <DetectedSituation viewer={viewer ?? null} />
       <div className="flex items-center gap-2">
         <SectionLabel
           title="Situations"

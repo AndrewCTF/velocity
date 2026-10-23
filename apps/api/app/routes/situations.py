@@ -24,21 +24,24 @@ action.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import time
 import uuid
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from app import llm
 from app.config import get_settings
-from app.intel import case_export
+from app.intel import anchorage, case_export
+from app.intel import sanctions as sx
 from app.intel.ontology import Link, Object, get_registry, kind_of
 from app.intel.ontology_schema import validate_link
 from app.keys import UserCtx
+from app.routes.maritime import vessel_snapshot
 from app.routes.ontology import (
     _refuse_overwrite_of_hidden_row,
     _refuse_write_above_clearance,
@@ -111,7 +114,6 @@ class CoaCard(BaseModel):
     side: Literal["enemy", "friendly"]
     likelihood: Literal["low", "med", "high"]
     rationale: str = ""
-
 
 
 def _ctx(p: Principal) -> UserCtx:
@@ -243,6 +245,67 @@ async def create_situation(
     if sit is None:
         raise HTTPException(status_code=502, detail="could not save situation")
     return sit
+
+
+@router.get("/api/situations/detect")
+async def detect_situation(
+    bbox: str = Query(..., description="w,s,e,n in degrees"),
+    r_km: float = Query(10.0, ge=1.0, le=50.0),
+    # Unused, but every GET on this router resolves the caller
+    # (tests/test_clearance_local_reads.py anti-rot walk).
+    p: Principal = Depends(current_principal_or_local),
+) -> dict[str, Any]:
+    """The densest cluster of hulls at anchor in ``bbox``: a situation candidate.
+
+    Read-only and unsaved; the panel offers "Open as situation" to persist it.
+    Members are joined against the sanctions index on IMO/MMSI only (the exact
+    tier ``/api/sanctions/vessels`` defaults to), so a hit is identifier-backed.
+    Declared before ``/{sit_id:path}``, which would otherwise swallow "detect".
+    """
+    try:
+        w, s, e, n = (float(v) for v in bbox.split(","))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="bbox must be w,s,e,n") from None
+    if not (-180 <= w < e <= 180 and -90 <= s < n <= 90):
+        raise HTTPException(status_code=400, detail="bbox out of range or empty")
+
+    # Off the loop, like the blob builder: the parked union is ~20k features.
+    hit = await asyncio.to_thread(
+        lambda: anchorage.densest_cluster(
+            vessel_snapshot(parked_only=True).get("features", []), (w, s, e, n), r_km
+        )
+    )
+    if hit is None:
+        return {"ok": False, "reason": "No vessels at anchor in this view."}
+
+    idx = await sx.get_index()
+    members = []
+    for f in hit["members"]:
+        pr = f.get("properties") or {}
+        imo = pr.get("imo") or None
+        m = sx.match_vessel(idx, imo=int(imo) if imo else None, mmsi=pr.get("mmsi"))
+        members.append(
+            {
+                "id": f.get("id"),
+                "mmsi": pr.get("mmsi"),
+                "name": pr.get("name"),
+                "shipType": pr.get("shipType"),
+                "t": pr.get("t"),
+                "sanctioned": m is not None and m.confidence == "exact",
+            }
+        )
+    return {
+        "ok": True,
+        "lon": hit["lon"],
+        "lat": hit["lat"],
+        "r_km": hit["r_km"],
+        "n": hit["n"],
+        "sanctioned": sum(1 for m in members if m["sanctioned"]),
+        "members": members,
+        "sanctions_lists": list(idx.lists),
+        # A list that failed to load must never read as one that found nothing.
+        "sanctions_failed": sorted(idx.failed),
+    }
 
 
 @router.get("/api/situations/{sit_id:path}", response_model=SituationDetail)

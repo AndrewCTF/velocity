@@ -105,6 +105,29 @@ export const SENSOR_SATS: readonly SensorSat[] = [
     sensor: "SAR",
     operator: "Umbra",
   },
+  // Sentinel-1 classifies by NORAD id only: "sentinel-1" never equals an alpha
+  // token, so Sentinel-2/3/6 (optical/altimetry) cannot fall into SAR by name.
+  {
+    norad: 39634,
+    name: "SENTINEL-1A",
+    match: "sentinel-1",
+    sensor: "SAR",
+    operator: "ESA Copernicus",
+  },
+  {
+    norad: 62261,
+    name: "SENTINEL-1C",
+    match: "sentinel-1",
+    sensor: "SAR",
+    operator: "ESA Copernicus",
+  },
+  {
+    norad: 66315,
+    name: "SENTINEL-1D",
+    match: "sentinel-1",
+    sensor: "SAR",
+    operator: "ESA Copernicus",
+  },
   {
     norad: 0,
     name: "UMBRA (constellation)",
