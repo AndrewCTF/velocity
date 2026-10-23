@@ -43,7 +43,13 @@ const FRAMES: Record<Page, (p: { nav: Nav }) => JSX.Element> = {
   d201: D201,
 };
 
-export function SlateFoundry({ viewer, initial = "d187" }: { viewer: Cesium.Viewer | null; initial?: Page }): JSX.Element {
+export function SlateFoundry({
+  viewer,
+  initial = "d187",
+}: {
+  viewer: Cesium.Viewer | null;
+  initial?: Page;
+}): JSX.Element {
   const host = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState<Page | "workbench">(initial);
   const [menu, setMenu] = useState(false);
@@ -60,7 +66,8 @@ export function SlateFoundry({ viewer, initial = "d187" }: { viewer: Cesium.View
   useLayoutEffect(() => {
     const el = host.current;
     if (!el) return;
-    const fit = (): void => setK(Math.min(el.clientWidth / W, el.clientHeight / H));
+    const fit = (): void =>
+      setK(Math.min(el.clientWidth / W, el.clientHeight / H));
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
@@ -102,28 +109,52 @@ export function SlateFoundry({ viewer, initial = "d187" }: { viewer: Cesium.View
     );
   const Frame = FRAMES[page];
   return (
-    <div className="sl-fx" ref={host} data-page={page} style={{ background: bg }}>
+    <div
+      className="sl-fx"
+      ref={host}
+      data-page={page}
+      style={{ background: bg }}
+    >
       <ErrorBoundary label="Foundry">
-        <div className="copy" style={{ width: W, height: H, zoom: k, background: bg }}>
+        <div
+          className="copy"
+          style={{ width: W, height: H, zoom: k, background: bg }}
+        >
           {ready ? <Frame nav={nav} /> : null}
         </div>
       </ErrorBoundary>
       {menu ? (
         <>
-          <button type="button" aria-label="Close menu" className="sl-hit" style={{ position: "absolute", inset: 0, zIndex: 5 }} onClick={() => setMenu(false)} />
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="sl-hit"
+            style={{ position: "absolute", inset: 0, zIndex: 5 }}
+            onClick={() => setMenu(false)}
+          />
           <div className="fx-menu" role="menu" style={{ left: 8, top: 8 }}>
             {MENU.map(([group, items]) => (
               <div key={group}>
                 <h6>{group}</h6>
                 {items.map(([id, label]) => (
-                  <button key={id} type="button" role="menuitem" aria-current={id === page ? "page" : undefined} onClick={() => nav.go(id)}>
+                  <button
+                    key={id}
+                    type="button"
+                    role="menuitem"
+                    aria-current={id === page ? "page" : undefined}
+                    onClick={() => nav.go(id)}
+                  >
                     {label}
                   </button>
                 ))}
               </div>
             ))}
             <h6>Workbench</h6>
-            <button type="button" role="menuitem" onClick={() => nav.workbench("home")}>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => nav.workbench("home")}
+            >
               Datasets, pipelines and builds
             </button>
           </div>

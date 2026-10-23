@@ -750,7 +750,9 @@ export function MavenFmv({
       >
         {/* M2 / M15: header and toolbar */}
         <div className="top">
-          <span className="logo" />
+          <span className="logo">
+            <BpIcon name="lightning" />
+          </span>
           <button
             type="button"
             className="pill"

@@ -50,13 +50,15 @@ export function AipApp({
     setReady(true);
   }, []);
   const hub = view === "hub" || view === "pdf";
-  const [x0, y0, W, H] = CROP[view === "hub" || view === "pdf" ? "terminal" : view];
+  const [x0, y0, W, H] =
+    CROP[view === "hub" || view === "pdf" ? "terminal" : view];
   const cfg = useJson<{ classification?: string }>("/api/config");
   const ban = bannerOf(cfg?.data?.classification);
   useLayoutEffect(() => {
     const el = host.current;
     if (!el) return;
-    const fit = (): void => setK(Math.min(el.clientWidth / W, el.clientHeight / H));
+    const fit = (): void =>
+      setK(Math.min(el.clientWidth / W, el.clientHeight / H));
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
@@ -111,13 +113,20 @@ export function AipApp({
           ) : view === "registry" ? (
             <RegistryView nav={nav} />
           ) : view === "control" ? (
-            <ControlPanel onConsole={() => nav("terminal")} onHub={() => setView("hub")} />
+            <ControlPanel
+              onConsole={() => nav("terminal")}
+              onHub={() => setView("hub")}
+            />
           ) : view === "titan" ? (
             <TitanView onHome={() => nav("terminal")} />
           ) : view === "map" ? (
             <MapApp onHome={() => nav("terminal")} ban={ban} />
           ) : (
-            <BoardView onHome={() => nav("terminal")} ban={ban} onMap={() => nav("map")} />
+            <BoardView
+              onHome={() => nav("terminal")}
+              ban={ban}
+              onMap={() => nav("map")}
+            />
           )}
         </Frame>
       </ErrorBoundary>

@@ -2,15 +2,67 @@
 // the repo's own plugin marketplace and product. The manifests are repo files
 // with no endpoint, so they are imported at build time, and the content rows
 // count files in plugin/osint-geoint exactly as the builder's globs do.
-import pj from "../../../../../../plugin/osint-geoint/.claude-plugin/plugin.json";
-import mk from "../../../../../../.claude-plugin/marketplace.json";
-import { BLU, CONTENT, DARK, E, GREY, Fr, Hit, I, frag, hairline, kit, vline, type N } from "./kit.js";
+import {
+  BLU,
+  CONTENT,
+  DARK,
+  E,
+  GREY,
+  Fr,
+  Hit,
+  I,
+  frag,
+  hairline,
+  kit,
+  vline,
+  type N,
+} from "./kit.js";
 import type { Nav } from "./nav.js";
 
+// Eager globs, not imports: the web image builds from apps/web alone, so a
+// manifest outside it is absent there and the page shows "—" instead of failing
+// the build.
+interface PluginJson {
+  name?: string;
+  displayName?: string;
+  version?: string;
+  description?: string;
+}
+interface MarketJson {
+  name?: string;
+  plugins?: { description?: string; category?: string }[];
+}
+const firstJson = <T,>(m: Record<string, unknown>): T =>
+  ((Object.values(m)[0] as { default?: T } | undefined)?.default ?? {}) as T;
+const pj: Required<PluginJson> = {
+  name: "—",
+  displayName: "—",
+  version: "—",
+  description: "",
+  ...firstJson<PluginJson>(
+    import.meta.glob(
+      "../../../../../../plugin/osint-geoint/.claude-plugin/plugin.json",
+      { eager: true },
+    ),
+  ),
+};
+const mk = firstJson<MarketJson>(
+  import.meta.glob("../../../../../../.claude-plugin/marketplace.json", {
+    eager: true,
+  }),
+);
+const mkName = mk.name ?? "—";
+
 const COUNTS = {
-  Skills: Object.keys(import.meta.glob("../../../../../../plugin/osint-geoint/skills/*/SKILL.md")).length,
-  Commands: Object.keys(import.meta.glob("../../../../../../plugin/osint-geoint/commands/*.md")).length,
-  Agents: Object.keys(import.meta.glob("../../../../../../plugin/osint-geoint/agents/*.md")).length,
+  Skills: Object.keys(
+    import.meta.glob("../../../../../../plugin/osint-geoint/skills/*/SKILL.md"),
+  ).length,
+  Commands: Object.keys(
+    import.meta.glob("../../../../../../plugin/osint-geoint/commands/*.md"),
+  ).length,
+  Agents: Object.keys(
+    import.meta.glob("../../../../../../plugin/osint-geoint/agents/*.md"),
+  ).length,
 };
 
 /** Python textwrap.wrap: greedy word wrap at `width` columns. */
@@ -32,15 +84,18 @@ export function wrap(s: string, width: number): string[] {
 /** The builder's rewrite of the plugin descriptions: no em dash reaches the page. */
 export function descOf(d: string): string {
   const [head, ...rest] = d.split(" — ");
-  return (head ?? "").replace(/—/g, ":") + ". " + rest.join(" — ").replace(/—/g, ":");
+  return (
+    (head ?? "").replace(/—/g, ":") + ". " + rest.join(" — ").replace(/—/g, ":")
+  );
 }
-export const subOf = (d: string): string => (d.split(", as ")[0] ?? "").replace(/ — /g, ", ");
+export const subOf = (d: string): string =>
+  (d.split(", as ")[0] ?? "").replace(/ — /g, ", ");
 
 export function D191({ nav }: { nav: Nav }): JSX.Element {
   const { txt, bx } = kit(2.3, 1.16);
   const W = 2642;
   const H = 1380;
-  const pl = mk.plugins[0]!;
+  const pl = { description: "", category: "—", ...mk.plugins?.[0] };
   const desc = descOf(pj.description);
   const sub = subOf(pl.description);
   const ST = "#e8553b";
@@ -54,7 +109,7 @@ export function D191({ nav }: { nav: Nav }): JSX.Element {
     txt(124, 49, "Marketplace", 12.5, "#394048", 700, null, "l", false, fs(26)),
     I("chevron-right", 318, 49, 24, "#5f6b7c"),
     I("shop", 360, 49, 30, ST),
-    txt(391, 49.5, mk.name, 12.5, GREY, 400, null, "l", false, fs(26)),
+    txt(391, 49.5, mkName, 12.5, GREY, 400, null, "l", false, fs(26)),
     I("chevron-right", 583, 49, 24, "#5f6b7c"),
     I("cube", 629, 49, 34, "#8f99a8"),
     txt(662, 49.5, pj.name, 12.5, GREY, 400, null, "l", false, fs(26)),
@@ -63,7 +118,18 @@ export function D191({ nav }: { nav: Nav }): JSX.Element {
     E(1604, 27, 88, 45, "background:#eef0f2;border-radius:3px"),
     txt(1614, 50, "In", 12.5, DARK, 400, null, "l", false, fs(23)),
     I("shop", 1656, 50, 30, ST),
-    txt(1700, 50, "Search products in store...", 12.5, GREY, 400, null, "l", false, fs(25)),
+    txt(
+      1700,
+      50,
+      "Search products in store...",
+      12.5,
+      GREY,
+      400,
+      null,
+      "l",
+      false,
+      fs(25),
+    ),
     vline(2188, 15, 66),
     I("cube-add", 2244, 49, 30, "#8f99a8"),
     txt(2273, 49.5, "Installations", 12.5, DARK, 400, null, "l", false, fs(25)),
@@ -73,7 +139,18 @@ export function D191({ nav }: { nav: Nav }): JSX.Element {
     I("arrow-left", 156, 210, 30, "#5f6b7c"),
     txt(188, 210.5, "Back to store", 12.5, DARK, 400, null, "l", false, fs(25)),
     I("cube", 153, 311, 60, "#a5acb6"),
-    txt(215, 310, pj.displayName, 12.5, "#1c2127", 700, null, "l", false, fs(40)),
+    txt(
+      215,
+      310,
+      pj.displayName,
+      12.5,
+      "#1c2127",
+      700,
+      null,
+      "l",
+      false,
+      fs(40),
+    ),
     bx(680, 280, 144, 59, "#fff", "#c5cbd3", 3),
     txt(702, 311, pj.version, 12.5, DARK, 400, null, "l", false, fs(25)),
     I("double-caret-vertical", 788, 311, 26, "#5f6b7c"),
@@ -93,7 +170,22 @@ export function D191({ nav }: { nav: Nav }): JSX.Element {
       ["Installations", 755],
       ["Linked products", 959],
     ] as const
-  ).forEach(([lab, xx]) => o.push(txt(xx, 520, lab, 12.5, lab === "Overview" ? "#215db0" : DARK, 400, null, "l", false, fs(28))));
+  ).forEach(([lab, xx]) =>
+    o.push(
+      txt(
+        xx,
+        520,
+        lab,
+        12.5,
+        lab === "Overview" ? "#215db0" : DARK,
+        400,
+        null,
+        "l",
+        false,
+        fs(28),
+      ),
+    ),
+  );
   o.push(
     E(121, 555, 126, 5, `background:${BLU}`),
     hairline(0, 560, W, "#d3d8de"),
@@ -103,7 +195,11 @@ export function D191({ nav }: { nav: Nav }): JSX.Element {
   );
   wrap(desc, 112)
     .slice(0, 3)
-    .forEach((ln, i) => o.push(txt(162, 803 + 42 * i, ln, 12.5, DARK, 400, null, "l", false, fs(26))));
+    .forEach((ln, i) =>
+      o.push(
+        txt(162, 803 + 42 * i, ln, 12.5, DARK, 400, null, "l", false, fs(26)),
+      ),
+    );
   o.push(
     bx(120, 1007, 1761, 330, "#fff", "#d3d8de", 3),
     txt(162, 1058, "Content", 12.5, DARK, 700, null, "l", false, fs(25)),
@@ -131,20 +227,50 @@ export function D191({ nav }: { nav: Nav }): JSX.Element {
     [
       ["Version", pj.version],
       ["Category", pl.category],
-      ["Store", mk.name],
+      ["Store", mkName],
     ] as const
   ).forEach(([k, v], i) => {
     const yy = 680 + 58 * i;
     o.push(txt(1965, yy, k, 12.5, GREY, 400, null, "l", false, fs(25)));
-    if (k === "Category") o.push(E(2480 - (v.length * 14 + 30), yy - 21, v.length * 14 + 30, 42, "background:#eef0f2;border-radius:3px"), txt(2465, yy + 0.5, v, 12.5, DARK, 400, 200, "r", false, fs(22)));
-    else if (k === "Store") o.push(I("shop", 2480 - v.length * 15 - 40, yy, 30, ST), txt(2480, yy, v, 12.5, DARK, 400, 300, "r", false, fs(25)));
+    if (k === "Category")
+      o.push(
+        E(
+          2480 - (v.length * 14 + 30),
+          yy - 21,
+          v.length * 14 + 30,
+          42,
+          "background:#eef0f2;border-radius:3px",
+        ),
+        txt(2465, yy + 0.5, v, 12.5, DARK, 400, 200, "r", false, fs(22)),
+      );
+    else if (k === "Store")
+      o.push(
+        I("shop", 2480 - v.length * 15 - 40, yy, 30, ST),
+        txt(2480, yy, v, 12.5, DARK, 400, 300, "r", false, fs(25)),
+      );
     else o.push(txt(2480, yy, v, 12.5, DARK, 400, 200, "r", false, fs(25)));
   });
   o.push(
     Hit(0, 0, 99, 99, "Foundry apps", nav.menu),
     Hit(136, 185, 330, 50, "Back to store", nav.menu),
-    Hit(2181, 250, 148, 60, "Open", undefined, "Claude Code opens plugins; there is no install registry here"),
-    Hit(2339, 250, 181, 60, "Install again", undefined, "Claude Code owns installs: /plugin install osint-geoint@osint-velocity"),
+    Hit(
+      2181,
+      250,
+      148,
+      60,
+      "Open",
+      undefined,
+      "Claude Code opens plugins; there is no install registry here",
+    ),
+    Hit(
+      2339,
+      250,
+      181,
+      60,
+      "Install again",
+      undefined,
+      "Claude Code owns installs: /plugin install osint-geoint@osint-velocity",
+    ),
   );
   return (
     <Fr W={W} H={H}>

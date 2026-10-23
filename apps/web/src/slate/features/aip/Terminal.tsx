@@ -6,19 +6,7 @@
 // chat model is loaded.
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../../../transport/http.js";
-import {
-  CLIP,
-  Hit,
-  I,
-  Ii,
-  L,
-  R,
-  SVG,
-  T,
-  frag,
-  spinner,
-  type N,
-} from "./ui.js";
+import { CLIP, Hit, I, Ii, L, R, SVG, T, frag, spinner, type N } from "./ui.js";
 import {
   KM_PER_SCENE_PX,
   conf,
@@ -45,7 +33,8 @@ import {
   type SarFC,
   type WarnP,
 } from "./data.js";
-import lightHormuz from "./lightHormuz.png";
+// shortcut: reference-derived image kept out of the repo; the page draws without it. Ship a licensed asset to restore it.
+const lightHormuz: string = "";
 
 const SAR_PATH = "/api/intel/dark-vessels/sar?aoi=hormuz";
 
@@ -86,8 +75,7 @@ function useLive(sarNonce: number): Live {
   }
   const hzWarn = (warnRes?.data?.features ?? [])
     .filter(
-      (f) =>
-        f.geometry?.type === "Point" && inHormuz(f.geometry.coordinates),
+      (f) => f.geometry?.type === "Point" && inHormuz(f.geometry.coordinates),
     )
     .map((f) => ({ xy: f.geometry!.coordinates, p: f.properties }));
   return {
@@ -136,29 +124,7 @@ function aipShell(composer = true, simName?: string): N[] {
   s.push(R(282, 98, 1590, 916, "#f2f6f8"));
   s.push(R(282, 98, 1590, 54, "#fefefe"), L(282, 151, 1872, 151, "#e3e8ea"));
   s.push(R(282, 98, 61, 54, "#32363a"));
-  s.push(
-    <svg
-      className="a"
-      style={{ left: 299, top: 109, width: 28, height: 32 }}
-      viewBox="0 0 28 32"
-      aria-hidden
-    >
-      <circle
-        cx="14"
-        cy="12"
-        r="8.5"
-        fill="none"
-        stroke="#fff"
-        strokeWidth="2.6"
-      />
-      <path
-        d="M4 22 Q14 31 24 22"
-        fill="none"
-        stroke="#fff"
-        strokeWidth="2.6"
-      />
-    </svg>,
-  );
+  s.push(I("lightning", 313, 125, 24, "#fff")); // the app mark on the logo tile
   s.push(T(369, 124, "AIP terminal", 17.5, "#2a2f33", 700));
   s.push(L(506, 102, 506, 150, "#e3e8ea"));
   s.push(
@@ -220,7 +186,14 @@ function shellHits(h: ShellHits): N[] {
     Hit(282, 98, 61, 54, "Open the Foundry workspace", h.onLogo),
     Hit(518, 116, 122, 34, "Investigations", h.onInvestigations),
     Hit(638, 116, 84, 34, "Proposals: run a simulation", h.onProposals),
-    Hit(1824, 109, 30, 30, "AI hub: watch officer, analyst agent, local models", h.onHub),
+    Hit(
+      1824,
+      109,
+      30,
+      30,
+      "AI hub: watch officer, analyst agent, local models",
+      h.onHub,
+    ),
   ];
   if (h.sim)
     s.push(
@@ -233,11 +206,7 @@ function shellHits(h: ShellHits): N[] {
 
 /** The composer: drawn placeholder (focused and resting states, as A1 and A2
  *  draw them) with a real input over it. */
-function Composer({
-  onSend,
-}: {
-  onSend: (q: string) => void;
-}): JSX.Element {
+function Composer({ onSend }: { onSend: (q: string) => void }): JSX.Element {
   const [q, setQ] = useState("");
   const [focus, setFocus] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
@@ -250,9 +219,27 @@ function Composer({
   // fixed slots (null when hidden): a changed sibling count would remount the
   // input under the caret
   const s: N[] = [
-    focus ? R(298, 940, 1471, 64, "#fff", "#2c64c2", "border-radius:1px") : null,
-    focus && !q ? T(314, 956, "Start typing something to explore with AIP...", 16.5, "#6a7378") : null,
-    !focus && !q ? T(311, 967, "Start typing something to explore with AIP...", 16.5, "#8a9397") : null,
+    focus
+      ? R(298, 940, 1471, 64, "#fff", "#2c64c2", "border-radius:1px")
+      : null,
+    focus && !q
+      ? T(
+          314,
+          956,
+          "Start typing something to explore with AIP...",
+          16.5,
+          "#6a7378",
+        )
+      : null,
+    !focus && !q
+      ? T(
+          311,
+          967,
+          "Start typing something to explore with AIP...",
+          16.5,
+          "#8a9397",
+        )
+      : null,
   ];
   s.push(
     <input
@@ -279,7 +266,13 @@ function Composer({
 }
 
 // ── chat pieces ──────────────────────────────────────────────────────────────
-function avatar(x: number, y: number, init = "FH", you = true, grey = false): N[] {
+function avatar(
+  x: number,
+  y: number,
+  init = "FH",
+  you = true,
+  grey = false,
+): N[] {
   const c = grey ? "#d6dbde" : "#427298";
   const fc = grey ? "#6a7378" : "#fff";
   return [
@@ -336,11 +329,21 @@ function reply(x: number, y: number, r: Reply | null): N[] {
   if (r === null) return dotsCard(x, y);
   if (r.status === 200 && r.text)
     return [
-      R(x, y, 900, 38, "#f6fafa", "#e3e8ea", "height:auto;min-height:38px;padding:9px 12px", (
-        <div className="sl-wrap" style={{ fontSize: 15, lineHeight: "20px", color: "#2a2f33" }}>
+      R(
+        x,
+        y,
+        900,
+        38,
+        "#f6fafa",
+        "#e3e8ea",
+        "height:auto;min-height:38px;padding:9px 12px",
+        <div
+          className="sl-wrap"
+          style={{ fontSize: 15, lineHeight: "20px", color: "#2a2f33" }}
+        >
           {r.text}
-        </div>
-      )),
+        </div>,
+      ),
     ];
   const msg =
     r.status === 409
@@ -486,7 +489,7 @@ function lightmapDiv(
           top: fy - cy * k,
           width: 1882 * k,
           height: 1242 * k,
-          background: `url(${lightHormuz}) 0 0/100% 100%`,
+          background: `${lightHormuz ? `url(${lightHormuz})` : "none"} 0 0/100% 100%`,
         }}
       />
     </div>
@@ -520,18 +523,64 @@ function mapA3(lv: Live, x0: number, y0: number, x1: number, y1: number): N[] {
     const qy = my + (py - sy) * k;
     if (x0 + 3 < qx && qx < x1 - 3 && y0 + 3 < qy && qy < y1 - 3)
       s.push(
-        R(Math.round(qx - 2), Math.round(qy - 1), 5, 3, "#9aa6ae", "", "border-radius:1px"),
+        R(
+          Math.round(qx - 2),
+          Math.round(qy - 1),
+          5,
+          3,
+          "#9aa6ae",
+          "",
+          "border-radius:1px",
+        ),
       );
   }
-  s.push(T(x0 + w * 0.2, y0 + h * 0.34, "I R A N", 12, "#9aa3a8", 600, "letter-spacing:.35em"));
-  s.push(T(x0 + w * 0.42, y0 + h * 0.8, "O M A N", 11, "#9aa3a8", 600, "letter-spacing:.3em"));
   s.push(
-    R(mx - 11, my - 11, 22, 22, "rgba(76,127,212,.10)", "#4c7fd4", "border-radius:50%"),
+    T(
+      x0 + w * 0.2,
+      y0 + h * 0.34,
+      "I R A N",
+      12,
+      "#9aa3a8",
+      600,
+      "letter-spacing:.35em",
+    ),
+  );
+  s.push(
+    T(
+      x0 + w * 0.42,
+      y0 + h * 0.8,
+      "O M A N",
+      11,
+      "#9aa3a8",
+      600,
+      "letter-spacing:.3em",
+    ),
+  );
+  s.push(
+    R(
+      mx - 11,
+      my - 11,
+      22,
+      22,
+      "rgba(76,127,212,.10)",
+      "#4c7fd4",
+      "border-radius:50%",
+    ),
     R(mx - 3, my - 3, 6, 6, "#4c7fd4", "", "border-radius:50%"),
   );
   const px0 = mx + 14;
   const py0 = my + 5;
-  s.push(R(px0, py0, 140, 56, "#fff", "#e3e8ea", "box-shadow:0 1px 5px rgba(0,0,0,.18);border-radius:2px"));
+  s.push(
+    R(
+      px0,
+      py0,
+      140,
+      56,
+      "#fff",
+      "#e3e8ea",
+      "box-shadow:0 1px 5px rgba(0,0,0,.18);border-radius:2px",
+    ),
+  );
   s.push(
     R(px0 + 12, py0 + 17, 24, 24, "#2f6fd0", "", "border-radius:2px"),
     I("cube", px0 + 24, py0 + 29, 15, "#fff"),
@@ -545,7 +594,16 @@ function mapA3(lv: Live, x0: number, y0: number, x1: number, y1: number): N[] {
 
 function a3Body(lv: Live, q: string[], dim = false): N[] {
   const s: N[] = [
-    ...bubble(502, 152, 634, 56, q.slice(-2), 166, 21, "border-radius:2px;border-top:0"),
+    ...bubble(
+      502,
+      152,
+      634,
+      56,
+      q.slice(-2),
+      166,
+      21,
+      "border-radius:2px;border-top:0",
+    ),
   ];
   s.push(...assistant(518, 246));
   s.push(R(502, 271, 1148, 612, "#fff", "#e3e8ea"));
@@ -554,7 +612,15 @@ function a3Body(lv: Live, q: string[], dim = false): N[] {
     T(1443, 312, "Hand-off Inspector", 15, "#38507e"),
     I("panel-stats", 1604, 313, 19, "#38507e"),
   );
-  s.push(T(530, 345, `Result of query: chokepoints by vessels inside, AIS snapshot ${stampOf(lv)}`, 15, "#7a8388"));
+  s.push(
+    T(
+      530,
+      345,
+      `Result of query: chokepoints by vessels inside, AIS snapshot ${stampOf(lv)}`,
+      15,
+      "#7a8388",
+    ),
+  );
   s.push(R(530, 375, 1093, 482, "#fff", "#e6eaec"));
   s.push(T(550, 403, "Chokepoints: worldwide", 16, "#2a2f33", 700));
   s.push(R(531, 432, 532, 56, "#f4f7f8"), L(531, 488, 1063, 488, "#e6eaec"));
@@ -581,27 +647,51 @@ function a3Body(lv: Live, q: string[], dim = false): N[] {
       );
     else if (i > 0) s.push(L(531, yy - 23, 1063, yy - 23, "#e9edef"));
     const short = nm.length < 17 ? nm : nm.slice(0, 14) + "...";
-    s.push(I("cube", 555, yy, 26, "#8e969c"), T(577, yy, short, 16.5, "#2a2f33"));
+    s.push(
+      I("cube", 555, yy, 26, "#8e969c"),
+      T(577, yy, short, 16.5, "#2a2f33"),
+    );
     const [lab, fg, bg, bd] = CONG[p.congestion] ?? CONG.normal!;
     s.push(...chip(723, yy, lab === "Normal" ? 86 : 107, lab, fg, bg, bd));
     s.push(T(865, yy, lv.ts ? mon(lv.ts) : "n/a", 16, "#2a2f33"));
   });
   s.push(L(1063, 375, 1063, 857, "#e6eaec"));
-  s.push(T(1085, 403, "Relevant objects", 16, "#2a2f33", 700), L(1064, 431, 1623, 431, "#e6eaec"));
+  s.push(
+    T(1085, 403, "Relevant objects", 16, "#2a2f33", 700),
+    L(1064, 431, 1623, 431, "#e6eaec"),
+  );
   const hz = lv.ch.get("Strait of Hormuz");
   const rel: [string, Res<unknown> | null, number | null][] = [
     ["Vessels inside", lv.choke, hz ? hz.vessels : null],
     ["Stationary", lv.choke, hz ? hz.stationary : null],
-    ["SAR hulls, no AIS match", lv.sarRes, lv.sarRes?.ok ? lv.sar.length : null],
+    [
+      "SAR hulls, no AIS match",
+      lv.sarRes,
+      lv.sarRes?.ok ? lv.sar.length : null,
+    ],
     ["NGA warnings inside", lv.warnRes, lv.warnRes?.ok ? hzWarnMsgs(lv) : null],
-    ["Registry matches inside", lv.sancRes, lv.sancRes?.ok ? hzSanc(lv).length : null],
+    [
+      "Registry matches inside",
+      lv.sancRes,
+      lv.sancRes?.ok ? hzSanc(lv).length : null,
+    ],
   ];
   const mx = Math.max(1, ...rel.map(([, , v]) => v ?? 0));
   rel.forEach(([lab, res, v], i) => {
     const yy = [460, 492, 525, 557, 589][i]!;
     s.push(
       T(1084, yy, lab, 16.5, "#2a2f33"),
-      T(1527, yy, cnt(v === null && res?.ok ? { ...res, ok: false } : res, v ?? 0), 16, "#2a2f33", 400, "", "", "r"),
+      T(
+        1527,
+        yy,
+        cnt(v === null && res?.ok ? { ...res, ok: false } : res, v ?? 0),
+        16,
+        "#2a2f33",
+        400,
+        "",
+        "",
+        "r",
+      ),
     );
     s.push(
       R(1541, yy - 5, 65, 10, "#e1e7f3"),
@@ -623,7 +713,8 @@ function handoff(lv: Live): [string, string | null, string, N][] {
       "globe",
       "chokepoint feed",
       <>
-        {" "}and received <b>{cnt(lv.choke, n)} chokepoints</b> from the snapshot of{" "}
+        {" "}
+        and received <b>{cnt(lv.choke, n)} chokepoints</b> from the snapshot of{" "}
         <b>{stampOf(lv)}</b>.
       </>,
     ],
@@ -634,8 +725,8 @@ function handoff(lv: Live): [string, string | null, string, N][] {
       hz ? (
         <>
           I identified that you were querying about <b>Strait of Hormuz</b>:{" "}
-          <b>{hz.vessels} vessels</b> inside, <b>{hz.stationary}</b>{" "}
-          stationary, congestion <b>{hz.congestion}</b>.
+          <b>{hz.vessels} vessels</b> inside, <b>{hz.stationary}</b> stationary,
+          congestion <b>{hz.congestion}</b>.
         </>
       ) : (
         <>{unavailable("Chokepoints", lv.choke)}.</>
@@ -646,7 +737,8 @@ function handoff(lv: Live): [string, string | null, string, N][] {
       "shield",
       "sanctions registry",
       <>
-        {" "}and kept the{" "}
+        {" "}
+        and kept the{" "}
         <b>
           {cnt(lv.sancRes, hs)} of {cnt(lv.sancRes, lv.sanc.length)}
         </b>{" "}
@@ -658,7 +750,8 @@ function handoff(lv: Live): [string, string | null, string, N][] {
       "cube",
       "vessel",
       <>
-        {" "}for <b>SAR hulls with no AIS match</b> in <b>aoi=hormuz</b>:{" "}
+        {" "}
+        for <b>SAR hulls with no AIS match</b> in <b>aoi=hormuz</b>:{" "}
         <b>{cnt(lv.sarRes, lv.sar.length)}</b> dark candidates.
       </>,
     ],
@@ -671,13 +764,26 @@ function handoff(lv: Live): [string, string | null, string, N][] {
   ];
 }
 
-function handCard(x: number, y: number, w: number, h: number, c: ReturnType<typeof handoff>[number]): N[] {
+function handCard(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  c: ReturnType<typeof handoff>[number],
+): N[] {
   const [pre, ic, link, post] = c;
   return [
     R(x, y, w, h, "#fff", "#e8ecee"),
     <div
       className="a"
-      style={{ left: x + 19, top: y + 13, width: w - 36, fontSize: 16.5, lineHeight: "24px", color: "#2e3438" }}
+      style={{
+        left: x + 19,
+        top: y + 13,
+        width: w - 36,
+        fontSize: 16.5,
+        lineHeight: "24px",
+        color: "#2e3438",
+      }}
     >
       {pre}
       {link ? (
@@ -692,7 +798,9 @@ function handCard(x: number, y: number, w: number, h: number, c: ReturnType<type
 }
 
 function handoffPanel(lv: Live, onGraph: () => void, onClose: () => void): N[] {
-  const s: N[] = [R(1458, 98, 414, 916, "#f6f8f9", "", "border-left:1px solid #d9dfe2")];
+  const s: N[] = [
+    R(1458, 98, 414, 916, "#f6f8f9", "", "border-left:1px solid #d9dfe2"),
+  ];
   s.push(T(1472, 124, "Hand-off inspector", 16.5, "#2a2f33", 700));
   s.push(
     R(1790, 106, 37, 36, "#fff", "#d9dfe2", "border-radius:2px"),
@@ -700,7 +808,13 @@ function handoffPanel(lv: Live, onGraph: () => void, onClose: () => void): N[] {
     I("cross", 1851, 124, 17, "#3a4247"),
   );
   s.push(L(1459, 151, 1871, 151, "#e3e8ea"));
-  const cards: [number, number][] = [[177, 101], [318, 94], [452, 126], [620, 122], [783, 125]];
+  const cards: [number, number][] = [
+    [177, 101],
+    [318, 94],
+    [452, 126],
+    [620, 122],
+    [783, 125],
+  ];
   const hc = handoff(lv);
   cards.forEach(([y, h], i) => {
     s.push(...handCard(1480, y, 374, h, hc[i]!));
@@ -726,7 +840,9 @@ function handoffPanel(lv: Live, onGraph: () => void, onClose: () => void): N[] {
 }
 
 function graphPanel(q: string, onTrace: () => void, onClose: () => void): N[] {
-  const s: N[] = [R(1458, 98, 414, 916, "#fff", "", "border-left:1px solid #d9dfe2")];
+  const s: N[] = [
+    R(1458, 98, 414, 916, "#fff", "", "border-left:1px solid #d9dfe2"),
+  ];
   s.push(T(1472, 124, "Exploration and decision graph", 16.5, "#2a2f33", 700));
   s.push(
     R(1790, 106, 37, 36, "#fff", "#d9dfe2", "border-radius:2px"),
@@ -767,9 +883,20 @@ function graphPanel(q: string, onTrace: () => void, onClose: () => void): N[] {
   );
   s.push(R(1470, 591, 394, 416, "#fff", "#1e2a46", "border-width:2px"));
   s.push(L(1674, 662, 1674, 922, "#4a5358", 1));
-  for (const [cy, ic] of [[659, "envelope"], [926, "globe"]] as const)
+  for (const [cy, ic] of [
+    [659, "envelope"],
+    [926, "globe"],
+  ] as const)
     s.push(
-      R(1657, cy - 17, 35, 35, "#fff", "#4a7fc8", "border-radius:50%;border-width:2px"),
+      R(
+        1657,
+        cy - 17,
+        35,
+        35,
+        "#fff",
+        "#4a7fc8",
+        "border-radius:50%;border-width:2px",
+      ),
       I(ic, 1674, cy, 16, "#2f6fd0"),
     );
   s.push(
@@ -798,12 +925,17 @@ function bars(
   for (let i = 0; i <= Math.floor(ymax / step); i++) {
     const v = i * step;
     const yy = yBot - ((yBot - yTop) * v) / ymax;
-    s.push(T(xAxis - 18, yy, String(v), 12.5, "#4a5358", 400, "", "", "r"), L(xAxis - 4, yy, xAxis, yy, "#8a9397"));
+    s.push(
+      T(xAxis - 18, yy, String(v), 12.5, "#4a5358", 400, "", "", "r"),
+      L(xAxis - 4, yy, xAxis, yy, "#8a9397"),
+    );
   }
   labels.forEach((lab, i) => {
     const cx = xs[i]!;
     const hh = ((yBot - yTop) * Math.min(vals[i]!, ymax)) / ymax;
-    s.push(R(cx - bw / 2, yBot - hh, bw, hh, i === sel ? "#4a84e8" : "#9ebeee"));
+    s.push(
+      R(cx - bw / 2, yBot - hh, bw, hh, i === sel ? "#4a84e8" : "#9ebeee"),
+    );
     s.push(T(cx, yBot + 19, lab, 9.5, "#4a5358", 400, "", "", "c"));
   });
   return s;
@@ -832,22 +964,70 @@ function a6Body(lv: Live, q: string[], onTrace: () => void): N[] {
       "#7a8388",
     ),
   );
-  s.push(R(530, 495, 1092, 387, "#fff", "#e6eaec"), L(1076, 495, 1076, 882, "#e6eaec"), L(531, 551, 1622, 551, "#e6eaec"));
+  s.push(
+    R(530, 495, 1092, 387, "#fff", "#e6eaec"),
+    L(1076, 495, 1076, 882, "#e6eaec"),
+    L(531, 551, 1622, 551, "#e6eaec"),
+  );
   s.push(
     T(550, 523, "Vessels per chokepoint", 15, "#2a2f33", 700),
     T(1098, 523, "Stationary vessels per chokepoint", 15, "#2a2f33", 700),
   );
-  const pick = ["Strait of Hormuz", "Suez / Gulf of Suez", "Bosphorus", "Panama Canal", "Strait of Gibraltar"];
+  const pick = [
+    "Strait of Hormuz",
+    "Suez / Gulf of Suez",
+    "Bosphorus",
+    "Panama Canal",
+    "Strait of Gibraltar",
+  ];
   const labs = ["Hormuz", "Suez", "Bosphorus", "Panama", "Gibraltar"];
   if (!lv.choke?.ok) {
-    s.push(T(849, 720, unavailable("Chokepoints", lv.choke), 15, "#6a7378", 400, "", "", "c"));
+    s.push(
+      T(
+        849,
+        720,
+        unavailable("Chokepoints", lv.choke),
+        15,
+        "#6a7378",
+        400,
+        "",
+        "",
+        "c",
+      ),
+    );
   } else {
     const v = pick.map((p) => lv.ch.get(p)?.vessels ?? 0);
     const st = pick.map((p) => lv.ch.get(p)?.stationary ?? 0);
     // the copy's axis is 0..400 by 100; a busier day widens it, never clips it
     const ymax = Math.max(400, Math.ceil(Math.max(...v) / 100) * 100);
-    s.push(...bars(590, 598, 842, ymax, 100, labs, v, 0, 26, [668, 750, 832, 914, 996]));
-    s.push(...bars(1138, 598, 842, ymax, 100, labs, st, 0, 26, [1216, 1298, 1380, 1462, 1544]));
+    s.push(
+      ...bars(
+        590,
+        598,
+        842,
+        ymax,
+        100,
+        labs,
+        v,
+        0,
+        26,
+        [668, 750, 832, 914, 996],
+      ),
+    );
+    s.push(
+      ...bars(
+        1138,
+        598,
+        842,
+        ymax,
+        100,
+        labs,
+        st,
+        0,
+        26,
+        [1216, 1298, 1380, 1462, 1544],
+      ),
+    );
   }
   s.push(Hit(1428, 414, 195, 36, "Hand-off Inspector", onTrace));
   return s;
@@ -860,8 +1040,11 @@ const CONF_TINT: Record<string, [string, string, string]> = {
   high: ["#f8e0e4", "#a02830", "High"],
 };
 const sarDate = (lv: Live): string =>
-  lv.sarRes?.data ? dmy(new Date(lv.sarRes.data.summary.date + "T00:00:00Z")) : "n/a";
-const byLen = (lv: Live): Sar[] => [...lv.sar].sort((a, b) => b.lengthM - a.lengthM);
+  lv.sarRes?.data
+    ? dmy(new Date(lv.sarRes.data.summary.date + "T00:00:00Z"))
+    : "n/a";
+const byLen = (lv: Live): Sar[] =>
+  [...lv.sar].sort((a, b) => b.lengthM - a.lengthM);
 
 function modelBar(model: string, y = 232): N[] {
   return [
@@ -902,7 +1085,8 @@ function a13(name: string): N[] {
       1075,
       637,
       <>
-        Name your simulation <span style={{ color: "#38507e" }}>{name}</span>{" "}
+        Name your simulation{" "}
+        <span style={{ color: "#38507e" }}>{name}</span>{" "}
       </>,
       17,
       "#59646a",
@@ -916,7 +1100,19 @@ function a13(name: string): N[] {
 }
 
 function sarFail(lv: Live): N[] {
-  return [T(1075, 560, unavailable("SAR dark-vessel screen", lv.sarRes), 17, "#59646a", 400, "", "", "c")];
+  return [
+    T(
+      1075,
+      560,
+      unavailable("SAR dark-vessel screen", lv.sarRes),
+      17,
+      "#59646a",
+      400,
+      "",
+      "",
+      "c",
+    ),
+  ];
 }
 
 function a14(lv: Live, onMap: () => void): N[] {
@@ -929,7 +1125,15 @@ function a14(lv: Live, onMap: () => void): N[] {
   );
   s.push(
     R(1363, 312, 195, 34, "#c2feb6", "", "border-radius:2px"),
-    T(1372, 329, <>Dark candidates <b>{lv.sar.length}</b></>, 15.5, "#2a6a3a"),
+    T(
+      1372,
+      329,
+      <>
+        Dark candidates <b>{lv.sar.length}</b>
+      </>,
+      15.5,
+      "#2a6a3a",
+    ),
   );
   s.push(
     R(1580, 312, 253, 34, "#e2ecfa", "", "border-radius:2px"),
@@ -939,8 +1143,30 @@ function a14(lv: Live, onMap: () => void): N[] {
   );
   s.push(R(305, 358, 1543, 59, "#f2f6f6"), L(305, 417, 1848, 417, "#e0e5e8"));
   const cols = [320, 647, 785, 956, 1095, 1321, 1464, 1703];
-  const hdr = [["Title"], ["Acquired"], ["Class", "candidate"], ["Class", "confidence"], ["AIS match"], ["Length (m)"], ["Source"], ["Heading"]];
-  cols.forEach((x, j) => hdr[j]!.forEach((t, i) => s.push(T(x, 388 + (i - (hdr[j]!.length - 1) / 2) * 16, t, 13.5, "#4a5358", 700))));
+  const hdr = [
+    ["Title"],
+    ["Acquired"],
+    ["Class", "candidate"],
+    ["Class", "confidence"],
+    ["AIS match"],
+    ["Length (m)"],
+    ["Source"],
+    ["Heading"],
+  ];
+  cols.forEach((x, j) =>
+    hdr[j]!.forEach((t, i) =>
+      s.push(
+        T(
+          x,
+          388 + (i - (hdr[j]!.length - 1) / 2) * 16,
+          t,
+          13.5,
+          "#4a5358",
+          700,
+        ),
+      ),
+    ),
+  );
   const rowh = [67, 67, 67, 66, 67, 67, 66];
   let y = 418;
   byLen(lv)
@@ -948,15 +1174,48 @@ function a14(lv: Live, onMap: () => void): N[] {
     .forEach((sr, i) => {
       const h = rowh[i]!;
       const yc = y + h / 2;
-      if (i === 1) s.push(R(305, y, 1543, h, "#f0f8fe"), L(305, y, 1848, y, "#a9c4e8"), L(305, y + h, 1848, y + h, "#a9c4e8"));
+      if (i === 1)
+        s.push(
+          R(305, y, 1543, h, "#f0f8fe"),
+          L(305, y, 1848, y, "#a9c4e8"),
+          L(305, y + h, 1848, y + h, "#a9c4e8"),
+        );
       else s.push(L(305, y + h, 1848, y + h, "#e6eaec"));
       const [bg, fg, lab] = CONF_TINT[conf(sr)]!;
-      s.push(R(941, y + (i !== 1 ? 1 : 0), 137, h - 1, bg), R(1079, y + 1, 225, h - 1, sr.aisMatch ? "#dcebe0" : "#e4e4e4"));
-      s.push(R(320, yc - 12, 28, 24, "#3f73d6", "", "border-radius:2px"), I("th", 334, yc, 15, "#fff"));
-      s.push(T(357, yc - 11, sarTitle(sr) + " (aoi hormuz)", 16, "#2e3438"), T(357, yc + 11, `${sr.lengthM.toFixed(0)} x ${sr.widthM.toFixed(0)} m hull, Sentinel-1`, 16, "#2e3438"));
+      s.push(
+        R(941, y + (i !== 1 ? 1 : 0), 137, h - 1, bg),
+        R(1079, y + 1, 225, h - 1, sr.aisMatch ? "#dcebe0" : "#e4e4e4"),
+      );
+      s.push(
+        R(320, yc - 12, 28, 24, "#3f73d6", "", "border-radius:2px"),
+        I("th", 334, yc, 15, "#fff"),
+      );
+      s.push(
+        T(357, yc - 11, sarTitle(sr) + " (aoi hormuz)", 16, "#2e3438"),
+        T(
+          357,
+          yc + 11,
+          `${sr.lengthM.toFixed(0)} x ${sr.widthM.toFixed(0)} m hull, Sentinel-1`,
+          16,
+          "#2e3438",
+        ),
+      );
       s.push(T(647, yc, sarDate(lv), 16), T(785, yc, topCls(sr), 16));
-      s.push(T(956, yc, lab, 16, fg), T(1095, yc, sr.aisMatch ? "AIS matched" : "No AIS match", 16, "#2e3438"));
-      s.push(T(1321, yc, sr.lengthM.toFixed(0), 16), T(1464, yc, "Sentinel-1", 16), T(1703, yc, `${sr.headingDeg.toFixed(0)}°`, 16));
+      s.push(
+        T(956, yc, lab, 16, fg),
+        T(
+          1095,
+          yc,
+          sr.aisMatch ? "AIS matched" : "No AIS match",
+          16,
+          "#2e3438",
+        ),
+      );
+      s.push(
+        T(1321, yc, sr.lengthM.toFixed(0), 16),
+        T(1464, yc, "Sentinel-1", 16),
+        T(1703, yc, `${sr.headingDeg.toFixed(0)}°`, 16),
+      );
       y += h;
     });
   s.push(Hit(1580, 312, 253, 34, "View on map", onMap));
@@ -984,20 +1243,40 @@ function a15(
   );
   const [sx, sy] = scenePx(55.3, 25.78);
   const k = 1.12;
-  s.push(lightmapDiv(LX0, PY0, LX1 - LX0, PY1 - PY0, sx, sy, k, (LX1 - LX0) / 2, (PY1 - PY0) / 2));
+  s.push(
+    lightmapDiv(
+      LX0,
+      PY0,
+      LX1 - LX0,
+      PY1 - PY0,
+      sx,
+      sy,
+      k,
+      (LX1 - LX0) / 2,
+      (PY1 - PY0) / 2,
+    ),
+  );
   const proj = (lon: number, lat: number): [number, number] => {
     const [px, py] = scenePx(lon, lat);
-    return [LX0 + (LX1 - LX0) / 2 + (px - sx) * k, PY0 + (PY1 - PY0) / 2 + (py - sy) * k];
+    return [
+      LX0 + (LX1 - LX0) / 2 + (px - sx) * k,
+      PY0 + (PY1 - PY0) / 2 + (py - sy) * k,
+    ];
   };
   const km = (a: number[], b: number[]): number =>
     6371 *
     Math.hypot(
-      ((b[0]! - a[0]!) * Math.PI) / 180 * Math.cos((a[1]! * Math.PI) / 180),
+      (((b[0]! - a[0]!) * Math.PI) / 180) * Math.cos((a[1]! * Math.PI) / 180),
       ((b[1]! - a[1]!) * Math.PI) / 180,
     );
   const trk = (hist?.data?.tracks ?? [])
     .filter((t) => t.points.length >= 10)
-    .map((t) => ({ t, path: t.points.slice(1).reduce((acc, p, i) => acc + km(t.points[i]!, p), 0) }))
+    .map((t) => ({
+      t,
+      path: t.points
+        .slice(1)
+        .reduce((acc, p, i) => acc + km(t.points[i]!, p), 0),
+    }))
     .sort((a, b) => b.path - a.path)
     .slice(0, 8)
     .map((x) => x.t);
@@ -1007,7 +1286,9 @@ function a15(
     const pts = t.points.map((p) => proj(p[0]!, p[1]!));
     lines.push(
       <polyline
-        points={pts.map(([a, b]) => `${a.toFixed(0)},${b.toFixed(0)}`).join(" ")}
+        points={pts
+          .map(([a, b]) => `${a.toFixed(0)},${b.toFixed(0)}`)
+          .join(" ")}
         fill="none"
         stroke="#111"
         strokeWidth="2.4"
@@ -1024,21 +1305,74 @@ function a15(
       const kn = j + 1 < t.points.length ? km(p, q) / dtH / 1.852 : 0;
       const c = kn >= 8 ? "#3aa655" : kn >= 3 ? "#e3b82d" : "#d64545";
       const [a, b] = proj(p[0]!, p[1]!);
-      if (LX0 < a && a < LX1 && PY0 < b && b < PY1) marks.push(R(a - 8, b - 8, 16, 16, "#fff", c, "border-radius:50%;border-width:3px"));
+      if (LX0 < a && a < LX1 && PY0 < b && b < PY1)
+        marks.push(
+          R(
+            a - 8,
+            b - 8,
+            16,
+            16,
+            "#fff",
+            c,
+            "border-radius:50%;border-width:3px",
+          ),
+        );
     }
     const [a, b] = pts[pts.length - 1]!;
     if (LX0 + 10 < a && a < LX1 - 10 && PY0 + 10 < b && b < PY1 - 10)
-      marks.push(R(a - 11, b - 11, 22, 22, "#3f73d6", "#fff", "border-radius:3px;border-width:2px"), I("ship", a, b, 14, "#fff"));
+      marks.push(
+        R(
+          a - 11,
+          b - 11,
+          22,
+          22,
+          "#3f73d6",
+          "#fff",
+          "border-radius:3px;border-width:2px",
+        ),
+        I("ship", a, b, 14, "#fff"),
+      );
   }
-  s.push(CLIP(LX0, PY0, LX1 - LX0, PY1 - PY0, [SVG(lines, 0, 0, 1920, 1080), ...marks]));
-  for (const [lab, lon, lat] of [["Dubai", 55.27, 25.2], ["Sharjah", 55.4, 25.35], ["Das Island", 52.87, 25.15], ["Abu Dhabi", 54.37, 24.45]] as const) {
+  s.push(
+    CLIP(LX0, PY0, LX1 - LX0, PY1 - PY0, [
+      SVG(lines, 0, 0, 1920, 1080),
+      ...marks,
+    ]),
+  );
+  for (const [lab, lon, lat] of [
+    ["Dubai", 55.27, 25.2],
+    ["Sharjah", 55.4, 25.35],
+    ["Das Island", 52.87, 25.15],
+    ["Abu Dhabi", 54.37, 24.45],
+  ] as const) {
     const [a, b] = proj(lon, lat);
-    if (LX0 < a && a < LX1 && PY0 < b && b < PY1) s.push(T(a, b, lab, 15, "#59646a", 400, "", "", "c"));
+    if (LX0 < a && a < LX1 && PY0 < b && b < PY1)
+      s.push(T(a, b, lab, 15, "#59646a", 400, "", "", "c"));
   }
   const barKm = 20;
-  s.push(R(369, 855, (barKm / KM_PER_SCENE_PX) * k, 12, "#fff", "#2a2f33", "border-top:0"), T(375, 860, `${barKm} km`, 11, "#2a2f33"));
-  for (const [yy, ic] of [[680, "map"], [733, "zoom-to-fit"], [774, "zoom-in"], [810, "zoom-out"], [852, "compass"]] as const)
-    s.push(R(314, yy - 18, 40, 36, "#fff", "#cdd3d6", "border-radius:3px"), I(ic, 334, yy, 19, "#2a2f33"));
+  s.push(
+    R(
+      369,
+      855,
+      (barKm / KM_PER_SCENE_PX) * k,
+      12,
+      "#fff",
+      "#2a2f33",
+      "border-top:0",
+    ),
+    T(375, 860, `${barKm} km`, 11, "#2a2f33"),
+  );
+  for (const [yy, ic] of [
+    [680, "map"],
+    [733, "zoom-to-fit"],
+    [774, "zoom-in"],
+    [810, "zoom-out"],
+    [852, "compass"],
+  ] as const)
+    s.push(
+      R(314, yy - 18, 40, 36, "#fff", "#cdd3d6", "border-radius:3px"),
+      I(ic, 334, yy, 19, "#2a2f33"),
+    );
   if (!trk.length) {
     const why =
       hist === null
@@ -1047,13 +1381,38 @@ function a15(
           ? unavailable("Recorded AIS tracks", hist)
           : "No recorded vessel track in this box";
     s.push(T(583, 857, why, 10.5, "#59646a"));
-    if (hist?.ok) s.push(T(583, 870, `GET /api/history/tracks returned ${hist.data?.tracks.length ?? 0} tracks`, 10.5, "#59646a"));
+    if (hist?.ok)
+      s.push(
+        T(
+          583,
+          870,
+          `GET /api/history/tracks returned ${hist.data?.tracks.length ?? 0} tracks`,
+          10.5,
+          "#59646a",
+        ),
+      );
   } else {
     const t0 = Math.min(...trk.map((t) => t.points[0]![2]!));
     const t1 = Math.max(...trk.map((t) => t.points[t.points.length - 1]![2]!));
     const d1 = new Date(t1 * 1000);
-    s.push(T(583, 857, `${trk.length} longest tracks, ${stamp(new Date(t0 * 1000)).slice(0, -4)} to ${String(d1.getUTCHours()).padStart(2, "0")}:${String(d1.getUTCMinutes()).padStart(2, "0")} UTC`, 10.5, "#59646a"));
-    s.push(T(583, 870, "Waypoints: green >= 8 kn, yellow 3 to 8 kn, red < 3 kn (speed between fixes)", 10.5, "#59646a"));
+    s.push(
+      T(
+        583,
+        857,
+        `${trk.length} longest tracks, ${stamp(new Date(t0 * 1000)).slice(0, -4)} to ${String(d1.getUTCHours()).padStart(2, "0")}:${String(d1.getUTCMinutes()).padStart(2, "0")} UTC`,
+        10.5,
+        "#59646a",
+      ),
+    );
+    s.push(
+      T(
+        583,
+        870,
+        "Waypoints: green >= 8 kn, yellow 3 to 8 kn, red < 3 kn (speed between fixes)",
+        10.5,
+        "#59646a",
+      ),
+    );
   }
   const [RX0, RX1] = [835, 1848];
   s.push(
@@ -1073,64 +1432,188 @@ function a15(
   );
   const [csx, csy] = scenePx(55.9, 26.3);
   const k2 = 0.58;
-  s.push(lightmapDiv(RX0, PY0, RX1 - RX0, PY1 - PY0, csx, csy, k2, (RX1 - RX0) * 0.5, (PY1 - PY0) * 0.5));
+  s.push(
+    lightmapDiv(
+      RX0,
+      PY0,
+      RX1 - RX0,
+      PY1 - PY0,
+      csx,
+      csy,
+      k2,
+      (RX1 - RX0) * 0.5,
+      (PY1 - PY0) * 0.5,
+    ),
+  );
   const proj2 = (lon: number, lat: number): [number, number] => {
     const [px, py] = scenePx(lon, lat);
-    return [RX0 + (RX1 - RX0) * 0.5 + (px - csx) * k2, PY0 + (PY1 - PY0) * 0.5 + (py - csy) * k2];
+    return [
+      RX0 + (RX1 - RX0) * 0.5 + (px - csx) * k2,
+      PY0 + (PY1 - PY0) * 0.5 + (py - csy) * k2,
+    ];
   };
   const mk: N[] = [];
   for (const sr of lv.sar) {
     const [a, b] = proj2(sr.xy[0], sr.xy[1]);
-    if (!sr.aisMatch) mk.push(R(a - 7, b - 7, 14, 14, "#fff", "#e3b82d", "border-radius:50%;border-width:3px"));
+    if (!sr.aisMatch)
+      mk.push(
+        R(
+          a - 7,
+          b - 7,
+          14,
+          14,
+          "#fff",
+          "#e3b82d",
+          "border-radius:50%;border-width:3px",
+        ),
+      );
   }
   const hs = hzSanc(lv);
   for (const sc of hs) {
     const [a, b] = proj2(sc.xy[0], sc.xy[1]);
-    mk.push(R(a - 11, b - 11, 22, 22, "#3f73d6", "#fff", "border-radius:3px;border-width:2px"), I("shield", a, b, 13, "#fff"));
+    mk.push(
+      R(
+        a - 11,
+        b - 11,
+        22,
+        22,
+        "#3f73d6",
+        "#fff",
+        "border-radius:3px;border-width:2px",
+      ),
+      I("shield", a, b, 13, "#fff"),
+    );
   }
   const hxy = lv.chxy.get("Strait of Hormuz") ?? [56.3, 26.6];
   const [ha, hb] = proj2(hxy[0]!, hxy[1]!);
-  mk.push(R(ha - 16, hb - 16, 32, 32, "rgba(76,127,212,.10)", "#4c7fd4", "border-radius:50%;border-width:2px"));
+  mk.push(
+    R(
+      ha - 16,
+      hb - 16,
+      32,
+      32,
+      "rgba(76,127,212,.10)",
+      "#4c7fd4",
+      "border-radius:50%;border-width:2px",
+    ),
+  );
   s.push(CLIP(RX0, PY0, RX1 - RX0, PY1 - PY0, mk));
-  for (const [yy, ic] of [[680, "map"], [733, "zoom-to-fit"], [774, "zoom-in"], [810, "zoom-out"], [852, "compass"]] as const)
-    s.push(R(849, yy - 18, 40, 36, "#fff", "#cdd3d6", "border-radius:3px"), I(ic, 869, yy, 19, "#2a2f33"));
+  for (const [yy, ic] of [
+    [680, "map"],
+    [733, "zoom-to-fit"],
+    [774, "zoom-in"],
+    [810, "zoom-out"],
+    [852, "compass"],
+  ] as const)
+    s.push(
+      R(849, yy - 18, 40, 36, "#fff", "#cdd3d6", "border-radius:3px"),
+      I(ic, 869, yy, 19, "#2a2f33"),
+    );
   const hz = lv.ch.get("Strait of Hormuz");
-  s.push(T(1120, 870, `Yellow rings: ${lv.sar.length} SAR dark candidates. Blue squares: ${hs.length} registry matches. Ring: Strait of Hormuz (${hz ? hz.vessels : "n/a"} vessels).`, 10.5, "#59646a"));
-  s.push(Hit(1516, 311, 146, 36, "View detections", onTable), Hit(1675, 311, 157, 36, "View analysis", onAnalysis));
+  s.push(
+    T(
+      1120,
+      870,
+      `Yellow rings: ${lv.sar.length} SAR dark candidates. Blue squares: ${hs.length} registry matches. Ring: Strait of Hormuz (${hz ? hz.vessels : "n/a"} vessels).`,
+      10.5,
+      "#59646a",
+    ),
+  );
+  s.push(
+    Hit(1516, 311, 146, 36, "View detections", onTable),
+    Hit(1675, 311, 157, 36, "View analysis", onAnalysis),
+  );
   return s;
 }
 
-function kpi(x: number, y: number, w: number, h: number, bg: string, label: string, value: string): N[] {
-  return [R(x, y, w, h, bg), T(x + 20, y + 29, label, 15, "#4a5358"), T(x + 20, y + 60, value, 16, "#2a2f33")];
+function kpi(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  bg: string,
+  label: string,
+  value: string,
+): N[] {
+  return [
+    R(x, y, w, h, bg),
+    T(x + 20, y + 29, label, 15, "#4a5358"),
+    T(x + 20, y + 60, value, 16, "#2a2f33"),
+  ];
 }
 
 function a16(lv: Live, onClose: () => void): N[] {
   const s: N[] = [...modelBar("SAR dark-vessel screen")];
-  s.push(R(304, 279, 1415, 622, "#fff", "#e6eaec"), R(1720, 279, 129, 622, "#38424a"));
+  s.push(
+    R(304, 279, 1415, 622, "#fff", "#e6eaec"),
+    R(1720, 279, 129, 622, "#38424a"),
+  );
   s.push(
     I("timeline-bar-chart", 317, 301, 22, "#4a5358"),
     T(343, 302, "Screen analysis", 21, "#2a2f33", 700),
     I("cross", 1693, 301, 17, "#2a2f33"),
     L(305, 326, 1718, 326, "#e0e5e8"),
   );
-  s.push(R(304, 345, 1394, 156, "#f6f8f9"), T(320, 374, "CHANGES", 13, "#4a5358", 600), T(1009, 374, "IMPACT", 13, "#4a5358", 600));
+  s.push(
+    R(304, 345, 1394, 156, "#f6f8f9"),
+    T(320, 374, "CHANGES", 13, "#4a5358", 600),
+    T(1009, 374, "IMPACT", 13, "#4a5358", 600),
+  );
   const dark = lv.sar.filter((x) => x.darkCandidate).length;
   const ais = lv.sar.filter((x) => x.aisMatch).length;
-  s.push(...kpi(321, 394, 334, 86, "#e4e4e4", "Detections screened", String(lv.sar.length)));
+  s.push(
+    ...kpi(
+      321,
+      394,
+      334,
+      86,
+      "#e4e4e4",
+      "Detections screened",
+      String(lv.sar.length),
+    ),
+  );
   s.push(...kpi(655, 394, 333, 86, "#e4e4e4", "Dark candidates", String(dark)));
-  s.push(...kpi(1009, 394, 333, 86, "#c0feb2", "AIS-matched hulls", String(ais)));
-  s.push(...kpi(1342, 394, 333, 86, "#b4d6fc", "Registry matches inside", String(hzSanc(lv).length)));
+  s.push(
+    ...kpi(1009, 394, 333, 86, "#c0feb2", "AIS-matched hulls", String(ais)),
+  );
+  s.push(
+    ...kpi(
+      1342,
+      394,
+      333,
+      86,
+      "#b4d6fc",
+      "Registry matches inside",
+      String(hzSanc(lv).length),
+    ),
+  );
   s.push(R(304, 520, 1394, 363, "#fff", "#e6eaec"));
-  s.push(T(354, 690, "Detections", 15, "#4a5358", 400, "transform:translate(-50%,-52%) rotate(-90deg)"));
+  s.push(
+    T(
+      354,
+      690,
+      "Detections",
+      15,
+      "#4a5358",
+      400,
+      "transform:translate(-50%,-52%) rotate(-90deg)",
+    ),
+  );
   const [xa, y0, y1] = [406, 558, 794];
   s.push(L(xa, y0, xa, y1, "#4a5358"), L(xa, y1, 1658, y1, "#4a5358"));
   const n = { low: 0, medium: 0, high: 0 };
   for (const x of lv.sar) n[conf(x)]++;
   // the copy's axis is 0..8 by 2; more hulls widen it, never clip a bar
-  const ymax = Math.max(8, Math.ceil(Math.max(n.low, n.medium, n.high) / 2) * 2);
+  const ymax = Math.max(
+    8,
+    Math.ceil(Math.max(n.low, n.medium, n.high) / 2) * 2,
+  );
   for (let v = 0; v <= ymax; v += 2) {
     const yy = y1 - ((y1 - y0) * v) / ymax;
-    s.push(T(xa - 12, yy, String(v), 12.5, "#4a5358", 400, "", "", "r"), L(xa - 4, yy, xa, yy, "#4a5358"));
+    s.push(
+      T(xa - 12, yy, String(v), 12.5, "#4a5358", 400, "", "", "r"),
+      L(xa - 4, yy, xa, yy, "#4a5358"),
+    );
     if (v) s.push(L(xa, yy, 1658, yy, "#dfe4e7"));
   }
   (
@@ -1141,8 +1624,12 @@ function a16(lv: Live, onClose: () => void): N[] {
     ] as const
   ).forEach(([lab, v, col, cx]) => {
     const hh = ((y1 - y0) * v) / ymax;
-    s.push(R(cx - 145, y1 - hh, 290, hh, col), T(cx, y1 - hh - 10, String(v), 12.5, "#2a2f33", 400, "", "", "c"));
-    if (v) s.push(T(cx, y1 - hh / 2, String(v), 12.5, "#fff", 400, "", "", "c"));
+    s.push(
+      R(cx - 145, y1 - hh, 290, hh, col),
+      T(cx, y1 - hh - 10, String(v), 12.5, "#2a2f33", 400, "", "", "c"),
+    );
+    if (v)
+      s.push(T(cx, y1 - hh / 2, String(v), 12.5, "#fff", 400, "", "", "c"));
     s.push(T(cx, y1 + 15, lab, 13, "#4a5358", 400, "", "", "c"));
   });
   s.push(T(1031, 835, "Class confidence", 15.5, "#2a2f33", 400, "", "", "c"));
@@ -1150,7 +1637,10 @@ function a16(lv: Live, onClose: () => void): N[] {
   return s;
 }
 
-function a17(turn: { q: string; r: Reply | null } | null, onEdit: () => void): N[] {
+function a17(
+  turn: { q: string; r: Reply | null } | null,
+  onEdit: () => void,
+): N[] {
   const s: N[] = [R(304, 209, 1545, 466, "#fff", "#e6eaec")];
   s.push(
     R(1056, 254, 15, 36, "#f1f3f5", "#dfe3e6", "border-radius:3px"),
@@ -1164,8 +1654,14 @@ function a17(turn: { q: string; r: Reply | null } | null, onEdit: () => void): N
   );
   if (turn) {
     const ln = wrap(turn.q, 82).slice(0, 2);
-    s.push(...avatar(517, 732, "FH", true, true), ...bubble(502, 758, 722, bubbleH(ln.length), ln, 779));
-    s.push(...assistant(517, 838 + 21 * (ln.length - 1), "AIP Assistant"), ...reply(502, 864 + 21 * (ln.length - 1), turn.r));
+    s.push(
+      ...avatar(517, 732, "FH", true, true),
+      ...bubble(502, 758, 722, bubbleH(ln.length), ln, 779),
+    );
+    s.push(
+      ...assistant(517, 838 + 21 * (ln.length - 1), "AIP Assistant"),
+      ...reply(502, 864 + 21 * (ln.length - 1), turn.r),
+    );
   }
   s.push(Hit(990, 386, 172, 34, "Edit parameters", onEdit));
   return s;
@@ -1191,9 +1687,18 @@ function a18(lv: Live, sel: number, onPick: (i: number) => void): N[] {
   s.push(
     I("fullscreen", 1825, 257, 20, "#38507e"),
     T(331, 285, "Hull-length scenario", 17, "#2f6fd0", 700),
-    T(1280, 285, "Impact of a minimum hull length on the list", 16.5, "#2e3438"),
+    T(
+      1280,
+      285,
+      "Impact of a minimum hull length on the list",
+      16.5,
+      "#2e3438",
+    ),
   );
-  s.push(R(1680, 268, 168, 34, "#fff"), T(1688, 285, "Results Generated", 15.5, "#2e3438"));
+  s.push(
+    R(1680, 268, 168, 34, "#fff"),
+    T(1688, 285, "Results Generated", 15.5, "#2e3438"),
+  );
   THS.forEach((thv, i) => {
     const { n, pct } = keepAtLeast(lv.sar, thv);
     const y = [356, 520, 677][i]!;
@@ -1202,13 +1707,30 @@ function a18(lv: Live, sel: number, onPick: (i: number) => void): N[] {
     if (on) s.push(R(307, y - 8, 1538, 6, "#4676da"));
     const cy = y + 58;
     s.push(
-      R(330, y + 20, 191, 76, on ? "#96cafc" : "#d4d4d4", on ? "#7fb4ea" : "#a9b3bb"),
+      R(
+        330,
+        y + 20,
+        191,
+        76,
+        on ? "#96cafc" : "#d4d4d4",
+        on ? "#7fb4ea" : "#a9b3bb",
+      ),
       T(352, cy, `≥ ${thv} m`, 28, on ? "#2f6fd0" : "#2a2f33", 400),
       I("arrow-up", 470, cy, 22, on ? "#2f6fd0" : "#2a2f33"),
     );
-    s.push(R(684, y + 20, 569, 76, "#fff", "#dfe4e7"), T(704, cy, `${pct}%`, 28, "#2a2f33"), T(776, cy, "Detections kept", 15, "#4a5358", 600));
-    s.push(R(1253, y + 20, 569, 76, "#fff", "#dfe4e7"), T(1274, cy, String(n), 28, "#2a2f33"), T(1330, cy, "Dark candidates left", 15, "#4a5358", 600));
-    s.push(Hit(307, y, 1538, 117, `Run the ${thv} m threshold`, () => onPick(i)));
+    s.push(
+      R(684, y + 20, 569, 76, "#fff", "#dfe4e7"),
+      T(704, cy, `${pct}%`, 28, "#2a2f33"),
+      T(776, cy, "Detections kept", 15, "#4a5358", 600),
+    );
+    s.push(
+      R(1253, y + 20, 569, 76, "#fff", "#dfe4e7"),
+      T(1274, cy, String(n), 28, "#2a2f33"),
+      T(1330, cy, "Dark candidates left", 15, "#4a5358", 600),
+    );
+    s.push(
+      Hit(307, y, 1538, 117, `Run the ${thv} m threshold`, () => onPick(i)),
+    );
   });
   return s;
 }
@@ -1225,7 +1747,15 @@ function resultsHead(lv: Live, th: number): N[] {
     R(583, 276, 322, 34, "#dfe3e8", "", "border-radius:2px"),
     T(591, 293, "Detections kept above the threshold", 15.5, "#2a2f33", 700),
     R(1499, 276, 350, 34, "#dfe3e8"),
-    T(1507, 293, <>Dark candidates kept <b>{lv.sarRes ? keepAtLeast(lv.sar, th).n : ""}</b></>, 15.5, "#2a2f33"),
+    T(
+      1507,
+      293,
+      <>
+        Dark candidates kept <b>{lv.sarRes ? keepAtLeast(lv.sar, th).n : ""}</b>
+      </>,
+      15.5,
+      "#2a2f33",
+    ),
     R(431, 352, 1418, 531, "#fff", "#e6eaec"),
     R(431, 352, 1418, 63, "#f6f8f9"),
     L(431, 415, 1849, 415, "#e0e5e8"),
@@ -1235,11 +1765,41 @@ function resultsHead(lv: Live, th: number): N[] {
 function a19(lv: Live, th: number): N[] {
   const s = resultsHead(lv, th);
   const xs = [446, 738, 1029, 1321, 1612];
-  for (let i = 0; i < 5; i++) s.push(R(xs[i]!, 378, [66, 117, 92, 197, 91][i]!, 11, "#dde0e3", "", "border-radius:2px"));
-  const rows = [[184, 98, 170, 113, 142], [170, 112, 142, 184, 99], [142, 99, 184, 99, 113], [99, 170, 113, 142, 184], [113, 141, 184, 99, 170], [184, 99, 142, 113, 184], [170, 112, 99, 184, 99]];
+  for (let i = 0; i < 5; i++)
+    s.push(
+      R(
+        xs[i]!,
+        378,
+        [66, 117, 92, 197, 91][i]!,
+        11,
+        "#dde0e3",
+        "",
+        "border-radius:2px",
+      ),
+    );
+  const rows = [
+    [184, 98, 170, 113, 142],
+    [170, 112, 142, 184, 99],
+    [142, 99, 184, 99, 113],
+    [99, 170, 113, 142, 184],
+    [113, 141, 184, 99, 170],
+    [184, 99, 142, 113, 184],
+    [170, 112, 99, 184, 99],
+  ];
   [448, 519, 589, 659, 728, 798, 868].forEach((y, r) => {
     s.push(L(431, y + 35, 1849, y + 35, "#e6eaec"));
-    for (let c = 0; c < 5; c++) s.push(R(xs[c]! + 7, y - 15, rows[r]![c]!, 30, "#e4e6e8", "", "border-radius:3px"));
+    for (let c = 0; c < 5; c++)
+      s.push(
+        R(
+          xs[c]! + 7,
+          y - 15,
+          rows[r]![c]!,
+          30,
+          "#e4e6e8",
+          "",
+          "border-radius:3px",
+        ),
+      );
   });
   return s;
 }
@@ -1247,8 +1807,29 @@ function a19(lv: Live, th: number): N[] {
 function a20(lv: Live, th: number, onBack: () => void): N[] {
   const s = resultsHead(lv, th);
   const xs = [454, 796, 964, 1143, 1319, 1487, 1736];
-  const hdr = [["Title"], ["Acquired"], ["Class", "candidate"], ["Class", "confidence"], ["Length (m)"], ["Source"], ["Heading"]];
-  xs.forEach((x, j) => hdr[j]!.forEach((t, i) => s.push(T(x, 383 + (i - (hdr[j]!.length - 1) / 2) * 16, t, 13.5, "#4a5358", 700))));
+  const hdr = [
+    ["Title"],
+    ["Acquired"],
+    ["Class", "candidate"],
+    ["Class", "confidence"],
+    ["Length (m)"],
+    ["Source"],
+    ["Heading"],
+  ];
+  xs.forEach((x, j) =>
+    hdr[j]!.forEach((t, i) =>
+      s.push(
+        T(
+          x,
+          383 + (i - (hdr[j]!.length - 1) / 2) * 16,
+          t,
+          13.5,
+          "#4a5358",
+          700,
+        ),
+      ),
+    ),
+  );
   s.push(I("sort-desc", 1440, 383, 15, "#4a5358"));
   let y = 416;
   byLen(lv)
@@ -1257,53 +1838,186 @@ function a20(lv: Live, th: number, onBack: () => void): N[] {
     .forEach((sr, i) => {
       const h = 70;
       const yc = y + h / 2;
-      if (i === 2) s.push(R(431, y, 1418, h, "#f0f8fe"), L(431, y, 1849, y, "#a9c4e8"), L(431, y + h, 1849, y + h, "#a9c4e8"));
+      if (i === 2)
+        s.push(
+          R(431, y, 1418, h, "#f0f8fe"),
+          L(431, y, 1849, y, "#a9c4e8"),
+          L(431, y + h, 1849, y + h, "#a9c4e8"),
+        );
       else s.push(L(431, y + h, 1849, y + h, "#e6eaec"));
       const [bg, fg, lab] = CONF_TINT[conf(sr)]!;
-      s.push(R(1129, y + 1, 174, h - 1, bg), R(454, yc - 12, 28, 24, "#3f73d6", "", "border-radius:2px"), I("th", 468, yc, 15, "#fff"));
-      s.push(T(492, yc - 11, sarTitle(sr) + " (aoi hormuz)", 16), T(492, yc + 11, `${sr.lengthM.toFixed(0)} x ${sr.widthM.toFixed(0)} m hull, Sentinel-1`, 16), T(796, yc, sarDate(lv), 16), T(964, yc, topCls(sr), 16));
-      s.push(T(1143, yc, lab, 16, fg), T(1319, yc, sr.lengthM.toFixed(0), 16), T(1487, yc, "Sentinel-1", 16), T(1736, yc, `${sr.headingDeg.toFixed(0)}°`, 16));
+      s.push(
+        R(1129, y + 1, 174, h - 1, bg),
+        R(454, yc - 12, 28, 24, "#3f73d6", "", "border-radius:2px"),
+        I("th", 468, yc, 15, "#fff"),
+      );
+      s.push(
+        T(492, yc - 11, sarTitle(sr) + " (aoi hormuz)", 16),
+        T(
+          492,
+          yc + 11,
+          `${sr.lengthM.toFixed(0)} x ${sr.widthM.toFixed(0)} m hull, Sentinel-1`,
+          16,
+        ),
+        T(796, yc, sarDate(lv), 16),
+        T(964, yc, topCls(sr), 16),
+      );
+      s.push(
+        T(1143, yc, lab, 16, fg),
+        T(1319, yc, sr.lengthM.toFixed(0), 16),
+        T(1487, yc, "Sentinel-1", 16),
+        T(1736, yc, `${sr.headingDeg.toFixed(0)}°`, 16),
+      );
       y += h;
     });
   s.push(Hit(304, 233, 104, 667, "Back to the scenario rows", onBack));
   return s;
 }
 
-function metricRow(x: number, y: number, col: string, glyph: string, bold: string, text: string): N[] {
+function metricRow(
+  x: number,
+  y: number,
+  col: string,
+  glyph: string,
+  bold: string,
+  text: string,
+): N[] {
   return [
     I("git-commit", x, y, 17, "#4a5358"),
     R(x + 31, y - 10, 20, 20, col, "", "border-radius:2px"),
     I(glyph, x + 41, y, 12, "#fff"),
-    T(x + 56, y, <><b>{bold}</b> {text}</>, 15.5, "#2a2f33"),
+    T(
+      x + 56,
+      y,
+      <>
+        <b>{bold}</b> {text}
+      </>,
+      15.5,
+      "#2a2f33",
+    ),
   ];
 }
 
 function a21(lv: Live, name: string, th: number, onClose: () => void): N[] {
-  const s: N[] = [R(304, 233, 716, 667, "#f2f6f8"), R(282, 98, 738, 916, "rgba(30,34,38,.34)")];
-  s.push(R(1020, 98, 852, 916, "#f2f6f8", "", "border-left:1px solid #d9dfe2"), R(1020, 98, 852, 58, "#fff"), L(1020, 156, 1872, 156, "#e3e8ea"));
-  s.push(T(1039, 127, `proposal-changes-${name.slice(11)}`, 20, "#2a2f33", 600), I("edit", 1460, 125, 17, "#4a5358"));
-  s.push(R(1683, 108, 168, 35, "#2252a0", "", "border-radius:2px"), T(1767, 126, "Propose 2 changes", 15.5, "#fff", 400, "", "", "c"));
+  const s: N[] = [
+    R(304, 233, 716, 667, "#f2f6f8"),
+    R(282, 98, 738, 916, "rgba(30,34,38,.34)"),
+  ];
+  s.push(
+    R(1020, 98, 852, 916, "#f2f6f8", "", "border-left:1px solid #d9dfe2"),
+    R(1020, 98, 852, 58, "#fff"),
+    L(1020, 156, 1872, 156, "#e3e8ea"),
+  );
+  s.push(
+    T(1039, 127, `proposal-changes-${name.slice(11)}`, 20, "#2a2f33", 600),
+    I("edit", 1460, 125, 17, "#4a5358"),
+  );
+  s.push(
+    R(1683, 108, 168, 35, "#2252a0", "", "border-radius:2px"),
+    T(1767, 126, "Propose 2 changes", 15.5, "#fff", 400, "", "", "c"),
+  );
   s.push(R(1057, 180, 780, 276, "#fff", "#e3e8ea"));
-  s.push(R(1070, 192, 32, 28, "#e6e8ea", "", "border-radius:50%"), T(1086, 206, "VL", 11, "#59646a", 700, "", "", "c"), T(1114, 206, `Simulation 1: ${name}`, 15.5, "#2a2f33", 700));
-  const owner = <>Owner: <span style={{ color: "#38507e" }}>Local principal</span></>;
-  s.push(T(1118, 241, "Model: SAR dark-vessel screen", 15.5, "#4a5358"), T(1118, 268, owner, 15.5, "#4a5358"), L(1075, 296, 1818, 296, "#e3e8ea"));
+  s.push(
+    R(1070, 192, 32, 28, "#e6e8ea", "", "border-radius:50%"),
+    T(1086, 206, "VL", 11, "#59646a", 700, "", "", "c"),
+    T(1114, 206, `Simulation 1: ${name}`, 15.5, "#2a2f33", 700),
+  );
+  const owner = (
+    <>
+      Owner: <span style={{ color: "#38507e" }}>Local principal</span>
+    </>
+  );
+  s.push(
+    T(1118, 241, "Model: SAR dark-vessel screen", 15.5, "#4a5358"),
+    T(1118, 268, owner, 15.5, "#4a5358"),
+    L(1075, 296, 1818, 296, "#e3e8ea"),
+  );
   const dark = lv.sar.filter((x) => x.darkCandidate).length;
   const hs = hzSanc(lv).length;
-  s.push(...metricRow(1096, 328, "#8cae36", "dot", String(lv.sar.length), "Detections screened (total)"));
-  s.push(...metricRow(1096, 373, "#4aa38a", "th", String(dark), "Dark candidates"));
-  s.push(...metricRow(1096, 418, "#a22856", "shield", String(hs), "Registry matches inside the area"));
+  s.push(
+    ...metricRow(
+      1096,
+      328,
+      "#8cae36",
+      "dot",
+      String(lv.sar.length),
+      "Detections screened (total)",
+    ),
+  );
+  s.push(
+    ...metricRow(1096, 373, "#4aa38a", "th", String(dark), "Dark candidates"),
+  );
+  s.push(
+    ...metricRow(
+      1096,
+      418,
+      "#a22856",
+      "shield",
+      String(hs),
+      "Registry matches inside the area",
+    ),
+  );
   s.push(R(1057, 475, 780, 310, "#fff", "#e3e8ea"));
-  s.push(R(1070, 487, 32, 28, "#e6e8ea", "", "border-radius:50%"), T(1086, 501, "VL", 11, "#59646a", 700, "", "", "c"), T(1114, 501, `Simulation 2: ${name}`, 15.5, "#2a2f33", 700));
-  s.push(T(1118, 537, "Model: SAR dark-vessel screen", 15.5, "#4a5358"), T(1118, 564, owner, 15.5, "#4a5358"));
-  s.push(L(1447, 520, 1447, 580, "#e3e8ea"), T(1460, 537, "Model: SAR hull-length threshold", 15.5, "#4a5358"), T(1460, 564, owner, 15.5, "#4a5358"), L(1075, 592, 1818, 592, "#e3e8ea"));
+  s.push(
+    R(1070, 487, 32, 28, "#e6e8ea", "", "border-radius:50%"),
+    T(1086, 501, "VL", 11, "#59646a", 700, "", "", "c"),
+    T(1114, 501, `Simulation 2: ${name}`, 15.5, "#2a2f33", 700),
+  );
+  s.push(
+    T(1118, 537, "Model: SAR dark-vessel screen", 15.5, "#4a5358"),
+    T(1118, 564, owner, 15.5, "#4a5358"),
+  );
+  s.push(
+    L(1447, 520, 1447, 580, "#e3e8ea"),
+    T(1460, 537, "Model: SAR hull-length threshold", 15.5, "#4a5358"),
+    T(1460, 564, owner, 15.5, "#4a5358"),
+    L(1075, 592, 1818, 592, "#e3e8ea"),
+  );
   const { n, pct } = keepAtLeast(lv.sar, th);
-  s.push(...metricRow(1096, 624, "#8cae36", "dot", String(n), `Detections kept at ${th} m or more`));
-  s.push(...metricRow(1096, 669, "#4aa38a", "th", `${pct}%`, "Of detections kept"));
-  s.push(...metricRow(1096, 714, "#4aa38a", "th", "n/a", "Hulls reviewed (no review log)"));
-  s.push(...metricRow(1096, 759, "#a22856", "shield", "0", "Objects changed in the ontology"));
+  s.push(
+    ...metricRow(
+      1096,
+      624,
+      "#8cae36",
+      "dot",
+      String(n),
+      `Detections kept at ${th} m or more`,
+    ),
+  );
+  s.push(
+    ...metricRow(1096, 669, "#4aa38a", "th", `${pct}%`, "Of detections kept"),
+  );
+  s.push(
+    ...metricRow(
+      1096,
+      714,
+      "#4aa38a",
+      "th",
+      "n/a",
+      "Hulls reviewed (no review log)",
+    ),
+  );
+  s.push(
+    ...metricRow(
+      1096,
+      759,
+      "#a22856",
+      "shield",
+      "0",
+      "Objects changed in the ontology",
+    ),
+  );
   s.push(
     Hit(282, 98, 738, 916, "Close the proposal", onClose),
-    Hit(1683, 108, 168, 35, "Propose 2 changes", undefined, "A scenario run changes no ontology object, so there is nothing to propose on this box"),
+    Hit(
+      1683,
+      108,
+      168,
+      35,
+      "Propose 2 changes",
+      undefined,
+      "A scenario run changes no ontology object, so there is nothing to propose on this box",
+    ),
   );
   return s;
 }
@@ -1317,7 +2031,8 @@ export function routeOf(q: string): Route {
   return "none";
 }
 
-type Stage = "table" | "map" | "analysis" | "paused" | "scen" | "results" | "proposal";
+type Stage =
+  "table" | "map" | "analysis" | "paused" | "scen" | "results" | "proposal";
 
 export function Terminal({
   onFoundry,
@@ -1329,10 +2044,20 @@ export function Terminal({
   /** Investigations tab: the investigation workspace (features/pdf). */
   onInvestigate?: () => void;
 }): JSX.Element {
-  const [turn, setTurn] = useState<{ q: string; route: Route; r: Reply | null } | null>(null);
+  const [turn, setTurn] = useState<{
+    q: string;
+    route: Route;
+    r: Reply | null;
+  } | null>(null);
   const [panel, setPanel] = useState<null | "handoff" | "graph">(null);
-  const [sim, setSim] = useState<{ name: string; stage: Stage; th: number } | null>(null);
-  const [turn2, setTurn2] = useState<{ q: string; r: Reply | null } | null>(null);
+  const [sim, setSim] = useState<{
+    name: string;
+    stage: Stage;
+    th: number;
+  } | null>(null);
+  const [turn2, setTurn2] = useState<{ q: string; r: Reply | null } | null>(
+    null,
+  );
   const [sarNonce, setSarNonce] = useState(0);
   const lv = useLive(sarNonce);
   const hist = useJson<{ tracks: HistTrack[] }>(
@@ -1360,14 +2085,22 @@ export function Terminal({
       void askModel(
         lvRef.current,
         q,
-        first ? { kind: "vessel", id: first.id, props: { lengthM: first.lengthM, widthM: first.widthM } } : undefined,
+        first
+          ? {
+              kind: "vessel",
+              id: first.id,
+              props: { lengthM: first.lengthM, widthM: first.widthM },
+            }
+          : undefined,
       ).then((r) => setTurn2((t) => (t && t.q === q ? { ...t, r } : t)));
       return;
     }
     const route = routeOf(q);
     setTurn({ q, route, r: null });
     if (route === "none")
-      void askModel(lvRef.current, q).then((r) => setTurn((t) => (t && t.q === q ? { ...t, r } : t)));
+      void askModel(lvRef.current, q).then((r) =>
+        setTurn((t) => (t && t.q === q ? { ...t, r } : t)),
+      );
   };
 
   const hits: ShellHits = {
@@ -1392,10 +2125,23 @@ export function Terminal({
     const failed = lv.sarRes !== null && !lv.sarRes.ok;
     switch (sim.stage) {
       case "table":
-        s.push(...(loading ? a13(sim.name) : failed ? sarFail(lv) : a14(lv, () => go("map"))));
+        s.push(
+          ...(loading
+            ? a13(sim.name)
+            : failed
+              ? sarFail(lv)
+              : a14(lv, () => go("map"))),
+        );
         break;
       case "map":
-        s.push(...a15(lv, hist, () => go("table"), () => go("analysis")));
+        s.push(
+          ...a15(
+            lv,
+            hist,
+            () => go("table"),
+            () => go("analysis"),
+          ),
+        );
         break;
       case "analysis":
         s.push(...a16(lv, () => go("paused")));
@@ -1404,13 +2150,17 @@ export function Terminal({
         s.push(...a17(turn2, () => go("scen")));
         break;
       case "scen":
-        s.push(...a18(lv, THS.indexOf(sim.th), (i) => {
-          setSim({ ...sim, th: THS[i]!, stage: "results" });
-          setSarNonce((n) => n + 1);
-        }));
+        s.push(
+          ...a18(lv, THS.indexOf(sim.th), (i) => {
+            setSim({ ...sim, th: THS[i]!, stage: "results" });
+            setSarNonce((n) => n + 1);
+          }),
+        );
         break;
       case "results":
-        s.push(...(loading ? a19(lv, sim.th) : a20(lv, sim.th, () => go("scen"))));
+        s.push(
+          ...(loading ? a19(lv, sim.th) : a20(lv, sim.th, () => go("scen"))),
+        );
         break;
       case "proposal":
         s.push(...a21(lv, sim.name, sim.th, () => go("results")));
@@ -1420,16 +2170,44 @@ export function Terminal({
     s.push(...aipShell(true), ...shellHits(hits));
     const lines = turn ? wrap(turn.q) : [];
     if (!turn) s.push(contextLine(lv));
-    else if (turn.route === "a3") s.push(...a3Body(lv, lines, panel !== null), Hit(1436, 298, 182, 30, "Hand-off Inspector", () => setPanel("handoff")));
-    else if (turn.route === "a6") s.push(...a6Body(lv, lines, () => setPanel("handoff")), ...(panel ? [R(282, 98, 1176, 916, "rgba(30,34,38,.34)")] : []));
+    else if (turn.route === "a3")
+      s.push(
+        ...a3Body(lv, lines, panel !== null),
+        Hit(1436, 298, 182, 30, "Hand-off Inspector", () =>
+          setPanel("handoff"),
+        ),
+      );
+    else if (turn.route === "a6")
+      s.push(
+        ...a6Body(lv, lines, () => setPanel("handoff")),
+        ...(panel ? [R(282, 98, 1176, 916, "rgba(30,34,38,.34)")] : []),
+      );
     else {
       const ln = lines.slice(0, 3);
       const dy = 21 * (ln.length - 2);
-      s.push(contextLine(lv), ...avatar(517, 253), ...bubble(502, 280, 634, bubbleH(ln.length), ln, 301, 21));
+      s.push(
+        contextLine(lv),
+        ...avatar(517, 253),
+        ...bubble(502, 280, 634, bubbleH(ln.length), ln, 301, 21),
+      );
       s.push(...assistant(517, 381 + dy), ...reply(502, 406 + dy, turn.r));
     }
-    if (panel === "handoff") s.push(...handoffPanel(lv, () => setPanel("graph"), () => setPanel(null)));
-    if (panel === "graph") s.push(...graphPanel(turn?.q ?? "", () => setPanel("handoff"), () => setPanel(null)));
+    if (panel === "handoff")
+      s.push(
+        ...handoffPanel(
+          lv,
+          () => setPanel("graph"),
+          () => setPanel(null),
+        ),
+      );
+    if (panel === "graph")
+      s.push(
+        ...graphPanel(
+          turn?.q ?? "",
+          () => setPanel("handoff"),
+          () => setPanel(null),
+        ),
+      );
   }
   // two fixed children, so the frame's changing element count never remounts
   // the composer (and its typed text)

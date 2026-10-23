@@ -10,5 +10,8 @@ import "../../../index.css";
 import { EuropaApp } from "./EuropaApp.js";
 import type { Page } from "./SatMap.js";
 
-const page = (new URLSearchParams(location.search).get("page") ?? "gaia") as Page;
-createRoot(document.getElementById("eu-root")!).render(<EuropaApp viewer={null} initial={page} />);
+const page = (new URLSearchParams(location.search).get("page") ??
+  "gaia") as Page;
+createRoot(document.getElementById("eu-root")!).render(
+  <EuropaApp viewer={null} initial={page} />,
+);

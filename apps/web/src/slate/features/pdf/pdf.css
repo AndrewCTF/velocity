@@ -87,9 +87,40 @@
 }
 
 /* gotham/pdf/gotham-b.html lines 19-22 (the B page's chip and paragraph) */
-.sl-pdf .chip { display:inline-flex; align-items:center; gap:4px; height:19px; padding:0 6px 0 5px; background:#eef4fb; border:1px solid #d5e3f2; border-radius:2px; color:#2a72d4; vertical-align:middle; line-height:17px; }
-.sl-pdf .chip svg { width:12px; height:12px; flex:none; }
-.sl-pdf .para { color:#1c2127; font-size:13.2px; line-height:20px; letter-spacing:.005em; }
-.sl-pdf .para b.h { display:block; font-size:18px; font-weight:700; line-height:22px; margin:0 0 9px; letter-spacing:0; }
+.sl-pdf .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 19px;
+  padding: 0 6px 0 5px;
+  background: #eef4fb;
+  border: 1px solid #d5e3f2;
+  border-radius: 2px;
+  color: #2a72d4;
+  vertical-align: middle;
+  line-height: 17px;
+}
+.sl-pdf .chip svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.sl-pdf .para {
+  color: #1c2127;
+  font-size: 13.2px;
+  line-height: 20px;
+  letter-spacing: 0.005em;
+}
+.sl-pdf .para b.h {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 22px;
+  margin: 0 0 9px;
+  letter-spacing: 0;
+}
 /* App-only: a chip that opens its object is a button drawn as the chip */
-.sl-pdf button.chip { font: inherit; letter-spacing: inherit; }
+.sl-pdf button.chip {
+  font: inherit;
+  letter-spacing: inherit;
+}

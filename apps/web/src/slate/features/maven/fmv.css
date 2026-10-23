@@ -63,21 +63,14 @@
 .mfv .top .logo {
   width: 18px;
   height: 18px;
-  border-radius: 50%;
-  border: 2.2px solid #f3f5f5;
-  border-top-color: transparent;
-  position: relative;
+  display: grid;
+  place-items: center;
   flex: none;
+  color: #f3f5f5;
 }
-.mfv .top .logo::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #f3f5f5;
+.mfv .top .logo svg {
+  width: 16px;
+  height: 16px;
 }
 .mfv .top .pill {
   width: 37px;

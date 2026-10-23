@@ -29,7 +29,8 @@ import {
   type SweepAoi,
   type V3,
 } from "./data.js";
-import equirect from "./fb-equirect.jpg";
+// shortcut: reference-derived image kept out of the repo; the page draws without it. Ship a licensed asset to restore it.
+const equirect: string = "";
 
 const VW = 648;
 const VH = 430;
@@ -45,13 +46,32 @@ interface View {
   haze: number;
 }
 const VIEWS: Record<"globe" | "ring", View> = {
-  globe: { R: 470, cx: 483, cy: 268, tx: 323, ty: 216, tint: [90, 96, 130], trackW: 1, haze: 0 },
-  ring: { R: 900, cx: 483, cy: 268, tx: 191, ty: 219, tint: [120, 104, 140], trackW: 2, haze: 0.45 },
+  globe: {
+    R: 470,
+    cx: 483,
+    cy: 268,
+    tx: 323,
+    ty: 216,
+    tint: [90, 96, 130],
+    trackW: 1,
+    haze: 0,
+  },
+  ring: {
+    R: 900,
+    cx: 483,
+    cy: 268,
+    tx: 191,
+    ty: 219,
+    tint: [120, 104, 140],
+    trackW: 2,
+    haze: 0.45,
+  },
 };
 const centreCache = new Map<string, [number, number]>();
 const centreOf = (v: View): [number, number] => {
   const k = `${v.R},${v.tx},${v.ty}`;
-  if (!centreCache.has(k)) centreCache.set(k, solveCentre(v.R, v.cx, v.cy, v.tx, v.ty));
+  if (!centreCache.has(k))
+    centreCache.set(k, solveCentre(v.R, v.cx, v.cy, v.tx, v.ty));
   return centreCache.get(k)!;
 };
 const surf = (P: V3): V3 => {
@@ -59,7 +79,15 @@ const surf = (P: V3): V3 => {
   return [(P[0] / n) * RE, (P[1] / n) * RE, (P[2] / n) * RE];
 };
 const operatorOf = (name: string): string =>
-  name.includes("CAPELLA") ? "Capella Space" : name.includes("ICEYE") ? "ICEYE" : name.includes("UMBRA") ? "Umbra" : name.includes("SENTINEL") ? "ESA Copernicus" : "SAR";
+  name.includes("CAPELLA")
+    ? "Capella Space"
+    : name.includes("ICEYE")
+      ? "ICEYE"
+      : name.includes("UMBRA")
+        ? "Umbra"
+        : name.includes("SENTINEL")
+          ? "ESA Copernicus"
+          : "SAR";
 
 let plate: Promise<ImageData> | null = null;
 const loadPlate = (): Promise<ImageData> =>
@@ -74,6 +102,13 @@ const loadPlate = (): Promise<ImageData> =>
       res(g.getImageData(0, 0, im.width, im.height));
     };
     im.onerror = rej;
+    if (!equirect) {
+      // No texture shipped: a flat dark-ocean plate, so the globe, graticule
+      // and markers still draw.
+      const px = [14, 30, 48, 255];
+      res(new ImageData(new Uint8ClampedArray([...px, ...px]), 2, 1));
+      return;
+    }
     im.src = equirect;
   }));
 
@@ -84,7 +119,17 @@ export interface Mark {
 }
 
 /** render_view() of _eu_data.py: plate, graticule, tracks, ring, sightline, markers. */
-function GlobeView({ state, plan, now, marks }: { state: "globe" | "ring"; plan: Plan | null; now: number; marks: Mark[] }): JSX.Element {
+function GlobeView({
+  state,
+  plan,
+  now,
+  marks,
+}: {
+  state: "globe" | "ring";
+  plan: Plan | null;
+  now: number;
+  marks: Mark[];
+}): JSX.Element {
   const ref = useRef<HTMLCanvasElement>(null);
   const v = VIEWS[state];
   useEffect(() => {
@@ -96,7 +141,11 @@ function GlobeView({ state, plan, now, marks }: { state: "globe" | "ring"; plan:
       const b = orthoBasis(...centreOf(v));
       const [d0, l0] = subsolar(now);
       const r = Math.PI / 180;
-      const sun: V3 = [Math.cos(d0 * r) * Math.cos(l0 * r), Math.cos(d0 * r) * Math.sin(l0 * r), Math.sin(d0 * r)];
+      const sun: V3 = [
+        Math.cos(d0 * r) * Math.cos(l0 * r),
+        Math.cos(d0 * r) * Math.sin(l0 * r),
+        Math.sin(d0 * r),
+      ];
       const img = g.createImageData(VW, VH);
       paintGlobe(eq, img.data, VW, VH, b, v.R, v.cx, v.cy, sun, v.tint, v.haze);
       g.putImageData(img, 0, 0);
@@ -109,13 +158,29 @@ function GlobeView({ state, plan, now, marks }: { state: "globe" | "ring"; plan:
           g.stroke();
         }
       };
-      for (let lat = -75; lat < 90; lat += 10) line(Array.from({ length: 181 }, (_, i) => llaEcef(lat, -180 + i * 2)), "rgba(230,238,246,.11)", 1);
-      for (let lon = -180; lon < 180; lon += 10) line(Array.from({ length: 91 }, (_, i) => llaEcef(-90 + i * 2, lon)), "rgba(230,238,246,.11)", 1);
+      for (let lat = -75; lat < 90; lat += 10)
+        line(
+          Array.from({ length: 181 }, (_, i) => llaEcef(lat, -180 + i * 2)),
+          "rgba(230,238,246,.11)",
+          1,
+        );
+      for (let lon = -180; lon < 180; lon += 10)
+        line(
+          Array.from({ length: 91 }, (_, i) => llaEcef(-90 + i * 2, lon)),
+          "rgba(230,238,246,.11)",
+          1,
+        );
       const best = plan?.best;
       if (best) {
-        const tt2 = Array.from({ length: 260 }, (_, i) => best.t0 - 3000 + i * 30);
+        const tt2 = Array.from(
+          { length: 260 },
+          (_, i) => best.t0 - 3000 + i * 30,
+        );
         const per = periodS(best.tle);
-        const track = (ts: number[]): V3[] => satEcef(best.tle, ts).filter((p): p is V3 => !!p).map(surf);
+        const track = (ts: number[]): V3[] =>
+          satEcef(best.tle, ts)
+            .filter((p): p is V3 => !!p)
+            .map(surf);
         line(track(tt2), "rgba(236,150,60,.92)", v.trackW);
         // the next revolution, SGP4-propagated one orbital period later
         line(track(tt2.map((t) => t + per)), "rgba(236,150,60,.43)", 1);
@@ -126,14 +191,34 @@ function GlobeView({ state, plan, now, marks }: { state: "globe" | "ring"; plan:
       for (let k = 0; k < 360; k += 5) {
         const t = (k * Math.PI) / 180;
         const at = (a: number): V3 =>
-          [0, 1, 2].map((i) => RE * (Math.cos(a * r) * cen[i]! + Math.sin(a * r) * (Math.sin(t) * east[i]! + Math.cos(t) * north[i]!))) as V3;
-        line([at(k % 30 ? ang * 0.93 : ang * 0.88), at(ang)], "rgba(205,215,225,.84)", 1);
+          [0, 1, 2].map(
+            (i) =>
+              RE *
+              (Math.cos(a * r) * cen[i]! +
+                Math.sin(a * r) *
+                  (Math.sin(t) * east[i]! + Math.cos(t) * north[i]!)),
+          ) as V3;
+        line(
+          [at(k % 30 ? ang * 0.93 : ang * 0.88), at(ang)],
+          "rgba(205,215,225,.84)",
+          1,
+        );
       }
       if (best) {
         const S = satEcef(best.tle, [best.t0])[0];
         if (S) {
           const T0 = llaEcef(...AOI);
-          line(Array.from({ length: 60 }, (_, i) => [0, 1, 2].map((k) => T0[k]! + ((S[k]! - T0[k]!) * i) / 59) as V3), "rgb(200,230,80)", 3);
+          line(
+            Array.from(
+              { length: 60 },
+              (_, i) =>
+                [0, 1, 2].map(
+                  (k) => T0[k]! + ((S[k]! - T0[k]!) * i) / 59,
+                ) as V3,
+            ),
+            "rgb(200,230,80)",
+            3,
+          );
         }
       }
       for (const m of marks) {
@@ -158,31 +243,90 @@ function GlobeView({ state, plan, now, marks }: { state: "globe" | "ring"; plan:
       ref={ref}
       width={VW}
       height={VH}
-      aria-label={state === "globe" ? "Globe with the selected pass" : "AOI azimuth ring"}
-      style={{ position: "absolute", left: 0, top: 0, width: VW, height: VH, filter: `brightness(${state === "globe" ? 0.82 : 0.78}) saturate(${state === "globe" ? 0.85 : 0.7})` }}
+      aria-label={
+        state === "globe" ? "Globe with the selected pass" : "AOI azimuth ring"
+      }
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: VW,
+        height: VH,
+        filter: `brightness(${state === "globe" ? 0.82 : 0.78}) saturate(${state === "globe" ? 0.85 : 0.7})`,
+      }}
     />
   );
 }
 
-function polarPlot(cx: number, cy: number, R: number, sky: { az: number; el: number }[]): N {
+function polarPlot(
+  cx: number,
+  cy: number,
+  R: number,
+  sky: { az: number; el: number }[],
+): N {
   const ox = R + 20;
   const oy = R + 12;
-  const pt = (a: number, e: number): [number, number] => [ox + ((R * (90 - e)) / 90) * Math.sin((a * Math.PI) / 180), oy - ((R * (90 - e)) / 90) * Math.cos((a * Math.PI) / 180)];
+  const pt = (a: number, e: number): [number, number] => [
+    ox + ((R * (90 - e)) / 90) * Math.sin((a * Math.PI) / 180),
+    oy - ((R * (90 - e)) / 90) * Math.cos((a * Math.PI) / 180),
+  ];
   const pts = sky.map((s) => pt(s.az, s.el));
   const p0 = pts[0];
   const s: N[] = [
-    <svg key="polar" aria-hidden style={{ left: cx - R - 20, top: cy - R - 12, width: 2 * R + 40, height: 2 * R + 24, overflow: "visible" }}>
-      <circle cx={ox} cy={oy} r={R} fill="none" stroke="#7aa6e8" strokeWidth="1" />
+    <svg
+      key="polar"
+      aria-hidden
+      style={{
+        left: cx - R - 20,
+        top: cy - R - 12,
+        width: 2 * R + 40,
+        height: 2 * R + 24,
+        overflow: "visible",
+      }}
+    >
+      <circle
+        cx={ox}
+        cy={oy}
+        r={R}
+        fill="none"
+        stroke="#7aa6e8"
+        strokeWidth="1"
+      />
       {[30, 45, 60, 75].map((el) => (
-        <circle key={el} cx={ox} cy={oy} r={((R * (90 - el)) / 90).toFixed(1)} fill="none" stroke="#6a96d8" strokeWidth=".8" />
+        <circle
+          key={el}
+          cx={ox}
+          cy={oy}
+          r={((R * (90 - el)) / 90).toFixed(1)}
+          fill="none"
+          stroke="#6a96d8"
+          strokeWidth=".8"
+        />
       ))}
       {[0, 45, 90, 135].map((az) => {
         const a = (az * Math.PI) / 180;
-        return <line key={az} x1={ox + R * Math.sin(a)} y1={oy - R * Math.cos(a)} x2={ox - R * Math.sin(a)} y2={oy + R * Math.cos(a)} stroke="#6a96d8" strokeWidth=".8" />;
+        return (
+          <line
+            key={az}
+            x1={ox + R * Math.sin(a)}
+            y1={oy - R * Math.cos(a)}
+            x2={ox - R * Math.sin(a)}
+            y2={oy + R * Math.cos(a)}
+            stroke="#6a96d8"
+            strokeWidth=".8"
+          />
+        );
       })}
       {p0 ? (
         <>
-          <polyline points={pts.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" ")} fill="none" stroke="#f0a43c" strokeWidth="1.4" />
+          <polyline
+            points={pts
+              .map((p) => p.map((n) => n.toFixed(1)).join(","))
+              .join(" ")}
+            fill="none"
+            stroke="#f0a43c"
+            strokeWidth="1.4"
+          />
           <circle cx={p0[0]} cy={p0[1]} r="2.4" fill="#f0a43c" />
           <path d={`M${p0[0] - 1} ${p0[1] - 6} l-3 -5 h6z`} fill="#f0c43c" />
         </>
@@ -195,9 +339,23 @@ function polarPlot(cx: number, cy: number, R: number, sky: { az: number; el: num
     [60, "60°"],
   ] as const) {
     const r = (R * (90 - el)) / 90;
-    s.push(T(cx + r * 0.7 + 3, cy - r * 0.7 - 1, lab, 3.8, "#8ab2ee", 400, "l", 0));
+    s.push(
+      T(cx + r * 0.7 + 3, cy - r * 0.7 - 1, lab, 3.8, "#8ab2ee", 400, "l", 0),
+    );
   }
-  if (p0 && sky[0]) s.push(T(p0[0] + cx - R - 20 - 6, p0[1] + cy - R - 12 - 2, `${sky[0].az.toFixed(0)}°`, 3.8, "#f0c43c", 400, "r", 0));
+  if (p0 && sky[0])
+    s.push(
+      T(
+        p0[0] + cx - R - 20 - 6,
+        p0[1] + cy - R - 12 - 2,
+        `${sky[0].az.toFixed(0)}°`,
+        3.8,
+        "#f0c43c",
+        400,
+        "r",
+        0,
+      ),
+    );
   return frag(s);
 }
 
@@ -230,13 +388,34 @@ export function MetaFrame({
 }): N {
   const best = plan?.best ?? null;
   const v = VIEWS[state];
-  const marks = useMemo(() => [...chokes.map((c) => ({ lat: c.lat, lon: c.lon, name: c.name })), ...quakes], [chokes, quakes]);
+  const marks = useMemo(
+    () => [
+      ...chokes.map((c) => ({ lat: c.lat, lon: c.lon, name: c.name })),
+      ...quakes,
+    ],
+    [chokes, quakes],
+  );
   const sky = useMemo(() => (best ? passSky(best) : []), [best]);
-  const satWhy = gpRes && !gpRes.ok ? unavailable("Satellite elements", gpRes) : plan ? "No SAR pass over the AOI in the next 9 h" : "Propagating satellites…";
+  const satWhy =
+    gpRes && !gpRes.ok
+      ? unavailable("Satellite elements", gpRes)
+      : plan
+        ? "No SAR pass over the AOI in the next 9 h"
+        : "Propagating satellites…";
   const win0 = plan?.win0 ?? now - Math.trunc(2.7 * 3600);
   const s: N[] = [
     A(507, 162, 905, 510, "background:#082236"),
-    <div key="map" style={{ left: 762, top: 162, width: 648, height: 430, overflow: "hidden", background: "#04060c" }}>
+    <div
+      key="map"
+      style={{
+        left: 762,
+        top: 162,
+        width: 648,
+        height: 430,
+        overflow: "hidden",
+        background: "#04060c",
+      }}
+    >
       <GlobeView state={state} plan={plan} now={now} marks={marks} />
     </div>,
   ];
@@ -245,9 +424,14 @@ export function MetaFrame({
     const [ax, ay] = proj(llaEcef(...AOI), b, v.R, v.cx, v.cy);
     const S = satEcef(best.tle, [best.t0])[0];
     const [sx, sy] = S ? proj(S, b, v.R, v.cx, v.cy) : [NaN, NaN];
-    const [lx, ly] = state === "globe" ? [762 + sx - 40, 162 + sy + 2] : [762 + ax - 78, 162 + ay - 18];
-    if (Number.isFinite(lx)) s.push(T(lx, ly, best.name, 4.6, "#f2f4f6", 400, "l", 0));
-    if (state === "globe" && Number.isFinite(sx)) s.push(circ(762 + sx, 162 + sy, 2.6, "#f2f4f6"));
+    const [lx, ly] =
+      state === "globe"
+        ? [762 + sx - 40, 162 + sy + 2]
+        : [762 + ax - 78, 162 + ay - 18];
+    if (Number.isFinite(lx))
+      s.push(T(lx, ly, best.name, 4.6, "#f2f4f6", 400, "l", 0));
+    if (state === "globe" && Number.isFinite(sx))
+      s.push(circ(762 + sx, 162 + sy, 2.6, "#f2f4f6"));
   } else s.push(T(1086, 200, satWhy, 7, "#f2f6fa", 600, "c", 0));
   // panel
   s.push(
@@ -258,8 +442,30 @@ export function MetaFrame({
     I("chevron-left", 739, 179, 8, "#c8dcf4"),
     T(544, 212.5, "Satellite Criteria", 9.5, "#e0eaf4", 400, "l", 0),
     A(545, 227, 208, 38, "background:#163a5c"),
-    T(552, 241, plan && gpTotal !== null ? `Currently working with ${plan.sarCount} of ${gpTotal.toLocaleString("en-US")}` : satWhy, 7.4, "#e8f0f8", 400, "l", 0),
-    T(552, 257, <>satellites where <b>Constellation</b> is</>, 7.4, "#e8f0f8", 400, "l", 0),
+    T(
+      552,
+      241,
+      plan && gpTotal !== null
+        ? `Currently working with ${plan.sarCount} of ${gpTotal.toLocaleString("en-US")}`
+        : satWhy,
+      7.4,
+      "#e8f0f8",
+      400,
+      "l",
+      0,
+    ),
+    T(
+      552,
+      257,
+      <>
+        satellites where <b>Constellation</b> is
+      </>,
+      7.4,
+      "#e8f0f8",
+      400,
+      "l",
+      0,
+    ),
     A(681, 251, 18, 10, "background:#1e4a80;border-radius:2px"),
     T(690, 256.5, "SAR", 4.8, "#6a96d8", 400, "c", 0),
     I("edit", 733, 248, 8, "#a8c8f0"),
@@ -272,7 +478,13 @@ export function MetaFrame({
     T(544, 386, "From", 6.6, "#e8f0f8", 400, "l", 0),
     T(580, 386, UTC(win0, "%d %b %Y %H:%MZ"), 6.6, "#f2f6fa", 700, "l", 0),
     T(679, 386, "for", 6.6, "#e8f0f8", 400, "l", 0),
-    A(697, 377, 56, 19, "border:1px solid #3a6aa8;border-radius:2px;box-sizing:border-box"),
+    A(
+      697,
+      377,
+      56,
+      19,
+      "border:1px solid #3a6aa8;border-radius:2px;box-sizing:border-box",
+    ),
     T(702, 386.5, "6 Hours", 6.4, "#7aa0d0", 400, "l", 0),
     I("double-caret-vertical", 743, 386, 7, "#c8dcf4"),
     A(545, 407, 208, 1, "background:#1a4070"),
@@ -286,7 +498,21 @@ export function MetaFrame({
     "satellites over the area of interest for the entire",
     "window selected above, with elevation, azimuth and",
     "sunlight at the area for each pass.",
-  ].forEach((ln, i) => s.push(T(545, 468 + i * 12.8, ln, 6.1, "#7e9cc4", 400, "l", 0, "font-style:italic")));
+  ].forEach((ln, i) =>
+    s.push(
+      T(
+        545,
+        468 + i * 12.8,
+        ln,
+        6.1,
+        "#7e9cc4",
+        400,
+        "l",
+        0,
+        "font-style:italic",
+      ),
+    ),
+  );
   s.push(
     A(545, 523, 208, 1, "background:#1a4070"),
     T(544, 541.5, "Monitoring Parameters", 9, "#e0eaf4", 400, "l", 0),
@@ -298,7 +524,9 @@ export function MetaFrame({
     A(651, 566, 101, 16, "background:#2c6ecc"),
     T(690, 574.5, "View Results", 6.8, "#f2f6fa", 400, "c", 0),
     I("arrow-right", 729, 574.5, 8, "#f2f6fa"),
-    Hit(651, 566, 101, 16, "View results", () => setState(state === "globe" ? "ring" : "globe")),
+    Hit(651, 566, 101, 16, "View results", () =>
+      setState(state === "globe" ? "ring" : "globe"),
+    ),
     // rail
     A(508, 162, 29, 510, "background:#0a2a4a"),
     hexlogo(520, 179, 5, "#e8f0f8"),
@@ -324,48 +552,187 @@ export function MetaFrame({
     Hit(512, 234, 20, 20, "AOI ring", () => setState("ring")),
     A(512, 328, 20, 20, "background:#1e4a80;border-radius:2px"),
     I("settings", 521, 337, 9, "#d0e4fa"),
-    A(509, 585, 27, 27, "border:1px solid #6a96d8;border-radius:50%;box-sizing:border-box"),
+    A(
+      509,
+      585,
+      27,
+      27,
+      "border:1px solid #6a96d8;border-radius:50%;box-sizing:border-box",
+    ),
     T(522.5, 594, "N", 4.4, "#8ab2ee", 400, "c", 0),
     T(522.5, 620, state === "globe" ? "0°" : "5°", 5.4, "#c8dcf4", 400, "c", 0),
-    A(513, 631, 20, 20, "border-left:1px solid #6a96d8;border-bottom:1px solid #6a96d8;box-sizing:border-box;background:#14335a"),
-    T(522.5, 660, state === "globe" ? "9°" : "10°", 5.4, "#c8dcf4", 400, "c", 0),
+    A(
+      513,
+      631,
+      20,
+      20,
+      "border-left:1px solid #6a96d8;border-bottom:1px solid #6a96d8;box-sizing:border-box;background:#14335a",
+    ),
+    T(
+      522.5,
+      660,
+      state === "globe" ? "9°" : "10°",
+      5.4,
+      "#c8dcf4",
+      400,
+      "c",
+      0,
+    ),
   );
-  if (state === "ring") s.push(I("add", 522, 640, 11, "#f2f6fa"), Hit(513, 631, 20, 20, "Zoom out to the globe", () => setState("globe")));
+  if (state === "ring")
+    s.push(
+      I("add", 522, 640, 11, "#f2f6fa"),
+      Hit(513, 631, 20, 20, "Zoom out to the globe", () => setState("globe")),
+    );
   // sweep card
-  s.push(A(1161, 168, 248, 190, "background:#1d457a"), T(1168, 188, "Strait of Hormuz", 14, "#e8f0f8", 400, "l", 0), T(1168, 221, "SAR Sweeps", 9.5, "#e0eaf4", 400, "l", 0));
+  s.push(
+    A(1161, 168, 248, 190, "background:#1d457a"),
+    T(1168, 188, "Strait of Hormuz", 14, "#e8f0f8", 400, "l", 0),
+    T(1168, 221, "SAR Sweeps", 9.5, "#e0eaf4", 400, "l", 0),
+  );
   if (sweep)
     s.push(
       A(1168, 237, 234, 46, "background:#1b4276"),
       T(1172, 246, "Latest Capture:", 6.6, "#f2f6fa", 700, "l", 0),
       T(1172, 258.5, "Date:", 6.4, "#9ab6dc", 400, "l", 0),
-      T(1195, 258.5, UTC(sweep.swept_at, "%-d %b %Y %H:%M"), 6.4, "#f2f6fa", 400, "l", 0),
+      T(
+        1195,
+        258.5,
+        UTC(sweep.swept_at, "%-d %b %Y %H:%M"),
+        6.4,
+        "#f2f6fa",
+        400,
+        "l",
+        0,
+      ),
       T(1172, 272, "Status:", 6.4, "#9ab6dc", 400, "l", 0),
       I("tick", 1213, 272, 7, "#4ac08a"),
       T(1222, 272, "SUCCESS", 6.4, "#4ac08a", 400, "l", 0),
       T(1168, 304.5, "Detections", 6.6, "#f2f6fa", 400, "l", 0),
-      A(1204, 299, 12, 11, "background:#2a5a96;border-radius:5px;font-size:5.2px;color:#cfe0f6;display:grid;place-items:center", String(sweep.detections)),
+      A(
+        1204,
+        299,
+        12,
+        11,
+        "background:#2a5a96;border-radius:5px;font-size:5.2px;color:#cfe0f6;display:grid;place-items:center",
+        String(sweep.detections),
+      ),
       A(1168, 312, 52, 1.5, "background:#e8f0f8"),
       T(1233, 304.5, "Dark", 6.6, "#9ab6dc", 400, "l", 0),
-      A(1256, 299, 12, 11, "background:#2a5a96;border-radius:5px;font-size:5.2px;color:#cfe0f6;display:grid;place-items:center", String(sweep.dark_candidates)),
+      A(
+        1256,
+        299,
+        12,
+        11,
+        "background:#2a5a96;border-radius:5px;font-size:5.2px;color:#cfe0f6;display:grid;place-items:center",
+        String(sweep.dark_candidates),
+      ),
       ...(sweep.dark_candidates === 0
-        ? [T(1285, 333, 'No dark-vessel candidates found for this AOI. View the "Detections"', 5.9, "#cfe0f6", 400, "c", 0), T(1285, 346, "tab to see all of its detections.", 5.9, "#cfe0f6", 400, "c", 0)]
-        : [T(1285, 333, `${sweep.dark_candidates} detections have no AIS match. View the "Dark"`, 5.9, "#cfe0f6", 400, "c", 0), T(1285, 346, "tab to see the candidates.", 5.9, "#cfe0f6", 400, "c", 0)]),
+        ? [
+            T(
+              1285,
+              333,
+              'No dark-vessel candidates found for this AOI. View the "Detections"',
+              5.9,
+              "#cfe0f6",
+              400,
+              "c",
+              0,
+            ),
+            T(
+              1285,
+              346,
+              "tab to see all of its detections.",
+              5.9,
+              "#cfe0f6",
+              400,
+              "c",
+              0,
+            ),
+          ]
+        : [
+            T(
+              1285,
+              333,
+              `${sweep.dark_candidates} detections have no AIS match. View the "Dark"`,
+              5.9,
+              "#cfe0f6",
+              400,
+              "c",
+              0,
+            ),
+            T(
+              1285,
+              346,
+              "tab to see the candidates.",
+              5.9,
+              "#cfe0f6",
+              400,
+              "c",
+              0,
+            ),
+          ]),
     );
-  else s.push(T(1285, 280, sweepRes?.ok ? "No sweep of this AOI yet" : unavailable("SAR sweep", sweepRes), 7, "#cfe0f6", 400, "c", 0));
+  else
+    s.push(
+      T(
+        1285,
+        280,
+        sweepRes?.ok
+          ? "No sweep of this AOI yet"
+          : unavailable("SAR sweep", sweepRes),
+        7,
+        "#cfe0f6",
+        400,
+        "c",
+        0,
+      ),
+    );
   // satellite card
   s.push(A(1161, 366, 248, 226, "background:#1d457a"));
   if (best)
     s.push(
       T(1168, 385, best.name, 12, "#e8f0f8", 400, "l", 0),
-      T(1168, 401.5, `${best.norad} · ${operatorOf(best.name)}`, 5.8, "#9ab6dc", 400, "l", 0),
+      T(
+        1168,
+        401.5,
+        `${best.norad} · ${operatorOf(best.name)}`,
+        5.8,
+        "#9ab6dc",
+        400,
+        "l",
+        0,
+      ),
       I("satellite", 1384, 389, 22, "#f2f6fa"),
       polarPlot(1283, 484, 55, sky),
       A(1168, 558, 232, 13, "background:#0a1822"),
       A(1168, 558, 1, 13, "background:#e8f0f8"),
-      T(1168, 580, UTC(best.t0, "%b %d %Y %H:%M:%SZ").toUpperCase(), 5.6, "#e8f0f8", 400, "l", 0),
-      T(1398, 580, UTC(best.t1, "%b %d %Y %H:%M:%SZ").toUpperCase(), 5.6, "#e8f0f8", 400, "r", 0),
+      T(
+        1168,
+        580,
+        UTC(best.t0, "%b %d %Y %H:%M:%SZ").toUpperCase(),
+        5.6,
+        "#e8f0f8",
+        400,
+        "l",
+        0,
+      ),
+      T(
+        1398,
+        580,
+        UTC(best.t1, "%b %d %Y %H:%M:%SZ").toUpperCase(),
+        5.6,
+        "#e8f0f8",
+        400,
+        "r",
+        0,
+      ),
     );
-  else s.push(I("satellite", 1384, 389, 22, "#f2f6fa"), T(1285, 480, satWhy, 6.6, "#cfe0f6", 400, "c", 0));
+  else
+    s.push(
+      I("satellite", 1384, 389, 22, "#f2f6fa"),
+      T(1285, 480, satWhy, 6.6, "#cfe0f6", 400, "c", 0),
+    );
   // timeline
   const X0 = 620;
   const X1 = 1412;
@@ -373,7 +740,16 @@ export function MetaFrame({
   s.push(
     A(537, 592, 875, 80, "background:#082236"),
     A(537, 592, 875, 1, "background:#0f3358"),
-    T(979, 602, UTC(best?.t0 ?? now, "%b %d %Y %H:%M:%SZ").toUpperCase(), 9.2, "#e8f0f8", 400, "c", 0),
+    T(
+      979,
+      602,
+      UTC(best?.t0 ?? now, "%b %d %Y %H:%M:%SZ").toUpperCase(),
+      9.2,
+      "#e8f0f8",
+      400,
+      "c",
+      0,
+    ),
     I("play", 1068, 602, 7, "#e8f0f8"),
     T(1081, 602.5, "60x", 5.4, "#c8dcf4", 400, "l", 0),
     I("step-forward", 1110, 602, 7, "#e8f0f8"),
@@ -386,10 +762,21 @@ export function MetaFrame({
     [626.5, "repeat", "Revisit", "#8ac080"],
     [637, "wind", "Sunlight", "#e0c040"],
   ] as const)
-    s.push(I(ic, 550, yc, 6, col), T(562, yc + 0.5, lab, 5.2, col, 400, "l", 0));
+    s.push(
+      I(ic, 550, yc, 6, col),
+      T(562, yc + 0.5, lab, 5.2, col, 400, "l", 0),
+    );
   s.push(A(X0, 623, X1 - X0, 1, "background:#4ac08a"));
   for (const p of (plan?.passes ?? []).filter((q) => q.peak >= 35))
-    s.push(A(tx(p.t0) - 1.5, 613, 3, 10, `background:${p.name.includes("CAPELLA") ? "#8fc43c" : "#4fa86a"};border-radius:1px`));
+    s.push(
+      A(
+        tx(p.t0) - 1.5,
+        613,
+        3,
+        10,
+        `background:${p.name.includes("CAPELLA") ? "#8fc43c" : "#4fa86a"};border-radius:1px`,
+      ),
+    );
   // sunlight bar: real solar elevation at the AOI, sampled every 5 min
   let run: number | null = null;
   for (let t = win0; t <= win0 + 6 * 3600 + 300; t += 300) {
@@ -404,7 +791,10 @@ export function MetaFrame({
   }
   for (let h = 0; h < 7; h++) {
     const t = win0 + h * 3600;
-    s.push(A(tx(t), 650, 1, 6, "background:#12385c"), T(tx(t), 668, UTC(t, "%H:%M"), 4.8, "#2a5a8c", 400, "c", 0));
+    s.push(
+      A(tx(t), 650, 1, 6, "background:#12385c"),
+      T(tx(t), 668, UTC(t, "%H:%M"), 4.8, "#2a5a8c", 400, "c", 0),
+    );
   }
   if (best) s.push(A(tx(best.t0), 607, 1.2, 65, "background:#f2f6fa"));
   s.push(A(1410, 162, 3, 510, "background:#04060a"));

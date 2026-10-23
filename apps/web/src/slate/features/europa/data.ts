@@ -189,7 +189,10 @@ export function chipsOf(e: Evid): [string, string][] {
       chips[2]!,
     ];
   return chips
-    .map(([a, b]): [string, string] => [a, b.length < 16 ? b : `${b.slice(0, 14)}…`])
+    .map(([a, b]): [string, string] => [
+      a,
+      b.length < 16 ? b : `${b.slice(0, 14)}…`,
+    ])
     .slice(0, 5);
 }
 
@@ -261,20 +264,22 @@ export function pickMarkers(
 type XY = [number, number];
 /** Monotone-chain convex hull (the builder's hull()). */
 export function hull(ptsIn: XY[]): XY[] {
-  const pts = [...new Map(ptsIn.map((p) => [`${p[0]},${p[1]}`, p])).values()].sort(
-    (a, b) => a[0] - b[0] || a[1] - b[1],
-  );
+  const pts = [
+    ...new Map(ptsIn.map((p) => [`${p[0]},${p[1]}`, p])).values(),
+  ].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   if (pts.length < 3) return pts;
   const cr = (o: XY, a: XY, b: XY): number =>
     (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lo: XY[] = [];
   for (const p of pts) {
-    while (lo.length >= 2 && cr(lo[lo.length - 2]!, lo[lo.length - 1]!, p) <= 0) lo.pop();
+    while (lo.length >= 2 && cr(lo[lo.length - 2]!, lo[lo.length - 1]!, p) <= 0)
+      lo.pop();
     lo.push(p);
   }
   const up: XY[] = [];
   for (const p of [...pts].reverse()) {
-    while (up.length >= 2 && cr(up[up.length - 2]!, up[up.length - 1]!, p) <= 0) up.pop();
+    while (up.length >= 2 && cr(up[up.length - 2]!, up[up.length - 1]!, p) <= 0)
+      up.pop();
     up.push(p);
   }
   return [...lo.slice(0, -1), ...up.slice(0, -1)];
@@ -298,7 +303,10 @@ export function clusters(vs: SatV[], r = 62): SatV[][] {
     for (let k = 0; k < grp.length; k++) {
       const a = vs[grp[k]!]!;
       vs.forEach((b, j) => {
-        if (!seen.has(j) && Math.hypot(a.px[0] - b.px[0], a.px[1] - b.px[1]) < r) {
+        if (
+          !seen.has(j) &&
+          Math.hypot(a.px[0] - b.px[0], a.px[1] - b.px[1]) < r
+        ) {
           seen.add(j);
           grp.push(j);
         }
@@ -317,7 +325,10 @@ export const watchBoxes = (vs: SatV[]): SatV[][] =>
 /** Profile vessel of the data-aware slide: freshest named cargo-type track in the view. */
 export function profileVessel(vs: SatV[]): SatV | null {
   const inbox = (v: SatV): boolean =>
-    v.px[0] > 300 && v.px[0] < SATW - 300 && v.px[1] > 300 && v.px[1] < SATH - 300;
+    v.px[0] > 300 &&
+    v.px[0] < SATW - 300 &&
+    v.px[1] > 300 &&
+    v.px[1] < SATH - 300;
   const cargo = vs.filter(
     (v) =>
       inbox(v) &&
@@ -326,9 +337,15 @@ export function profileVessel(vs: SatV[]): SatV | null {
       v.ageS != null,
   );
   const named = vs.filter((v) => inbox(v) && v.name);
-  const cand = cargo.length ? cargo : named.length ? named : vs.filter((v) => v.name);
+  const cand = cargo.length
+    ? cargo
+    : named.length
+      ? named
+      : vs.filter((v) => v.name);
   if (!cand.length) return null;
-  return cand.reduce((a, b) => ((b.ageS ?? Infinity) < (a.ageS ?? Infinity) ? b : a));
+  return cand.reduce((a, b) =>
+    (b.ageS ?? Infinity) < (a.ageS ?? Infinity) ? b : a,
+  );
 }
 
 // ── E10 ontology incidents linked to their detector domains ──────────────────
@@ -340,7 +357,12 @@ export function incidentsOf(lists: (OntoObj[] | null)[]): {
   const seen = new Map<string, OntoObj>();
   for (const l of lists) for (const x of l ?? []) seen.set(x.id, x);
   const inc = [...seen.values()]
-    .filter((x) => x.kind === "incident" && Array.isArray(x.props["domains"]) && (x.props["domains"] as unknown[]).length)
+    .filter(
+      (x) =>
+        x.kind === "incident" &&
+        Array.isArray(x.props["domains"]) &&
+        (x.props["domains"] as unknown[]).length,
+    )
     .map((x) => ({
       id: x.id,
       threat: (x.props["threat_level"] as string | undefined) ?? null,
@@ -349,18 +371,27 @@ export function incidentsOf(lists: (OntoObj[] | null)[]): {
     }));
   return { inc, seen: seen.size };
 }
-export function graphData(all: Incident[], n = 46): { inc: Incident[]; doms: string[] } {
+export function graphData(
+  all: Incident[],
+  n = 46,
+): { inc: Incident[]; doms: string[] } {
   const sorted = [...all].sort(
-    (a, b) => -(a.score ?? 0) + (b.score ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    (a, b) =>
+      -(a.score ?? 0) + (b.score ?? 0) ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
   );
   const step = Math.max(1, Math.floor(sorted.length / n));
   const inc = sorted.filter((_, i) => i % step === 0).slice(0, n);
   const doms: string[] = [];
-  for (const i of inc) for (const d of i.domains) if (!doms.includes(d)) doms.push(d);
+  for (const i of inc)
+    for (const d of i.domains) if (!doms.includes(d)) doms.push(d);
   return { inc, doms };
 }
 /** Count by key, as the builder's dict loops do (Python str(None) is "None"). */
-export function countBy<T>(xs: T[], key: (x: T) => string[]): Map<string, number> {
+export function countBy<T>(
+  xs: T[],
+  key: (x: T) => string[],
+): Map<string, number> {
   const m = new Map<string, number>();
   for (const x of xs) for (const k of key(x)) m.set(k, (m.get(k) ?? 0) + 1);
   return m;
@@ -380,7 +411,9 @@ export function lineageChains(lin: Lineage): [string, string, string][] {
   out.forEach(([a], i) => firstRow.has(a) || firstRow.set(a, i));
   return out
     .map((c, i) => [c, i] as const)
-    .sort((x, y) => firstRow.get(x[0][0])! - firstRow.get(y[0][0])! || x[1] - y[1])
+    .sort(
+      (x, y) => firstRow.get(x[0][0])! - firstRow.get(y[0][0])! || x[1] - y[1],
+    )
     .map(([c]) => c);
 }
 export function lineageLayoutEu(lin: Lineage): Map<string, XY> {
@@ -392,8 +425,14 @@ export function lineageLayoutEu(lin: Lineage): Map<string, XY> {
   lineageChains(lin).forEach(([a, t, b], r) => {
     const y = Y0L + r * PITCH;
     rowsOf.set(a, [...(rowsOf.get(a) ?? []), y]);
-    pos.set(t, [X[1]! + (((r * 37) % 5) - 2) * 9, y + (((r * 53) % 5) - 2) * 8]);
-    pos.set(b, [X[2]! + (((r * 29) % 5) - 2) * 11, y + (((r * 41) % 7) - 3) * 8]);
+    pos.set(t, [
+      X[1]! + (((r * 37) % 5) - 2) * 9,
+      y + (((r * 53) % 5) - 2) * 8,
+    ]);
+    pos.set(b, [
+      X[2]! + (((r * 29) % 5) - 2) * 11,
+      y + (((r * 41) % 7) - 3) * 8,
+    ]);
   });
   // a source feeding several transforms sits between their rows
   for (const [a, ys] of rowsOf)
@@ -407,7 +446,8 @@ const D2R = Math.PI / 180;
 const jd = (t: number): number => t / 86400 + 2440587.5;
 const gmst = (j: number): number => {
   const tt = (j - 2451545.0) / 36525.0;
-  const g = 280.46061837 + 360.98564736629 * (j - 2451545.0) + 0.000387933 * tt * tt;
+  const g =
+    280.46061837 + 360.98564736629 * (j - 2451545.0) + 0.000387933 * tt * tt;
   return (((g % 360) + 360) % 360) * D2R;
 };
 /** Sub-solar point [declination, longitude] in degrees at unix time t (s). */
@@ -480,10 +520,20 @@ export function planPasses(items: Omm[], now: number): Plan {
   const sar = items.filter(
     (i) => i.TLE_LINE1 && i.TLE_LINE2 && isSar(i.OBJECT_NAME ?? ""),
   );
-  const win = { startMs: (now - 3 * 3600) * 1000, endMs: (now + 9 * 3600) * 1000 };
+  const win = {
+    startMs: (now - 3 * 3600) * 1000,
+    endMs: (now + 9 * 3600) * 1000,
+  };
   const rows: PassRow[] = [];
   for (const it of sar)
-    for (const p of passesOverAoi(it.TLE_LINE1!, it.TLE_LINE2!, { lat: AOI[0], lon: AOI[1] }, win, 15, 15))
+    for (const p of passesOverAoi(
+      it.TLE_LINE1!,
+      it.TLE_LINE2!,
+      { lat: AOI[0], lon: AOI[1] },
+      win,
+      15,
+      15,
+    ))
       rows.push({
         name: (it.OBJECT_NAME ?? "").trim(),
         norad: String(it.NORAD_CAT_ID ?? ""),
@@ -496,8 +546,12 @@ export function planPasses(items: Omm[], now: number): Plan {
   const future = rows.filter((r) => r.t0 > now);
   const best =
     future.find((r) => r.name.includes("CAPELLA") && r.peak >= 35) ??
-    future.slice(0, 6).reduce<PassRow | null>((a, b) => (!a || b.peak > a.peak ? b : a), null);
-  const win0 = best ? best.t0 - Math.trunc(2.7 * 3600) : now - Math.trunc(2.7 * 3600);
+    future
+      .slice(0, 6)
+      .reduce<PassRow | null>((a, b) => (!a || b.peak > a.peak ? b : a), null);
+  const win0 = best
+    ? best.t0 - Math.trunc(2.7 * 3600)
+    : now - Math.trunc(2.7 * 3600);
   return {
     sarCount: sar.length,
     best,
@@ -507,11 +561,18 @@ export function planPasses(items: Omm[], now: number): Plan {
 }
 /** az/el of the selected pass at 15 s steps (the sky plot). */
 export const passSky = (p: PassRow): { az: number; el: number }[] =>
-  skyView(p.tle[0], p.tle[1], { lat: AOI[0], lon: AOI[1] }, { startMs: p.t0 * 1000, endMs: p.t1 * 1000 }, 15).map(
-    (s) => ({ az: s.azDeg, el: s.elDeg }),
-  );
+  skyView(
+    p.tle[0],
+    p.tle[1],
+    { lat: AOI[0], lon: AOI[1] },
+    { startMs: p.t0 * 1000, endMs: p.t1 * 1000 },
+    15,
+  ).map((s) => ({ az: s.azDeg, el: s.elDeg }));
 /** ECEF km positions of the satellite at the given unix seconds. */
-export function satEcef(tle: [string, string], ts: number[]): ([number, number, number] | null)[] {
+export function satEcef(
+  tle: [string, string],
+  ts: number[],
+): ([number, number, number] | null)[] {
   const rec = twoline2satrec(tle[0], tle[1]);
   return ts.map((t) => {
     const d = new Date(t * 1000);
@@ -527,7 +588,8 @@ export const periodS = (tle: [string, string]): number =>
 // ── orthographic globe (gotham/_fb_assets.py) ─────────────────────────────────
 export const RE = 6378.137;
 export type V3 = [number, number, number];
-export const dot = (a: V3, b: V3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const dot = (a: V3, b: V3): number =>
+  a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: V3, b: V3): V3 => [
   a[1] * b[2] - a[2] * b[1],
   a[2] * b[0] - a[0] * b[2],
@@ -546,7 +608,11 @@ export type Basis = [V3, V3, V3];
 export function orthoBasis(lat0: number, lon0: number): Basis {
   const la = lat0 * D2R;
   const lo = lon0 * D2R;
-  const cen: V3 = [Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)];
+  const cen: V3 = [
+    Math.cos(la) * Math.cos(lo),
+    Math.cos(la) * Math.sin(lo),
+    Math.sin(la),
+  ];
   const east: V3 = [-Math.sin(lo), Math.cos(lo), 0];
   return [cen, east, cross(cen, east)];
 }
@@ -555,18 +621,32 @@ export function proj(P: V3, b: Basis, R: number, cx: number, cy: number): V3 {
   const k = R / RE;
   return [cx + dot(P, b[1]) * k, cy - dot(P, b[2]) * k, dot(P, b[0])];
 }
-export function sphereCircle(lat: number, lon: number, angDeg: number, n = 90): V3[] {
+export function sphereCircle(
+  lat: number,
+  lon: number,
+  angDeg: number,
+  n = 90,
+): V3[] {
   const [cen, east, north] = orthoBasis(lat, lon);
   const a = angDeg * D2R;
   return Array.from({ length: n }, (_, i) => {
     const t = (i / (n - 1)) * 2 * Math.PI;
     return [0, 1, 2].map(
-      (k) => RE * (Math.cos(a) * cen[k]! + Math.sin(a) * (Math.cos(t) * east[k]! + Math.sin(t) * north[k]!)),
+      (k) =>
+        RE *
+        (Math.cos(a) * cen[k]! +
+          Math.sin(a) * (Math.cos(t) * east[k]! + Math.sin(t) * north[k]!)),
     ) as V3;
   });
 }
 /** The view centre that puts the AOI at (tx, ty) on a globe of radius R at (cx, cy). */
-export function solveCentre(R: number, cx: number, cy: number, tx: number, ty: number): [number, number] {
+export function solveCentre(
+  R: number,
+  cx: number,
+  cy: number,
+  tx: number,
+  ty: number,
+): [number, number] {
   const la = AOI[0] * D2R;
   const lo = AOI[1] * D2R;
   let best: [number, number, number] | null = null;
@@ -575,8 +655,12 @@ export function solveCentre(R: number, cx: number, cy: number, tx: number, ty: n
       const l0 = lat0 * D2R;
       const o0 = lon0 * D2R;
       const u = Math.cos(la) * Math.sin(lo - o0);
-      const v = Math.cos(l0) * Math.sin(la) - Math.sin(l0) * Math.cos(la) * Math.cos(lo - o0);
-      const vis = Math.sin(l0) * Math.sin(la) + Math.cos(l0) * Math.cos(la) * Math.cos(lo - o0);
+      const v =
+        Math.cos(l0) * Math.sin(la) -
+        Math.sin(l0) * Math.cos(la) * Math.cos(lo - o0);
+      const vis =
+        Math.sin(l0) * Math.sin(la) +
+        Math.cos(l0) * Math.cos(la) * Math.cos(lo - o0);
       if (vis <= 0) continue;
       const e = (cx + u * R - tx) ** 2 + (cy - v * R - ty) ** 2;
       if (!best || e < best[0]) best = [e, lat0, lon0];
@@ -584,7 +668,13 @@ export function solveCentre(R: number, cx: number, cy: number, tx: number, ty: n
   return [best![1], best![2]];
 }
 /** Split a projected polyline where it goes behind the globe. */
-export function visibleRuns(pts: V3[], b: Basis, R: number, cx: number, cy: number): XY[][] {
+export function visibleRuns(
+  pts: V3[],
+  b: Basis,
+  R: number,
+  cx: number,
+  cy: number,
+): XY[][] {
   const runs: XY[][] = [];
   let seg: XY[] = [];
   for (const P of pts) {
@@ -629,17 +719,26 @@ export function paintGlobe(
         continue;
       }
       const w = Math.sqrt(1 - r2);
-      const P: V3 = [0, 1, 2].map((k) => u * east[k]! + v * north[k]! + w * cen[k]!) as V3;
+      const P: V3 = [0, 1, 2].map(
+        (k) => u * east[k]! + v * north[k]! + w * cen[k]!,
+      ) as V3;
       const lat = Math.asin(Math.max(-1, Math.min(1, P[2]))) * R2D;
       const lon = Math.atan2(P[1], P[0]) * R2D;
-      const px = Math.min(Math.max(((lon + 180) / 360) * (EW - 1), 0), EW - 1.01);
-      const py = Math.min(Math.max(((90 - lat) / 180) * (EH - 1), 0), EH - 1.01);
+      const px = Math.min(
+        Math.max(((lon + 180) / 360) * (EW - 1), 0),
+        EW - 1.01,
+      );
+      const py = Math.min(
+        Math.max(((90 - lat) / 180) * (EH - 1), 0),
+        EH - 1.01,
+      );
       const x0 = Math.floor(px);
       const y0 = Math.floor(py);
       const fx = px - x0;
       const fy = py - y0;
       const c = [0, 1, 2].map((k) => {
-        const at = (x: number, y: number): number => eq.data[(y * EW + x) * 4 + k]!;
+        const at = (x: number, y: number): number =>
+          eq.data[(y * EW + x) * 4 + k]!;
         return (
           at(x0, y0) * (1 - fx) * (1 - fy) +
           at(x0 + 1, y0) * fx * (1 - fy) +

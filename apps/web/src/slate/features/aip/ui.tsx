@@ -153,9 +153,7 @@ export function L(
           width: wd,
           height: Math.abs(y2 - y1),
         };
-  return (
-    <div className="a" style={{ ...st, background: col, ...css(ex) }} />
-  );
+  return <div className="a" style={{ ...st, background: col, ...css(ex) }} />;
 }
 
 export function CLIP(
@@ -187,14 +185,7 @@ export function CLIP(
   );
 }
 
-export function SVG(
-  inner: N[],
-  x = 0,
-  y = 0,
-  w = 1920,
-  h = 1080,
-  ex = "",
-): N {
+export function SVG(inner: N[], x = 0, y = 0, w = 1920, h = 1080, ex = ""): N {
   return (
     <svg
       className="a"

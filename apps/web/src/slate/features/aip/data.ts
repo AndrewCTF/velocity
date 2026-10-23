@@ -324,8 +324,7 @@ export const comma = (n: number): string => n.toLocaleString("en-US");
 const GEO_CX = [579.0603917238906, 1.1519823034302774, -31720.716824870044];
 const GEO_CY = [2.261125465928714, -575.6161275462374, 16226.050406843233];
 const mercy = (lat: number): number =>
-  (Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 180 / 2)) * 180) /
-  Math.PI;
+  (Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 180 / 2)) * 180) / Math.PI;
 export function scenePx(lon: number, lat: number): [number, number] {
   const v = [lon, mercy(lat), 1];
   return [

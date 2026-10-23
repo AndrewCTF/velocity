@@ -3,7 +3,17 @@
 // dots and chokepoints are the live routes; the table is the live evidence
 // store filtered by the search box.
 import { useState } from "react";
-import { A, I, T as T0, Hit, circ, frag, insetFrame, titlebar, type N } from "./ui.js";
+import {
+  A,
+  I,
+  T as T0,
+  Hit,
+  circ,
+  frag,
+  insetFrame,
+  titlebar,
+  type N,
+} from "./ui.js";
 import {
   UTC,
   chipsOf,
@@ -17,7 +27,8 @@ import {
 } from "./data.js";
 import { apiFetch } from "../../../transport/http.js";
 import { setDragTitle } from "./drag.js";
-import world from "./eu-world.png";
+// shortcut: reference-derived image kept out of the repo; the page draws without it. Ship a licensed asset to restore it.
+const world: string = "";
 
 // the Gaia pane text is set larger than the chat pane's
 const T = (
@@ -82,7 +93,13 @@ export function GaiaFrame({
     titlebar("Gaia home", "home", 1316),
     Hit(770, 283, 18, 18, "Chat", toChat),
     A(767, 304, 1099, 354, "background:#14181c"),
-    A(767, 304, 1099, 354, `background:url(${world}) 0 0/1100px 360px no-repeat`),
+    A(
+      767,
+      304,
+      1099,
+      354,
+      `background:${world ? `url(${world})` : "none"} 0 0/1100px 360px no-repeat`,
+    ),
   ];
   // theatre outlines: longitude spans that hold the real chokepoints of each group
   const labs: [number, number, string][] = [];
@@ -96,28 +113,75 @@ export function GaiaFrame({
       `M${f(x0 + 9)} ${f(y0)} H${f(x1 - 9)} Q${f(x1)} ${f(y0)} ${f(x1)} ${f(y0 + 9)} V${f(ym)} L${f(x1 - j)} ${f(ym + 6)} V${f(y1 - 9)} Q${f(x1 - j)} ${f(y1)} ${f(x1 - j - 9)} ${f(y1)} ` +
       `H${f(x0 + 9)} Q${f(x0)} ${f(y1)} ${f(x0)} ${f(y1 - 9)} V${f(ym + 6)} L${f(x0 + j)} ${f(ym)} V${f(y0 + 9)} Q${f(x0 + j)} ${f(y0)} ${f(x0 + j + 9)} ${f(y0)}Z`;
     labs.push([x0 + (x1 - x0) / 2, y0 + 16, lab]);
-    return <path key={lab} d={d} fill="rgba(120,140,155,.06)" stroke="#8d969d" strokeWidth="1.4" strokeLinejoin="round" />;
+    return (
+      <path
+        key={lab}
+        d={d}
+        fill="rgba(120,140,155,.06)"
+        stroke="#8d969d"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    );
   });
   s.push(
-    <svg key="map" aria-hidden style={{ left: 0, top: 0, width: 1920, height: 1080, overflow: "visible" }}>
+    <svg
+      key="map"
+      aria-hidden
+      style={{
+        left: 0,
+        top: 0,
+        width: 1920,
+        height: 1080,
+        overflow: "visible",
+      }}
+    >
       {paths}
       {warnRings(warns).map(([x, y], i) => (
-        <circle key={`w${i}`} cx={x.toFixed(1)} cy={y.toFixed(1)} r="3.1" fill="none" stroke="#e8923a" strokeWidth="1.15" opacity=".9" />
+        <circle
+          key={`w${i}`}
+          cx={x.toFixed(1)}
+          cy={y.toFixed(1)}
+          r="3.1"
+          fill="none"
+          stroke="#e8923a"
+          strokeWidth="1.15"
+          opacity=".9"
+        />
       ))}
       {aircraft
         .filter((_, i) => i % 3 === 0)
         .map(([lon, lat]) => [gx(lon), gy(lat)] as const)
         .filter(([x, y]) => x > 770 && x < 1600 && y > 306 && y < 656)
         .map(([x, y], i) => (
-          <circle key={`a${i}`} cx={x.toFixed(1)} cy={y.toFixed(1)} r="2.9" fill="#7f8fd6" opacity=".78" />
+          <circle
+            key={`a${i}`}
+            cx={x.toFixed(1)}
+            cy={y.toFixed(1)}
+            r="2.9"
+            fill="#7f8fd6"
+            opacity=".78"
+          />
         ))}
     </svg>,
   );
-  for (const [x, y, lab] of labs) s.push(T(x, y, lab, 8.3, "#f2f4f6", 600, "c", 0.01));
+  for (const [x, y, lab] of labs)
+    s.push(T(x, y, lab, 8.3, "#f2f4f6", 600, "c", 0.01));
   for (const c of chokes)
-    s.push(A(gx(c.lon) - 3, gy(c.lat) - 3, 6, 6, "border:1.3px solid #f0f2f4;border-radius:50%;box-sizing:border-box;background:rgba(20,24,28,.6)"));
+    s.push(
+      A(
+        gx(c.lon) - 3,
+        gy(c.lat) - 3,
+        6,
+        6,
+        "border:1.3px solid #f0f2f4;border-radius:50%;box-sizing:border-box;background:rgba(20,24,28,.6)",
+      ),
+    );
   // create bar
-  s.push(A(771, 316, 277, 22, "background:rgba(20,24,28,.9);border-radius:2px"), T(786, 327, "Create", 8.2, "#d8dee3"));
+  s.push(
+    A(771, 316, 277, 22, "background:rgba(20,24,28,.9);border-radius:2px"),
+    T(786, 327, "Create", 8.2, "#d8dee3"),
+  );
   const create: [number, number, string, string, (() => void) | undefined][] = [
     [821, 882, "globe-network", "Map", toMap],
     [887, 948, "th", "Sheet", undefined],
@@ -125,10 +189,24 @@ export function GaiaFrame({
   ];
   for (const [x0, x1, ic, lab, go] of create)
     s.push(
-      A(x0, 316, x1 - x0, 21, "background:#2f6f3d;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.35)"),
+      A(
+        x0,
+        316,
+        x1 - x0,
+        21,
+        "background:#2f6f3d;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.35)",
+      ),
       I(ic, x0 + 19, 326.5, 9, "#eef5ee"),
       T(x0 + 30, 327, lab, 8, "#f2f6f2"),
-      Hit(x0, 316, x1 - x0, 21, `Create ${lab}`, go, "Velocity has no sheet store"),
+      Hit(
+        x0,
+        316,
+        x1 - x0,
+        21,
+        `Create ${lab}`,
+        go,
+        "Velocity has no sheet store",
+      ),
     );
   s.push(
     A(949, 316, 17, 21, "background:#2f6f3d;border-radius:2px"),
@@ -154,17 +232,34 @@ export function GaiaFrame({
     const yc = 570 + i * 17;
     if (k === "ic") s.push(I("pulse", 789, yc, 9, col));
     else if (k.startsWith("dot")) s.push(circ(789, yc, 3, col));
-    else s.push(A(786, yc - 3.2, 6.4, 6.4, `border:1.3px solid ${col};border-radius:50%`));
+    else
+      s.push(
+        A(
+          786,
+          yc - 3.2,
+          6.4,
+          6.4,
+          `border:1.3px solid ${col};border-radius:50%`,
+        ),
+      );
     s.push(T(803, yc + 0.3, lab, 7.4, "#aab2b8"));
   });
   if (hormuz) {
     const hx = gx(hormuz.lon);
     const hy = gy(hormuz.lat);
     s.push(
-      A(hx - 52, hy + 30, 112, 20, "background:#e6e9f2;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.5)"),
+      A(
+        hx - 52,
+        hy + 30,
+        112,
+        20,
+        "background:#e6e9f2;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.5)",
+      ),
       I("map-marker", hx - 39, hy + 40, 9, "#2a50a8"),
       T(hx - 29, hy + 40.5, "Strait of Hormuz", 7.8, "#242a38", 600, "l", 0.01),
-      Hit(hx - 52, hy + 30, 112, 20, "Preview Strait of Hormuz", () => setCard(true)),
+      Hit(hx - 52, hy + 30, 112, 20, "Preview Strait of Hormuz", () =>
+        setCard(true),
+      ),
     );
   }
   // preview card
@@ -180,7 +275,15 @@ export function GaiaFrame({
       T(1611, 497, "Strait of Hormuz", 8.6, "#f2f4f6", 400),
       T(1611, 515, "UNCLASSIFIED", 7.6, "#e4e8ec", 600),
       T(1611, 531, "Vessels in box", 7.6, "#8a949b"),
-      T(1687, 531, hormuz ? `${hormuz.vessels} items` : unavailable("Chokepoints", chokeRes), 7.6, "#e4e8ec"),
+      T(
+        1687,
+        531,
+        hormuz
+          ? `${hormuz.vessels} items`
+          : unavailable("Chokepoints", chokeRes),
+        7.6,
+        "#e4e8ec",
+      ),
       T(1611, 547, "Stationary", 7.6, "#8a949b"),
       T(1687, 547, hormuz ? `${hormuz.stationary} items` : "—", 7.6, "#e4e8ec"),
       I("pulse", 1633, 570, 14, "#6a747b"),
@@ -192,7 +295,14 @@ export function GaiaFrame({
     );
   // tab strip
   s.push(A(767, 658, 1099, 32, "background:#1c1e24"));
-  const tabs: [string, string, number, number, number, (() => void) | undefined][] = [
+  const tabs: [
+    string,
+    string,
+    number,
+    number,
+    number,
+    (() => void) | undefined,
+  ][] = [
     ["duplicate", "All artifacts", 789, 804, 0, undefined],
     ["globe-network", "Maps", 883, 898, 0, toMap],
     ["th", "Datasets", 953, 968, 0, undefined],
@@ -205,18 +315,46 @@ export function GaiaFrame({
       A(ix - 10, 666, 20, 20, "background:#252a31;border-radius:3px"),
       I(ic, ix, 676, 10, on ? "#b44fd6" : "#9aa4ab"),
       T(tx, 674, lab, 7.4, "#e4e8ec", 600),
-      Hit(ix - 10, 664, tx - ix + lab.length * 5 + 14, 24, lab, go, "Only the evidence store backs this browser"),
+      Hit(
+        ix - 10,
+        664,
+        tx - ix + lab.length * 5 + 14,
+        24,
+        lab,
+        go,
+        "Only the evidence store backs this browser",
+      ),
     );
   s.push(
     A(1015, 688, 80, 2, "background:#6a9ae0"),
-    A(1600, 663, 230, 23, "background:#1a2234;border:1px solid #3a4a70;border-radius:2px;box-sizing:border-box"),
+    A(
+      1600,
+      663,
+      230,
+      23,
+      "background:#1a2234;border:1px solid #3a4a70;border-radius:2px;box-sizing:border-box",
+    ),
     I("search", 1611, 675, 10, "#d8dee3"),
     <input
       key="q"
       aria-label="Search evidence"
       value={q}
       onChange={(e) => setQ(e.target.value)}
-      style={{ position: "absolute", left: 1622, top: 667, width: 186, height: 16, background: "transparent", border: 0, outline: 0, padding: 0, color: "#e4e8ec", fontSize: 7.8 * 1.14 * 1.12, letterSpacing: "0.046em", fontFamily: "inherit" }}
+      style={{
+        position: "absolute",
+        left: 1622,
+        top: 667,
+        width: 186,
+        height: 16,
+        background: "transparent",
+        border: 0,
+        outline: 0,
+        padding: 0,
+        color: "#e4e8ec",
+        fontSize: 7.8 * 1.14 * 1.12,
+        letterSpacing: "0.046em",
+        fontFamily: "inherit",
+      }}
     />,
     I("cross", 1817, 675, 8, "#d8dee3"),
     Hit(1810, 668, 14, 14, "Clear search", () => setQ("")),
@@ -236,12 +374,35 @@ export function GaiaFrame({
     [786, "Shared with my teams"],
     [811, "Favorites"],
   ] as const)
-    s.push(T(782, yc + 0.5, t, 7.6, "#cdd3d8", 600), Hit(775, yc - 10, 165, 20, t, undefined, "Open mode has no user identity to filter by"));
+    s.push(
+      T(782, yc + 0.5, t, 7.6, "#cdd3d8", 600),
+      Hit(
+        775,
+        yc - 10,
+        165,
+        20,
+        t,
+        undefined,
+        "Open mode has no user identity to filter by",
+      ),
+    );
   s.push(
     A(775, 830, 165, 1, "background:#3c444b"),
-    A(775, 843, 11, 11, "border:1px solid #6a747b;border-radius:2px;box-sizing:border-box"),
+    A(
+      775,
+      843,
+      11,
+      11,
+      "border:1px solid #6a747b;border-radius:2px;box-sizing:border-box",
+    ),
     T(794, 848.5, "Show untitled", 7.6, "#cdd3d8"),
-    A(775, 864, 11, 11, "border:1px solid #6a747b;border-radius:2px;box-sizing:border-box"),
+    A(
+      775,
+      864,
+      11,
+      11,
+      "border:1px solid #6a747b;border-radius:2px;box-sizing:border-box",
+    ),
     I("pulse", 800, 869, 9, "#3fa35a"),
     T(811, 869.5, "Only show verified", 7.6, "#cdd3d8"),
   );
@@ -259,9 +420,13 @@ export function GaiaFrame({
   ] as const)
     s.push(T(x, 704.5, h, 7.2, "#c4cad0", 700, "l", 0.02));
   s.push(I("sort-desc", 1395, 704, 7, "#aeb4ba"));
-  const rows = EVID.filter((e) => e.title.toLowerCase().includes(q.trim().toLowerCase()));
-  if (!ev?.ok) s.push(T(955, 740, unavailable("Evidence", ev), 8, "#e8923a", 600));
-  else if (!rows.length) s.push(T(955, 740, `No evidence matches "${q}"`, 8, "#aab2b8"));
+  const rows = EVID.filter((e) =>
+    e.title.toLowerCase().includes(q.trim().toLowerCase()),
+  );
+  if (!ev?.ok)
+    s.push(T(955, 740, unavailable("Evidence", ev), 8, "#e8923a", 600));
+  else if (!rows.length)
+    s.push(T(955, 740, `No evidence matches "${q}"`, 8, "#aab2b8"));
   const ys = [722, 770, 818];
   rows.slice(0, 3).forEach((e, k) => {
     const y = ys[k]!;
@@ -281,7 +446,16 @@ export function GaiaFrame({
         style={{ left: 949, top: y, width: 560, height: 48, cursor: "grab" }}
       />,
       I("document", 966, y + 11, 9, "#b44fd6"),
-      T(978, y + 11.5, t.length < 21 ? t : `${t.slice(0, 19)}…`, 8, "#f2f4f6", 600, "l", 0.02),
+      T(
+        978,
+        y + 11.5,
+        t.length < 21 ? t : `${t.slice(0, 19)}…`,
+        8,
+        "#f2f4f6",
+        600,
+        "l",
+        0.02,
+      ),
     );
     if (k === 0) s.push(I("star-empty", 1087, y + 11, 8, "#aeb4ba"));
     s.push(
@@ -301,13 +475,31 @@ export function GaiaFrame({
       }
       s.push(
         A(cx, cy - 6, w, 12, "background:#d6dade;border-radius:6px"),
-        T(cx + 6, cy + 0.3, <><b>{lab}:</b> {val}</>, 6.8, "#252a30", 400, "l", 0.0),
+        T(
+          cx + 6,
+          cy + 0.3,
+          <>
+            <b>{lab}:</b> {val}
+          </>,
+          6.8,
+          "#252a30",
+          400,
+          "l",
+          0.0,
+        ),
       );
       cx += w + 4;
     }
     s.push(
       I("duplicate", 1794, y + 12, 9, "#c4ccd2"),
-      Hit(1787, y + 5, 14, 14, "Copy SHA-256", () => void navigator.clipboard?.writeText(e.sha256)),
+      Hit(
+        1787,
+        y + 5,
+        14,
+        14,
+        "Copy SHA-256",
+        () => void navigator.clipboard?.writeText(e.sha256),
+      ),
       I("export", 1815, y + 12, 9, "#c4ccd2"),
       Hit(1808, y + 5, 14, 14, "Download artifact", () => void download(e)),
     );

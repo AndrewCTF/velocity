@@ -5,7 +5,8 @@
 // / `style` keep the builder's inline CSS strings verbatim (parsed by css()).
 import type { CSSProperties, ReactNode } from "react";
 import { css } from "../aip/ui.js";
-import scene from "./sceneGulf.jpg";
+// shortcut: reference-derived image kept out of the repo; the page draws without it. Ship a licensed asset to restore it.
+const scene: string = "";
 
 export { css, frag, Hit } from "../aip/ui.js";
 export type N = ReactNode;
@@ -37,10 +38,24 @@ export function T(
     </div>
   );
 }
-export const Tr = (x: number, yc: number, text: N, color: string, size: number, w: number, extra = ""): N =>
-  T(x, yc, text, color, size, w, extra, true);
-export const Tc = (x: number, yc: number, text: N, color: string, size: number, w: number, extra = ""): N =>
-  T(x, yc, text, color, size, w, extra, false, true);
+export const Tr = (
+  x: number,
+  yc: number,
+  text: N,
+  color: string,
+  size: number,
+  w: number,
+  extra = "",
+): N => T(x, yc, text, color, size, w, extra, true);
+export const Tc = (
+  x: number,
+  yc: number,
+  text: N,
+  color: string,
+  size: number,
+  w: number,
+  extra = "",
+): N => T(x, yc, text, color, size, w, extra, false, true);
 
 export function A(
   x: number,
@@ -141,8 +156,13 @@ export function IS(
  *  scene_crop calls); the tab badge counts them. */
 export const N_MEDIA = 3;
 
-export const HL = (x0: number, y0: number, x1: number, y1: number, color = "#fdeeb5"): N =>
-  A(x0, y0, x1 - x0, y1 - y0, `background:${color}`);
+export const HL = (
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  color = "#fdeeb5",
+): N => A(x0, y0, x1 - x0, y1 - y0, `background:${color}`);
 
 export const shipicon = (xc: number, yc: number, col = "#abb3bf", s = 20): N =>
   IS("ship", xc, yc, s, col);
@@ -196,7 +216,7 @@ export function sceneBg(
   const bx = w / 2 - cx * k;
   const by = h / 2 - cy * k;
   return (
-    `background:url(${scene}) ${bx.toFixed(1)}px ${by.toFixed(1)}px/${(SCENE_W * k).toFixed(1)}px ${(SCENE_H * k).toFixed(1)}px no-repeat #0a1220` +
+    `background:${scene ? `url(${scene})` : "none"} ${bx.toFixed(1)}px ${by.toFixed(1)}px/${(SCENE_W * k).toFixed(1)}px ${(SCENE_H * k).toFixed(1)}px no-repeat #0a1220` +
     (filter ? `;filter:${filter}` : "")
   );
 }

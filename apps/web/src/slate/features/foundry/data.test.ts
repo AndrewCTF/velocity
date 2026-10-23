@@ -1,9 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { KM, aisType, countryOrder, d192, d200, densCenter, depsOf, fmt_slash, fmt_t, lengthRamp, magRamp, ofvOf, proj, quakeCell, splitWrap, wpx, type Airport } from "./data.js";
+import {
+  KM,
+  aisType,
+  countryOrder,
+  d192,
+  d200,
+  densCenter,
+  depsOf,
+  fmt_slash,
+  fmt_t,
+  lengthRamp,
+  magRamp,
+  ofvOf,
+  proj,
+  quakeCell,
+  splitWrap,
+  wpx,
+  type Airport,
+} from "./data.js";
 import { pyRound, scaleFs } from "./kit.js";
 import { descOf, subOf, wrap } from "./Marketplace.js";
 
-const ap = (iata: string, lon: number, lat: number, country = "X"): Airport => ({ iata, name: iata, city: iata, country, lon, lat });
+const ap = (
+  iata: string,
+  lon: number,
+  lat: number,
+  country = "X",
+): Airport => ({ iata, name: iata, city: iata, country, lon, lat });
 
 describe("foundry copy derivations", () => {
   it("projects like raw_plate: centre lands mid-plate", () => {
@@ -19,7 +42,9 @@ describe("foundry copy derivations", () => {
   it("python round half to even, font-size post-pass skips decimals", () => {
     expect(pyRound(2.5)).toBe(2);
     expect(pyRound(3.5)).toBe(4);
-    expect(scaleFs("font-size:25px;font-size:28.75px", 1.16)).toBe("font-size:29px;font-size:28.75px");
+    expect(scaleFs("font-size:25px;font-size:28.75px", 1.16)).toBe(
+      "font-size:29px;font-size:28.75px",
+    );
   });
   it("counts departures and keeps only airports that have them", () => {
     const deps = depsOf([
@@ -27,7 +52,9 @@ describe("foundry copy derivations", () => {
       { src: "A", dst: "C" },
     ]);
     expect(deps.get("A")).toBe(2);
-    expect(ofvOf([ap("A", 0, 0), ap("B", 1, 1)], deps).map((a) => a.iata)).toEqual(["A"]);
+    expect(
+      ofvOf([ap("A", 0, 0), ap("B", 1, 1)], deps).map((a) => a.iata),
+    ).toEqual(["A"]);
   });
   it("d192 bins by percentile and selects inside the radius", () => {
     const deps = new Map<string, number>();
@@ -40,11 +67,21 @@ describe("foundry copy derivations", () => {
     expect(r.inview.length).toBe(12);
     expect(r.edges[0]![0]).toBe(1);
     expect(r.bin(12)).toBe(3);
-    if (r.ctr) for (const a of r.selected) expect(KM([r.ctr.lon, r.ctr.lat], [a.lon, a.lat])).toBeLessThanOrEqual(r.rkm);
+    if (r.ctr)
+      for (const a of r.selected)
+        expect(KM([r.ctr.lon, r.ctr.lat], [a.lon, a.lat])).toBeLessThanOrEqual(
+          r.rkm,
+        );
   });
   it("d200 picks the ringed airport clear of the edges", () => {
     const deps = new Map<string, number>();
-    const aps = [ap("C", 10, 49), ap("N1", 10.5, 49), ap("N2", 9.5, 49), ap("N3", 10, 49.6), ap("E", 30, 49)];
+    const aps = [
+      ap("C", 10, 49),
+      ap("N1", 10.5, 49),
+      ap("N2", 9.5, 49),
+      ap("N3", 10, 49.6),
+      ap("E", 30, 49),
+    ];
     aps.forEach((a, i) => deps.set(a.iata, 10 - i));
     const r = d200(aps, deps, proj(10, 49, 5.7, 897, 375), 897, 375)!;
     expect(r.sel.iata).toBe("C");
@@ -57,7 +94,17 @@ describe("foundry copy derivations", () => {
       ["C", 30],
       ["D", 3],
     ]);
-    expect(countryOrder([ap("A", 0, 0, "Fr"), ap("C", 0, 0, "De"), ap("B", 0, 0, "De"), ap("D", 0, 0, "It")], deps)).toEqual(["De", "Fr"]);
+    expect(
+      countryOrder(
+        [
+          ap("A", 0, 0, "Fr"),
+          ap("C", 0, 0, "De"),
+          ap("B", 0, 0, "De"),
+          ap("D", 0, 0, "It"),
+        ],
+        deps,
+      ),
+    ).toEqual(["De", "Fr"]);
   });
   it("ramps", () => {
     expect(magRamp(0, 0, 4)).toBe("#f7ce6b");
@@ -75,7 +122,13 @@ describe("foundry copy derivations", () => {
     expect(n).toBe(2);
     expect(Math.abs(lo - 4.4)).toBeLessThan(1);
     expect(Math.abs(la - 51.9)).toBeLessThan(1);
-    const q = Array.from({ length: 5 }, () => ({ mag: 2, place: "x", time: 0, lon: -150, lat: 60 }));
+    const q = Array.from({ length: 5 }, () => ({
+      mag: 2,
+      place: "x",
+      time: 0,
+      lon: -150,
+      lat: 60,
+    }));
     expect(quakeCell(q, 30)).toEqual([-160, 55]); // first cell with |dlon| < 15 and |dlat| < 9.3
   });
   it("ais_type", () => {
@@ -99,7 +152,9 @@ describe("foundry copy derivations", () => {
     expect(fmt_slash(86400 * 31 + 13 * 3600)).toBe("02/01/1970, 1:00:00 PM");
   });
   it("marketplace copy carries no em dash and wraps like textwrap", () => {
-    const d = descOf("Live intel as MCP tools — ADS-B, AIS — bundled with a skill.");
+    const d = descOf(
+      "Live intel as MCP tools — ADS-B, AIS — bundled with a skill.",
+    );
     expect(d).not.toContain("—");
     expect(d.startsWith("Live intel as MCP tools. ADS-B")).toBe(true);
     expect(subOf("A — B, as 46 tools")).toBe("A, B");
