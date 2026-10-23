@@ -73,21 +73,16 @@ export function ObjectInspector({
   return (
     <div className="h-full flex flex-col">
       {id && (
-        <div className="flex items-stretch shrink-0 border-b border-line-2 bg-bg-1">
+        <div className="k-ptabs shrink-0">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               aria-current={tab === t.id ? "page" : undefined}
-              className={`relative px-3 h-7 font-label uppercase tracking-[0.6px] text-[10px] transition-colors ${
-                tab === t.id ? "text-txt-0" : "text-txt-3 hover:text-txt-1"
-              }`}
+              className={tab === t.id ? "k-ptab on" : "k-ptab"}
             >
               {t.label}
-              {tab === t.id && (
-                <span className="absolute left-2 right-2 bottom-0 h-[2px] bg-accent" />
-              )}
             </button>
           ))}
         </div>

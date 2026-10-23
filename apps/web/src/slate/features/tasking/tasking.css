@@ -1,0 +1,520 @@
+/* SAR tasking flow (features copy G33 modal, G36 Task Asset). The copy's
+   inline geometry, scoped; children of each box are placed absolutely. */
+.slate-shell .sl-task-backdrop {
+  position: absolute;
+  left: 42px;
+  top: 92px;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  z-index: 210;
+  background: rgba(0, 2, 4, 0.35);
+}
+.slate-shell .sl-g33 {
+  position: relative;
+  width: 566px;
+  height: 267px;
+  background: #101618;
+  border: 1.5px solid #0e181a;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.65);
+}
+.slate-shell .sl-g36 {
+  position: absolute;
+  left: 61px;
+  top: 108px;
+  width: 420px;
+  height: 670px;
+  background: #182022;
+  border: 1px solid #2a3438;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  z-index: 210;
+}
+.slate-shell .sl-g33 > *,
+.slate-shell .sl-g36 > * {
+  position: absolute;
+}
+.slate-shell .sl-g33 .t,
+.slate-shell .sl-g36 .t {
+  white-space: nowrap;
+  line-height: 20px;
+  height: 20px;
+  color: #e5e8eb;
+  font-size: 15px;
+  letter-spacing: 0.045em;
+}
+.slate-shell .sl-g33 .sl-link,
+.slate-shell .sl-g36 .sl-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+.slate-shell .sl-g33-head {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f6f7f9;
+  letter-spacing: 0.035em;
+  line-height: 21px;
+  white-space: normal;
+}
+.slate-shell .sl-g33-explore {
+  border: 1.6px solid #8ba0a6;
+  background: #263a3c;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 12px;
+  font: inherit;
+  font-size: 16.5px;
+  color: #f6f7f9;
+  cursor: pointer;
+}
+.slate-shell .sl-g33-retry,
+.slate-shell .sl-g36-btn {
+  border: 1.5px solid #8f99a8;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  font: inherit;
+  font-size: 16.5px;
+  color: #f6f7f9;
+  cursor: pointer;
+}
+.slate-shell .sl-g36-btn {
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: #f1f4f6;
+}
+.slate-shell .sl-g36-btn.pri {
+  border-color: #4a7fa8;
+  color: #5da7ef;
+}
+.slate-shell .sl-g33 button:disabled,
+.slate-shell .sl-g36 button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.slate-shell .sl-g36-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 16px;
+  color: #5da7ef;
+  cursor: pointer;
+}
+.slate-shell .sl-g36-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.slate-shell .sl-g36-empty {
+  margin: 8px 0;
+  color: #aab4ba;
+  font-size: 15px;
+}
+.slate-shell .sl-g36-row {
+  position: relative;
+  flex: none;
+  height: 60px;
+  border: 1.6px solid #6d7a80;
+  background: #222a30;
+  border-radius: 2px;
+}
+.slate-shell .sl-g36-row:hover {
+  border-color: #c9d1d4;
+}
+.slate-shell .sl-g36-row > * {
+  position: absolute;
+}
+.slate-shell .sl-g36-row .ic {
+  left: 0;
+  top: 0;
+  width: 60px;
+  height: 57px;
+  background: #323c40;
+  display: grid;
+  place-items: center;
+  color: #e08ab0;
+}
+.slate-shell .sl-g36-row .nm {
+  left: 74px;
+  top: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #f1f4f6;
+  white-space: nowrap;
+}
+.slate-shell .sl-g36-row .sc {
+  left: 74px;
+  top: 28px;
+  font-size: 13.5px;
+  color: #aab4ba;
+  white-space: nowrap;
+  max-width: 196px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slate-shell .sl-g36-row .cnt {
+  left: 275px;
+  top: 15px;
+  width: 55px;
+  height: 27px;
+  background: #503e2a;
+  color: #f0b050;
+  font-size: 15.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.03em;
+}
+.slate-shell .sl-g36-row .cnt.ok {
+  background: #1c443c;
+  color: #3ddc97;
+}
+.slate-shell .sl-g36-row .ck {
+  left: 337px;
+  top: 10px;
+  width: 35px;
+  height: 35px;
+  border: 1.5px solid #8f99a8;
+  background: #222a30;
+  border-radius: 2px;
+  display: grid;
+  place-items: center;
+  color: #e5e8eb;
+  cursor: pointer;
+  padding: 0;
+}
+/* G53 submit-task-order modal and G38 order-status popover. */
+.slate-shell .sl-g53 {
+  position: relative;
+  width: 692px;
+  height: 320px;
+  background: #0e1416;
+  border: 1px solid #2a343a;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+}
+.slate-shell .sl-g53 > *,
+.slate-shell .sl-g53 > div > *,
+.slate-shell .sl-g38 > *,
+.slate-shell .sl-g38 > div > * {
+  position: absolute;
+}
+.slate-shell .sl-g53 .t,
+.slate-shell .sl-g38 .t {
+  white-space: nowrap;
+  line-height: 20px;
+  height: 20px;
+  color: #e5e8eb;
+  font-size: 15px;
+  letter-spacing: 0.045em;
+}
+.slate-shell .sl-g53 .sl-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+.slate-shell .sl-odesct {
+  font-size: 15.5px;
+  line-height: 19px;
+  color: #f1f4f6;
+  white-space: normal;
+  overflow: hidden;
+}
+.slate-shell .sl-odesc {
+  background: #141c20;
+  border: 1px solid #3a464c;
+  color: #f1f4f6;
+  font: inherit;
+  font-size: 14px;
+  resize: none;
+}
+.slate-shell .sl-g53b {
+  border: 1px solid #cfd6da;
+  border-radius: 2px;
+  background: none;
+  color: #f6f7f9;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.slate-shell .sl-g53b:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.slate-shell .sl-ocheck {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #12c486;
+  color: #0e1416;
+  display: grid;
+  place-items: center;
+}
+.slate-shell .sl-ocheck.no {
+  background: #4d5558;
+  color: #cfd6da;
+}
+.slate-shell .sl-ospin {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #3a4448;
+  border-top-color: #8d979d;
+  border-radius: 50%;
+  animation: sl-ospin 1s linear infinite;
+}
+@keyframes sl-ospin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.slate-shell .sl-ordwrap {
+  position: absolute !important;
+  top: 1px !important;
+  transform: none !important;
+  right: 79px;
+}
+.slate-shell .sl-ordcnt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-top: 0;
+  cursor: pointer;
+  color: #fff;
+}
+.slate-shell .sl-ordcnt .dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #2b7fd0;
+  display: grid;
+  place-items: center;
+}
+.slate-shell .sl-ordcnt .n {
+  font-size: 10px;
+  color: #9fc9ef;
+  line-height: 10px;
+}
+.slate-shell .sl-g38 {
+  position: fixed;
+  right: 67px;
+  top: 83px;
+  width: 319px;
+  height: 238px;
+  background: #222a30;
+  border-radius: 3px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+}
+/* G34 feeders and G29 satellites (asset step). */
+.slate-shell .sl-g36 .sl-g34in {
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-family: inherit;
+  color: #e5e8eb;
+}
+.slate-shell .sl-g34in::placeholder {
+  color: #9fabb2;
+}
+.slate-shell .sl-g34list,
+.slate-shell .sl-g29list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.slate-shell .sl-g29list {
+  border: 1px solid #2a343a;
+  background: #1a222a;
+  gap: 4px;
+  padding: 12px 0 6px;
+}
+.slate-shell .sl-g34card {
+  position: relative;
+  flex: none;
+  height: 71px;
+  border: 1px solid #2a343a;
+  background: #142228;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  color: inherit;
+}
+.slate-shell .sl-g34card.on {
+  border: 2px solid #2b9a78;
+}
+.slate-shell .sl-g34card > * {
+  position: absolute;
+}
+.slate-shell .sl-g34card .nm {
+  left: 66px;
+  top: 7px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #f6f7f9;
+}
+.slate-shell .sl-g34card .st {
+  left: 16px;
+  top: 39px;
+  width: 52px;
+  height: 19px;
+  background: #205040;
+  color: #3fd6a0;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.04em;
+}
+.slate-shell .sl-g34card .st.off {
+  background: #3a3a2a;
+  color: #d6c06a;
+}
+.slate-shell .sl-g34card .loc {
+  left: 85px;
+  top: 38px;
+  font-size: 15.5px;
+  color: #d5dce0;
+}
+.slate-shell .sl-g34card .rec {
+  left: 273px;
+  top: 24px;
+  width: 107px;
+  height: 22px;
+  background: #167462;
+  color: #f1f6f6;
+  font-size: 14.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slate-shell .sl-g34band {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #e9eef0;
+  cursor: pointer;
+}
+.slate-shell .sl-g34det {
+  font-size: 14px;
+  color: #c4ced3;
+  white-space: normal;
+}
+.slate-shell .sl-g34go {
+  gap: 10px;
+}
+.slate-shell .sl-g29prog {
+  border: 1.6px solid #3fa7a0;
+  background: #1c3030;
+  border-radius: 2px;
+}
+.slate-shell .sl-g29prog > * {
+  position: absolute;
+}
+.slate-shell .sl-g29t {
+  font-size: 15.5px;
+  line-height: 22px;
+  color: #e9eef0;
+  white-space: normal;
+}
+.slate-shell .sl-g29bar {
+  background: #d3d9dc;
+  border-radius: 4px;
+}
+.slate-shell .sl-g29bar.run {
+  animation: sl-g29slide 1.4s ease-in-out infinite alternate;
+}
+@keyframes sl-g29slide {
+  to {
+    transform: translateX(285px);
+  }
+}
+.slate-shell .sl-g29row {
+  position: relative;
+  flex: none;
+  height: 67px;
+}
+.slate-shell .sl-g29row > * {
+  position: absolute;
+}
+.slate-shell .sl-g29row .ic {
+  left: 22px;
+  top: 0;
+  width: 38px;
+  height: 38px;
+  background: #232c33;
+  display: grid;
+  place-items: center;
+  color: #d5dce0;
+}
+.slate-shell .sl-g29row .nm {
+  left: 70px;
+  top: -1px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #f6f7f9;
+  white-space: nowrap;
+}
+.slate-shell .sl-g29row .eta {
+  left: 70px;
+  top: 21px;
+  font-size: 13.5px;
+  color: #a9b4ba;
+  white-space: nowrap;
+}
+.slate-shell .sl-g29row .av {
+  left: 278px;
+  top: 2px;
+  width: 92px;
+  height: 37px;
+  background: #323c42;
+  border: 0;
+  border-radius: 2px;
+  color: #f1f4f6;
+  font: inherit;
+  font-size: 15.5px;
+  cursor: pointer;
+}
+.slate-shell .sl-g29row .av.on {
+  box-shadow: inset 0 0 0 2px #5da7ef;
+}
+.slate-shell .sl-g29all {
+  align-self: center;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 15.5px;
+  color: #5da7ef;
+  cursor: pointer;
+}
+.slate-shell .sl-g38 .acts > * {
+  position: static;
+}

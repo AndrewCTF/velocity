@@ -3,8 +3,6 @@
 // read/written automatically — unknown/missing keys fall back to the default,
 // so the blob is forward/backward compatible across versions.
 //
-// The dashboard layout choice keeps its own store (state/dashboardMode.ts) for
-// back-compat with its existing consumers; every other preference lives here.
 import { create } from "zustand";
 import type { MapQuality } from "../globe/qualityPresets";
 
@@ -72,6 +70,31 @@ export interface Settings {
   // are never shed. Default ON — the operator can disable if they prefer
   // seeing everything regardless of frame rate.
   adaptiveLayerGovernor: boolean;
+  // Home view for the zoom-out / reset-view action (globe/camera.ts
+  // flyToGlobal). null = the built-in whole-globe framing. Set from Settings ·
+  // Map defaults.
+  homeView: HomeView | null;
+}
+
+export interface HomeView {
+  lon: number;
+  lat: number;
+  height: number;
+}
+
+/** The saved home view, or null when unset or out of range. */
+export function validHomeView(v: unknown): HomeView | null {
+  if (!v || typeof v !== "object") return null;
+  const { lon, lat, height } = v as Record<string, unknown>;
+  const ok =
+    typeof lon === "number" &&
+    typeof lat === "number" &&
+    typeof height === "number" &&
+    Math.abs(lon) <= 180 &&
+    Math.abs(lat) <= 90 &&
+    height > 0 &&
+    height <= 100_000_000;
+  return ok ? { lon, lat, height } : null;
 }
 
 const DEFAULTS: Settings = {
@@ -85,6 +108,7 @@ const DEFAULTS: Settings = {
   selectionAiPosition: "top",
   leftRailExpanded: false,
   adaptiveLayerGovernor: true,
+  homeView: null,
 };
 
 const LS_KEY = "velocity.settings";

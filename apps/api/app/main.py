@@ -110,6 +110,7 @@ from app.routes import ground as ground_routes
 from app.routes import hazards as hazards_routes
 from app.routes import health as health_routes
 from app.routes import history as history_routes
+from app.routes import host as host_routes
 from app.routes import imagery as imagery_routes
 from app.routes import infra as infra_routes
 from app.routes import ingest as ingest_routes
@@ -818,6 +819,7 @@ def create_app() -> FastAPI:
     app.include_router(alert_rules_routes.router)
     app.include_router(targets_routes.router)
     app.include_router(status_routes.router)
+    app.include_router(host_routes.router)
     # Local 3DGS reconstruction jobs (Studio): images/video → COLMAP → gsplat →
     # .ply, on the box's GPU. SSE progress; keyless local passes through.
     app.include_router(recon_routes.router)

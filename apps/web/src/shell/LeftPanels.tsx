@@ -20,7 +20,7 @@ export interface RailItem {
 // still rendered, under "More" — a surface never disappears because it has not
 // been re-homed yet.
 const MEMBERS: Record<LeftPanelId, readonly string[]> = {
-  layers: ["layers", "allsources"],
+  layers: ["layers", "allsources", "layer-style"],
   find: ["search-objects"],
   histogram: ["filters"],
   info: ["feeds", "ops", "acars", "chokepoints"],

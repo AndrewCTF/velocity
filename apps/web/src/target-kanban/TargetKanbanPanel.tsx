@@ -265,7 +265,7 @@ export function TargetKanbanPanel({ viewer }: Props = {}): JSX.Element {
       {blocked ? (
         <p
           role="alert"
-          className="mono text-[10px] uppercase tracking-[0.4px] text-alert border border-alert/40 bg-alert/10 rounded-sm px-2 py-1"
+          className="text-[10px] uppercase tracking-[0.4px] text-alert border border-alert/40 bg-alert/10 rounded-sm px-2 py-1"
         >
           {blocked}
         </p>
@@ -400,7 +400,7 @@ function StageColumn({
           />
         ))}
         {cards.length === 0 && (
-          <p className="mono text-[10px] uppercase tracking-[0.6px] text-txt-4 py-1">
+          <p className="text-[10px] uppercase tracking-[0.6px] text-txt-4 py-1">
             {dragging ? "drop here" : "empty"}
           </p>
         )}

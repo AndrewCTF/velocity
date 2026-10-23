@@ -4,22 +4,12 @@
    reference rather than guessing. Colour comes from theme/tokens.css; this file
    owns STRUCTURE only, so the two cannot drift.
 
-   What changes from the old shell, and why:
-
-   1. FOUR GRID ROWS BECOME TWO CONTENT ROWS. The old shell spent 26px on a
-      saturated green classification band and pinned a 158px timeline footer
-      open whether or not anyone was scrubbing. That is 184px of permanent
-      chrome on a surface whose whole job is the map. The marking becomes a pill
-      in the title bar and the timeline becomes a dock that floats over the map.
-
-   2. THE UNLABELLED ICON RAIL BECOMES FOUR NAMED TABS. Eighteen icons with no
-      words is a menu you learn by clicking every one. Four names, each on a
-      number key, is a menu you read. Where the other fourteen went is recorded
-      in panels.ts and asserted by panels.test.ts.
-
-   3. NOTHING SHARES AN EDGE. Panels, map and dock each get four borders and sit
-      in an 8px gutter, so each reads as a surface rather than a region of one
-      continuous slab. */
+   2026-10-23: the operator chose the copied reference workspace shell
+   (gotham/_kit/gotham-shell.css) as THE app UI, which deliberately reverses
+   three 2026-08 calls: the marking is a full-width band again (16px, not
+   26px), the named tab strip is an icon rail again (each tab keeps its name
+   as aria-label + tooltip and its number key), and panels float over a
+   full-width map instead of sitting in an 8px gutter. */
 
 /* The shell fills what the window has LEFT, not a flat 100vh. LowEndBanner and
    DegradedBanner are router-level siblings that render ABOVE this element in
@@ -34,6 +24,15 @@
 }
 
 .csl2 {
+  /* Reference shell geometry (gotham/_kit/gotham-shell.css): 16px banner,
+     40px tabs bar, 36px menu row, 42px rail, map from y=92. Colour stays in
+     tokens so every scheme renders the same grammar. */
+  --g-left: 436px;
+  --g-right: 340px;
+  --g-banner: 16px;
+  --g-tabsbar: 40px;
+  --g-menurow: 36px;
+  --g-railw: 42px;
   display: grid;
   flex: 1 1 auto;
   min-height: 0;
@@ -41,87 +40,301 @@
      window it lives in. */
   width: 100%;
   overflow: hidden;
-  /* minmax(0, 1fr), not the implicit `auto`. A grid column defaults to a
-     min-content floor, so the title bar (which hosts a wide command bar) was
-     forcing the whole shell wider than the viewport and pushing the right
-     panel off-screen. */
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: var(--g-title) var(--g-tabs) 1fr auto;
+  /* minmax(0, ...), not the implicit `auto`: a grid track defaults to a
+     min-content floor, so a wide row forced the shell past the viewport. */
+  grid-template-columns: var(--g-railw) auto minmax(0, 1fr) auto;
+  grid-template-rows: var(--g-banner) var(--g-tabsbar) var(--g-menurow) minmax(
+      0,
+      1fr
+    );
+  grid-template-areas:
+    "banner banner banner banner"
+    "tabs tabs tabs tabs"
+    "rail menu action doc"
+    "rail body body body";
   background: var(--bg-0);
   color: var(--txt-1);
 }
 
-/* ── Title bar ─────────────────────────────────────────────────────────────
-   System state lives here, which is why there is no separate status strip. */
+/* ── Banner, tabs bar, menu row ────────────────────────────────────────────
+   TitleBar emits these as direct grid items; the header has no box. */
 .csl2-title {
+  display: contents;
+}
+.csl2-banner {
+  grid-area: banner;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  background: var(--cls-unclas-bg);
+  /* txt-0, not --cls-unclas-fg: the bp-dark pair measured 4.17:1 at 11px;
+     txt-0 on the band is 5.55:1 or better in every scheme. */
+  color: var(--txt-0);
+  font: 600 11px/1 var(--font-sans);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.csl2-banner[data-kind="exercise"] {
+  background: var(--cls-exercise-bg);
+  color: var(--cls-exercise-fg);
+}
+.csl2-tabsbar {
+  grid-area: tabs;
   display: flex;
-  align-items: center;
-  gap: 0;
+  align-items: stretch;
   min-width: 0;
   overflow: hidden;
-  height: var(--g-title);
-  padding: 0 10px;
-  background: var(--bg-1);
-  border-bottom: 1px solid var(--line-2);
-  font-size: var(--fs-dense);
+  background: var(--bg-3);
+  font-family: var(--font-sans);
+  /* The ramp is only guaranteed on bg-1/bg-2; on bg-3 the muted tiers measured
+     4.40:1 under bp-light, so everything in this bar takes one tier brighter. */
+  --txt-2: var(--txt-1);
+  --txt-3: var(--txt-1);
 }
-
-/* The marking, as a pill. A full-width saturated band is the loudest thing on
-   a screen whose loudest thing should be the data. */
-.csl2-title > * {
-  min-width: 0;
+/* The 42px launcher cell sits over the rail column, as the reference's app
+   glyph does. */
+.csl2-launch {
+  flex: 0 0 var(--g-railw);
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: var(--txt-1);
+  cursor: pointer;
 }
-.csl2-clas {
-  display: inline-flex;
+.csl2-launch:hover,
+.csl2-launch[aria-expanded="true"] {
+  color: var(--txt-0);
+  background: var(--hover);
+}
+.csl2-search {
+  flex: 0 0 240px;
+  align-self: center;
+  height: 26px;
+  margin: 0 12px 0 2px;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  height: var(--g-btn-xs);
-  padding: 0 7px;
-  border: 1px solid var(--ok);
-  border-radius: var(--r-sm);
-  color: var(--ok-fg);
-  font-size: var(--fs-caption);
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  justify-content: space-between;
+  padding: 0 3px 0 8px;
+  background: none;
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  color: var(--txt-3);
+  font: 400 15px/1 var(--font-sans);
+  cursor: text;
+}
+.csl2-search:hover {
+  border-color: var(--accent-line);
+}
+.csl2-search kbd {
+  font: 12px/1.3 var(--font-sans);
+  color: var(--txt-2);
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+.csl2-dtab {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px 0 10px;
+  background: none;
+  border: 0;
+  color: var(--txt-0);
+  font: 400 16px/1 var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.csl2-dtab:hover {
+  background: var(--hover);
+}
+.csl2-dtab[aria-current="page"] {
+  background: var(--accent-dim);
+}
+.csl2-dtab-ico {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.csl2-sys {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 8px;
+  font-size: 13px;
+}
+.csl2-menu {
+  grid-area: menu;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-left: 6px;
+  background: var(--bg-1);
+  font: 400 16px/1 var(--font-sans);
+}
+.csl2-menu-sep {
+  width: 1px;
+  height: 22px;
+  margin: 0 10px;
+  background: var(--line-2);
+}
+.csl2-doc {
+  grid-area: doc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 12px 0 8px;
+  background: var(--bg-1);
+  font-family: var(--font-sans);
   white-space: nowrap;
 }
-.csl2-clas[data-kind="exercise"] {
-  border-color: var(--warn);
-  color: var(--warn-fg);
+
+/* ── Rail ───────────────────────────────────────────────────────────────── */
+.csl2-rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  padding-top: 12px;
+  background: var(--bg-0);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.csl2-rail::-webkit-scrollbar {
+  display: none;
+}
+.csl2-rail-group {
+  display: flex;
+  flex-direction: column;
+}
+.csl2-rail .csl2-rtab[aria-pressed="true"] {
+  color: var(--accent-fg);
+}
+/* The app launcher column: one coloured 20px glyph per app, the hue from its
+   group, the open app outlined. */
+.csl2-apps {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.csl2-app {
+  position: relative;
+  flex: none;
+  height: 32px;
+  margin-bottom: 6px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.csl2-app:hover {
+  filter: brightness(1.25);
+}
+.csl2-app[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 1px;
+  width: 30px;
+  height: 30px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+}
+.csl2-rtab {
+  position: relative;
+  height: 30px;
+  margin-bottom: 12px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: var(--txt-2);
+  cursor: pointer;
+}
+.csl2-rtab:hover {
+  color: var(--txt-0);
+}
+.csl2-rtab[aria-selected="true"] {
+  color: var(--txt-0);
+}
+/* Active = a 28px outlined square around the glyph, as in the reference. */
+.csl2-rtab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 1px;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--txt-1);
+  border-radius: 4px;
+}
+.csl2-rbadge {
+  position: absolute;
+  right: 3px;
+  bottom: -2px;
+  min-width: 14px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: var(--bg-4);
+  color: var(--txt-0);
+  font: 600 10px/13px var(--font-sans);
+  text-align: center;
 }
 
-/* ── Named tab strip ─────────────────────────────────────────────────────── */
+/* ── Tab strip (right panel, 2D shell) ── the panel tab row of the kit. */
 .csl2-tabs {
   display: flex;
   align-items: stretch;
-  height: var(--g-tabs);
-  padding: 0 8px;
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 4px;
   background: var(--bg-1);
   border-bottom: 1px solid var(--line-2);
 }
 .csl2-tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 12px;
+  gap: 7px;
+  padding: 0 14px;
   background: none;
   border: 0;
-  border-bottom: 2px solid transparent;
-  color: var(--txt-2);
-  font: inherit;
-  font-size: var(--fs-body);
+  color: var(--txt-1);
+  font: 400 15px/1 var(--font-sans);
   cursor: pointer;
-  transition:
-    color 100ms,
-    border-color 100ms;
   white-space: nowrap;
 }
 .csl2-tab:hover {
   color: var(--txt-0);
 }
 .csl2-tab[aria-selected="true"] {
-  color: var(--txt-0);
-  border-bottom-color: var(--accent);
+  color: var(--accent-fg);
+}
+.csl2-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent-fg);
 }
 /* A count in the tab, so a panel is never opened just to find it empty. */
 .csl2-badge {
@@ -131,69 +344,109 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: var(--bg-3);
-  /* txt-1, not txt-2. The token ramp is guaranteed AA against bg-1 and bg-2;
-     this badge sits on bg-3, one step lighter, and txt-2 measured 4.40:1 on it
-     under the light scheme — under the bar on a live count. Measured in the
-     browser across all seven schemes, not derived from the tokens. */
+  border-radius: 2px;
+  /* txt-1 on bg-4: one step lighter than the AA-guaranteed substrate, so the
+     brighter tier. */
+  background: var(--bg-4);
   color: var(--txt-1);
-  font-family: var(--font-mono);
-  font-size: var(--fs-caption);
-}
-.csl2-tab[aria-selected="true"] .csl2-badge {
-  background: var(--accent-dim);
-  color: var(--accent-fg);
+  font-size: 13px;
 }
 
 /* ── Body ───────────────────────────────────────────────────────────────── */
 .csl2-body {
-  display: grid;
+  grid-area: body;
+  position: relative;
   overflow: hidden;
-  grid-template-columns: var(--g-left) 1fr var(--g-right);
-  gap: var(--g-gap);
-  padding: var(--g-gap);
   min-height: 0;
+  min-width: 0;
   background: var(--bg-0);
-}
-.csl2-body[data-right="0"] {
-  grid-template-columns: var(--g-left) 1fr;
-}
-/* A full-bleed app hides both rails, so the map is the ONLY grid item — and a
-   grid places its only item in the FIRST track. That track is `--g-left`, so
-   every `chrome: 'full'` app (AI, Foundry, Workflows, City 3D, Country,
-   Markets) rendered inside a 336px column with 1,560px of empty console beside
-   it. Measured: .csl2-map at 8,106 336x916 in a 1920px window. */
-.csl2-body[data-left="0"] {
-  grid-template-columns: minmax(0, 1fr);
+  /* Fallback only. Console.tsx overwrites this from the dock's measured height
+     on every resize; panels and the bottom map furniture both read it. */
+  --dock-clear: 142px;
 }
 
+/* Floating opaque panels (`.panel` in the kit), 15px in from the rail and
+   11px below the menu row, stopping above the time dock. */
 .csl2-panel {
+  position: absolute;
+  top: 11px;
+  bottom: calc(var(--dock-clear) + 6px);
+  z-index: var(--z-rail);
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
   background: var(--bg-1);
   border: 1px solid var(--line-2);
-  border-radius: var(--r-sm);
+  box-shadow: var(--sh-2);
   overflow: hidden;
+}
+.csl2-panel-l {
+  left: 15px;
+  width: var(--g-left);
+}
+.csl2-panel-r {
+  right: 15px;
+  width: var(--g-right);
 }
 .csl2-panel-head {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
-  height: var(--g-btn);
-  padding: 0 var(--g-pad);
-  border-bottom: 1px solid var(--line);
-  font-size: var(--fs-body);
-  font-weight: 400;
+  height: 44px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-2);
+  font: 700 16.5px/1.2 var(--font-sans);
   color: var(--txt-0);
+}
+/* The left panel's tab row, the kit's `k-ptabs`: icon + name, 15px, a 3px
+   underline under the open one. */
+.csl2-ptabs {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  height: 52px;
+  padding: 0 6px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line-2);
+}
+.csl2-ptab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  background: none;
+  border: 0;
+  color: var(--txt-1);
+  font: 400 15px/1 var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.csl2-ptab:hover {
+  color: var(--txt-0);
+}
+.csl2-ptab[aria-current="true"] {
+  color: var(--accent-fg);
+}
+.csl2-ptab[aria-current="true"]::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent-fg);
+}
+.csl2-ptabs .csl2-panel-head-count {
+  align-self: center;
+  padding-right: 8px;
 }
 .csl2-panel-head-count {
   margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: var(--fs-caption);
+  font-size: 13px;
+  font-weight: 400;
   color: var(--txt-3);
 }
 .csl2-panel-body {
@@ -204,15 +457,14 @@
 }
 
 /* Inner tabs, for a named panel that hosts several former panels. Same
-   grammar as the top strip, one step quieter, and it scrolls sideways rather
-   than wrapping — a wrapped tab row changes the panel's header height every
-   time the set changes. */
+   grammar as the panel tab row, one step quieter, and it scrolls sideways
+   rather than wrapping. */
 .csl2-subtabs {
   display: flex;
   align-items: stretch;
   flex: 0 0 auto;
-  height: 26px;
-  padding: 0 6px;
+  height: 34px;
+  padding: 0 4px;
   background: var(--bg-2);
   border-bottom: 1px solid var(--line);
   overflow-x: auto;
@@ -223,59 +475,60 @@
   display: none;
 }
 .csl2-subtab {
-  padding: 0 8px;
-  font-size: var(--fs-caption);
-  border-bottom-width: 2px;
+  padding: 0 10px;
+  font-size: 14px;
 }
 
 .csl2-map {
-  /* Height the time dock occupies, plus its margin. Map furniture anchored to
-     the bottom of the map reads this rather than hard-coding an offset: the
-     scale bar sat at bottom:62px and the coordinate readout at bottom:14px,
-     both chosen for the old 158px footer, so both ended up underneath the
-     floating dock. */
-  /* Fallback only. Console.tsx overwrites this from the dock's measured height
-     on every resize, so nothing here has to guess. */
-  --dock-clear: 142px;
-  position: relative;
-  /* min-width:0 is load-bearing: without it the map's intrinsic content width
-     sets a floor on the 1fr track and shoves the right panel past the viewport
-     edge. */
+  position: absolute;
+  inset: 0;
+  /* min-width:0 is load-bearing in a flex/grid parent; kept for the 2D shell. */
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-sm);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
 }
 
-/* The globe fills the whole well and everything else floats over it.
-   Without this it is an ordinary flex item: flex-shrink took 284px off it to
-   make room for the banners, the agent console and the dock, so the map ended
-   at 658px of a 942px well and the remaining band was dead black with the
-   scale bar and the coordinate readout stranded in it. Out of flow, the
-   bottom-anchored stack sits ON the map, which is what the dock comment
-   below already assumed. */
+/* App surfaces take the span between the floating panels. */
+.csl2-overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--rail-left-w);
+  right: var(--rail-right-w);
+  /* The host is always mounted (AppSurface renders null on the map), so it
+     must not swallow globe clicks; only a real surface takes the pointer. */
+  pointer-events: none;
+}
+.csl2-overlay > * {
+  pointer-events: auto;
+}
+
+/* An open app surface hid the dock when both lived in one column; with the
+   dock spanning under the panels it would peek out either side instead. */
+.csl2-body:has(.csl2-overlay > *) .csl2-dock,
+.slate-shell:has(.csl2-overlay > *) .csl2-dock {
+  visibility: hidden;
+}
+
+/* The globe fills the whole well and everything else floats over it. */
 .csl2-globe {
   position: absolute;
   inset: 0;
 }
 
 /* ── Time dock ─────────────────────────────────────────────────────────────
-   Floats over the map instead of pinning a 158px footer open. Flow-anchored to
-   the bottom of the map column so it can never overlap the map furniture the
-   way a hand-tuned `bottom` did. */
+   Floats over the map, full width under both panels, as the reference
+   timeline does. Flow-anchored to the bottom of the map. */
 .csl2-dock {
   position: relative;
   z-index: 2;
   flex: 0 0 auto;
-  max-height: 148px;
-  overflow: auto;
-  margin: 0 10px 10px;
-  background: color-mix(in srgb, var(--bg-1) 97%, transparent);
+  max-height: 190px;
+  margin: 0 15px 10px;
+  background: var(--bg-1);
   border: 1px solid var(--line-2);
-  border-radius: var(--r-sm);
   box-shadow: var(--sh-2);
   overflow: hidden;
 }
@@ -318,23 +571,78 @@
 
 /* ── Action bar ────────────────────────────────────────────────────────────
    The query as a sentence, and the verbs that act on it. */
+/* ── Action bar ────────────────────────────────────────────────────────────
+   The query as a sentence and the verbs on it, in the menu row. */
 .csl2-action {
   display: flex;
-  align-items: center;
-  gap: 10px;
   flex: 0 0 auto;
-  height: var(--g-action);
-  padding: 0 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+  padding: 8px 14px;
   background: var(--bg-1);
-  border-top: 1px solid var(--line-2);
-  font-size: var(--fs-body);
+  border-bottom: 1px solid var(--line);
+  font: 400 14px/1.3 var(--font-sans);
+}
+.csl2-action > .flex-1 {
+  display: none;
 }
 .csl2-sentence {
+  flex: 1 1 100%;
+  order: 9;
   color: var(--txt-2);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+/* The menu row's centre: the open document, centred under the window. */
+.csl2-mid {
+  grid-area: action;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  background: var(--bg-1);
+  font-family: var(--font-sans);
   white-space: nowrap;
+}
+.csl2-star {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  color: var(--txt-2);
+  cursor: pointer;
+}
+.csl2-star:hover {
+  background: var(--hover);
+  color: var(--txt-0);
+}
+.csl2-star[aria-pressed="true"] {
+  color: var(--warn-fg);
+}
+.csl2-mid-ico {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.csl2-marking {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 12px;
+  margin-left: 4px;
+  border-left: 1px solid var(--line-2);
+  color: var(--txt-0);
+  font: 400 15px/1 var(--font-sans);
 }
 .csl2-sentence u {
   color: var(--accent-fg);
@@ -348,21 +656,17 @@
 }
 
 /* ── Other computers ───────────────────────────────────────────────────────
-   The old shell had four @media queries in the entire frontend, three of them
-   on the news page. Redundancy goes first: panels narrow before anything is
-   dropped, and the map is the last thing to give up pixels. */
+   Panels narrow before anything is dropped; the map gives up pixels last. */
 @media (max-width: 1450px) {
   .csl2 {
-    --g-left: 296px;
-    --g-right: 280px;
-    --g-pad: 12px;
+    --g-left: 360px;
+    --g-right: 300px;
   }
 }
 @media (max-width: 1300px) {
   .csl2 {
-    --g-left: 274px;
-    --g-right: 264px;
-    --g-pad: 11px;
+    --g-left: 300px;
+    --g-right: 270px;
   }
   .csl2-tab {
     padding: 0 9px;
@@ -370,26 +674,10 @@
 }
 @media (max-width: 1150px) {
   .csl2 {
-    --g-left: 250px;
+    --g-left: 260px;
   }
-  /* Selection becomes an overlay rather than vanishing: it is the panel the
-     operator opened deliberately. */
-  .csl2-body {
-    grid-template-columns: var(--g-left) 1fr;
-  }
-  .csl2-body > .csl2-panel:last-child {
-    position: absolute;
-    right: var(--g-gap);
-    top: var(--g-gap);
-    bottom: var(--g-gap);
-    width: 288px;
-    z-index: 20;
-    box-shadow: -8px 0 20px rgb(0 0 0 / 50%);
-  }
-}
-@media (max-height: 800px) {
-  .csl2-action {
-    height: 40px;
+  .csl2-sentence {
+    display: none;
   }
 }
 
@@ -824,4 +1112,875 @@
 }
 .psheet .csl2-dock span.flex-1:empty {
   display: none;
+}
+
+/* ── Reference chrome, transcribed (2026-10-23) ─────────────────────────────
+   Geometry and colour from the copied reference shell (gotham-shell.css and
+   its hero page): every px below is the copy's. Colours are chrome variables
+   that fall back to the scheme tokens, and Slate states the copy's sampled
+   hexes, so Slate IS the reference and every other scheme keeps its own
+   palette (and its contrast guard). */
+.csl2,
+.slate-shell {
+  --c-banner: var(--cls-unclas-bg);
+  --c-banner-fg: var(--txt-0);
+  --c-tabs: var(--bg-3);
+  --c-tabs-fg: var(--txt-0);
+  --c-dtab-on: var(--accent-dim);
+  --c-field-line: var(--line-2);
+  --c-field-fg: var(--txt-1);
+  --c-kbd-fg: var(--txt-0);
+  --c-kbd-line: var(--line-2);
+  --c-menu: var(--bg-1);
+  --c-menu-fg: var(--txt-0);
+  --c-sep: var(--line-2);
+  --csl2-mute: var(--txt-1);
+  --c-rail: var(--bg-0);
+  --c-rail-grey: var(--txt-1);
+  --c-rail-on: var(--txt-0);
+  --c-panel: var(--bg-1);
+  --c-panel-line: var(--line-2);
+  --c-ptabs: var(--bg-1);
+  --c-ptab-fg: var(--txt-0);
+  --c-ptab-on: var(--accent-fg);
+  --c-ptab-g: var(--mag-fg);
+  --c-band: var(--bg-3);
+  --c-band-line: var(--line);
+  --c-tl: var(--bg-1);
+  --c-tl-line: var(--line-2);
+  --c-tl-rows: var(--bg-2);
+  --c-tl-fg: var(--txt-1);
+  --c-tl-grid: var(--line);
+  --c-tl-bar: var(--line-2);
+  --c-tl-bar-on: var(--accent);
+  --g-left: 437px;
+}
+:root[data-theme="slate"] .csl2,
+:root[data-theme="slate"] .slate-shell {
+  --c-banner: #526472;
+  --c-banner-fg: #e6ebef;
+  --c-tabs: #283036;
+  --c-tabs-fg: #e8edee;
+  --c-dtab-on: #223e50;
+  --c-field-line: #3f4a52;
+  --c-field-fg: #a9b3b8;
+  --c-kbd-fg: #dfe5e7;
+  --c-kbd-line: #5b666d;
+  --c-menu: #1e2628;
+  --c-menu-fg: #f1f4f5;
+  --c-sep: #3a464c;
+  --csl2-mute: #aab4b8;
+  --c-rail: #181c20;
+  --c-rail-grey: #c9d1d4;
+  --c-rail-on: #d9e0e2;
+  --c-panel: rgba(28, 40, 42, 0.96);
+  --c-panel-line: #2c393c;
+  --c-ptabs: #202a2c;
+  --c-ptab-fg: #e4e9ea;
+  --c-ptab-on: #5aa9ff;
+  --c-ptab-g: #b49cf5;
+  --c-band: #2e383a;
+  --c-band-line: #253032;
+  --c-tl: rgba(24, 32, 38, 0.94);
+  --c-tl-line: #2b3a40;
+  --c-tl-rows: rgba(40, 62, 66, 0.55);
+  --c-tl-fg: #b4bec2;
+  --c-tl-grid: rgba(255, 255, 255, 0.12);
+  --c-tl-bar: #3d5559;
+  --c-tl-bar-on: #1a6e98;
+}
+
+.csl2-banner {
+  background: var(--c-banner);
+  color: var(--c-banner-fg);
+}
+
+/* Tabs bar: 40px. Globe 12px in, search at 44 (240x26), launcher at 313,
+   document tabs from 359. */
+.csl2-tabsbar {
+  position: relative;
+  align-items: center;
+  background: var(--c-tabs);
+  color: var(--c-tabs-fg);
+}
+.csl2-home {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-left: 12px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: #eef2f3;
+  cursor: pointer;
+}
+.csl2-tabsbar .csl2-search {
+  flex: 0 0 240px;
+  margin: 0;
+  margin-left: 12px;
+  border-color: var(--c-field-line);
+  color: var(--c-field-fg);
+  font-size: 15px;
+}
+.csl2-tabsbar .csl2-search kbd {
+  color: var(--c-kbd-fg);
+  border-color: var(--c-kbd-line);
+}
+.csl2-tabsbar .csl2-launch {
+  flex: 0 0 16px;
+  height: 16px;
+  margin-left: 29px;
+  padding: 0;
+  color: #dbe2e4;
+  background: none;
+}
+.csl2-tabsbar .csl2-launch:hover,
+.csl2-tabsbar .csl2-launch[aria-expanded="true"] {
+  color: #fff;
+  background: none;
+}
+.csl2-tabsbar .csl2-dtab {
+  flex: none;
+  align-self: stretch;
+  height: 40px;
+  padding: 0 10px;
+  gap: 10px;
+  color: var(--c-tabs-fg);
+  font-size: 16px;
+}
+.csl2-tabsbar .csl2-dtab:first-of-type {
+  margin-left: 30px !important;
+}
+.csl2-tabsbar .csl2-dtab[aria-current="page"] {
+  background: var(--c-dtab-on);
+}
+.csl2-tabsbar .csl2-dtab-ico {
+  width: 22px;
+  height: 22px;
+  color: #fff;
+}
+.csl2-tabsbar .csl2-sys {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+.csl2-cnt {
+  position: absolute;
+  top: 3px;
+  width: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: #e3e8ea;
+  font: 400 12px/1 var(--font-sans);
+  cursor: pointer;
+}
+.csl2-cnt:first-child {
+  right: 45px;
+}
+.csl2-cnt:nth-child(2) {
+  right: 8px;
+}
+
+/* Menu row: 36px from x 42. File 13, Edit 59, View 107, Support 160. */
+.csl2-menu {
+  position: relative;
+  padding-left: 13px;
+  gap: 0;
+  background: var(--c-menu);
+  color: var(--c-menu-fg);
+  font-size: 16px;
+}
+.csl2-menu > div > button {
+  height: 28px;
+  padding: 0;
+  border-radius: 0;
+  color: var(--c-menu-fg) !important;
+  background: none !important;
+  font-size: 16px;
+}
+.csl2-menu > div + div {
+  margin-left: 15px;
+}
+.csl2-menu > div:nth-child(3) {
+  margin-left: 17px;
+}
+.csl2-menu > div:nth-child(4) {
+  margin-left: 18px;
+}
+.csl2-menu > div > button[aria-expanded="true"] {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.csl2-mid {
+  background: var(--c-menu);
+  color: var(--c-menu-fg);
+  gap: 8px;
+  transform: translateX(-21px);
+  font-size: 16px;
+}
+.csl2-star {
+  width: 16px;
+  height: 16px;
+  color: var(--csl2-mute);
+}
+.csl2-star:hover {
+  background: none;
+}
+.csl2-mid-ico {
+  width: 16px;
+  height: 16px;
+  background: #2f7fd6;
+  color: #fff;
+}
+.csl2-mid-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--c-menu-fg);
+  font: 400 16px/1 var(--font-sans);
+  cursor: pointer;
+}
+.csl2-doc {
+  background: var(--c-menu);
+  color: var(--c-menu-fg);
+  gap: 0;
+  padding: 0 0 0 8px;
+}
+.csl2-vsep {
+  width: 1px;
+  height: 22px;
+  margin: 0 14px 0 13px;
+  background: var(--c-sep);
+}
+.csl2-marking {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  gap: 6px;
+  color: var(--c-menu-fg);
+  font: 400 15px/1 var(--font-sans);
+}
+.csl2-refresh {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: 0 2px 0 43px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--csl2-mute);
+  cursor: pointer;
+}
+
+/* Rail: 42px, glyphs 20px in 30px cells at the reference's y offsets. */
+.csl2-rail {
+  position: relative;
+  display: block;
+  padding: 0;
+  background: var(--c-rail);
+  border-right: 0;
+}
+.csl2-rail .csl2-rtab,
+.csl2-rail .csl2-app {
+  position: absolute;
+  left: 0;
+  width: 42px;
+  height: 30px;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--c-rail-grey);
+  cursor: pointer;
+}
+.csl2-rail .csl2-rtab[aria-selected="true"],
+.csl2-rail .csl2-rtab[aria-pressed="true"] {
+  color: var(--c-rail-on);
+}
+.csl2-rail .csl2-rtab[aria-selected="true"]::after,
+.csl2-rail .csl2-app[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 1px;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--c-rail-on);
+  border-radius: 4px;
+}
+.csl2-rail-group,
+.csl2-apps {
+  display: contents;
+}
+
+/* Left panel: the `.sit` frame at (57, 103), 437 wide. */
+.csl2-panel {
+  background: var(--c-panel);
+  border-color: var(--c-panel-line);
+  box-shadow: none;
+}
+.csl2-panel-l {
+  left: 14px;
+}
+.csl2-ptabs {
+  position: relative;
+  height: 52px;
+  padding: 0;
+  background: var(--c-ptabs);
+  border-bottom: 1px solid var(--c-panel-line);
+}
+.csl2-ptab-g {
+  flex: 0 0 50px;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid var(--c-panel-line);
+  color: var(--c-ptab-g);
+}
+.csl2-ptabs .csl2-ptab {
+  padding: 0 0 0 0;
+  margin-left: 14px;
+  gap: 7px;
+  color: var(--c-ptab-fg);
+  font-size: 16px;
+}
+.csl2-ptabs .csl2-ptab + .csl2-ptab {
+  margin-left: 30px;
+}
+.csl2-ptabs .csl2-ptab[aria-current="true"] {
+  color: var(--c-ptab-on);
+}
+.csl2-ptabs .csl2-ptab[aria-current="true"]::after {
+  left: -4px;
+  right: -4px;
+  bottom: 0;
+  height: 3px;
+  background: var(--c-ptab-on);
+}
+.csl2-panel .k-band {
+  min-height: 29px;
+  background: var(--c-band);
+  border-top: 1px solid var(--c-band-line);
+  font-size: 16px;
+}
+
+/* Time dock: the `.tl` frame, x 56 to 1709, 140 tall, 15 off the bottom. */
+.csl2-dock {
+  max-height: none;
+  margin: 0 19px 15px 14px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+/* TimeDock. The transport and replay strip sits above the timeline frame;
+   the frame itself is the reference `.tl`: 140 tall, rows band at 8 (82
+   tall, 25px rows from 11 down), gutter 263, gridlines 14 to 106, axis at
+   112. */
+.tdock-strip {
+  margin-bottom: 4px;
+  background: var(--c-tl);
+  border: 1px solid var(--c-tl-line);
+}
+.tdock-tl {
+  position: relative;
+  height: 140px;
+  background: var(--c-tl);
+  border: 1px solid var(--c-tl-line);
+  overflow: hidden;
+}
+.tdock-gantt {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8px;
+  height: 82px;
+  padding-top: 11px;
+  background: var(--c-tl-rows);
+}
+.tdock-row {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 263px minmax(0, 1fr);
+  height: 25px;
+}
+.tdock-gutter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 25px;
+  padding: 0 12px 0 22px;
+  margin-top: -3px;
+  color: var(--c-tl-fg);
+  font: 400 15.5px/1 var(--font-sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tdock-track {
+  position: relative;
+  height: 18px;
+  margin-right: 14px;
+}
+.tdock-grid {
+  position: absolute;
+  left: 263px;
+  right: 14px;
+  top: 14px;
+  height: 92px;
+  background-image: linear-gradient(
+    to right,
+    var(--c-tl-grid) 1px,
+    transparent 1px
+  );
+  background-size: calc(100% / 12) 100%;
+  background-position: calc(100% / 12) 0;
+  pointer-events: none;
+}
+.tdock-axlabel {
+  position: absolute;
+  left: 178px;
+  top: 112px;
+  font: 400 15px/1 var(--font-sans);
+  color: var(--c-menu-fg);
+}
+.tdock-axis {
+  position: absolute;
+  left: 263px;
+  right: 14px;
+  top: 112px;
+  height: 18px;
+}
+.tdock-tick {
+  position: absolute;
+  transform: translateX(-8px);
+  color: var(--c-menu-fg);
+  font: 400 15px/1 var(--font-sans);
+  white-space: nowrap;
+}
+
+/* The folded transport: a popover above the timeline frame, opened from the
+   clock in the frame's gutter. */
+.tdock {
+  position: relative;
+}
+.tdock .tdock-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 3;
+  margin: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.tdock .tdock-strip[data-open="false"] {
+  display: none;
+}
+/* Open, the Timeline panel takes the frame's place at the bottom of the map,
+   where the copy draws it (y 855 in its frame), instead of floating over the
+   situation panel. The dock grows; --dock-clear follows it. */
+.tdock .tdock-strip[data-open="true"] {
+  position: relative;
+  bottom: auto;
+  box-shadow: none;
+  border: 0;
+}
+/* The transport and replay rows sit behind the panel's widget toggle. */
+/* display lives here, not in a `flex` utility: utilities outrank this layer,
+   so the hide rule below could never win against one. */
+.tdock-ctl {
+  display: flex;
+}
+.tdock-strip[data-ctl="false"] .tdock-ctl {
+  display: none;
+}
+.tdock:has(> .tdock-strip[data-open="true"]) > .tdock-tl {
+  display: none;
+}
+.tdock-clock {
+  position: absolute;
+  left: 22px;
+  top: 108px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px 0 0;
+  background: none;
+  border: 0;
+  color: var(--c-tl-fg);
+  font: 400 15px/1 var(--font-sans);
+  cursor: pointer;
+}
+.tdock-clock:hover,
+.tdock-clock[aria-expanded="true"] {
+  color: var(--c-menu-fg);
+}
+.tdock-clock i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* Router-level notices (low-end graphics, unconfigured sources): one fixed
+   stack centred over the map under the menu row, never in the page flow. */
+.notice-stack {
+  position: fixed;
+  top: 100px;
+  left: 50%;
+  z-index: var(--z-dock);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: min(640px, calc(100vw - 40px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.notice-stack:empty {
+  display: none;
+}
+.notice-stack > * {
+  pointer-events: auto;
+}
+
+/* Situation Gantt rows: outlined bars, the picked row filled (the copy's
+   `.tl .bar` / `.bar.on` / `.rl.on`). */
+.tdock-sit {
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.tdock-sit .tdock-gutter {
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.tdock-row.on .tdock-gutter {
+  color: #fff;
+  font-weight: 700;
+}
+.tdock-bar {
+  position: absolute;
+  top: 0;
+  height: 18px;
+  min-width: 8px;
+  border: 2px solid var(--c-tl-bar);
+}
+.tdock-bar.tick {
+  width: 3px;
+  min-width: 3px;
+  border-width: 0;
+  background: var(--c-tl-bar);
+}
+.tdock-row.on .tdock-bar {
+  background: var(--c-tl-bar-on);
+  border-color: var(--c-tl-bar-on);
+}
+.tdock-dur {
+  position: absolute;
+  top: 0;
+  color: #fff;
+  font: 400 15px/18px var(--font-sans);
+  white-space: nowrap;
+}
+
+/* ── Timeline panel (reference feature G23) ──────────────────────────────
+   Geometry from gotham/gotham/features-a.html 78-84 (panel at 150,855 in the
+   copy frame, so every offset below is copy x - 150, y - 855). Tokens per
+   scheme; the copy's hex under slate. */
+.tdock-strip {
+  --c-tlp: var(--bg-1);
+  --c-tlp-hd: var(--bg-1);
+  --c-tlp-line: var(--line-2);
+  --c-tlp-btn: var(--bg-3);
+  --c-tlp-btn-line: var(--line-2);
+  --c-tlp-play: var(--bg-2);
+  --c-tlp-play-ico: var(--accent-fg);
+  --c-tlp-fg: var(--txt-0);
+  --c-tlp-ico: var(--txt-1);
+  --c-tlp-day: var(--txt-1);
+  --c-tlp-tick: var(--txt-3);
+  --c-tlp-rule: var(--line-2);
+  --c-tlp-legend: var(--bg-2);
+  --c-tlp-range: var(--bg-3);
+  --c-tlp-grip: var(--txt-2);
+  --c-tlp-head: var(--txt-0);
+  --c-tlp-tag: var(--txt-0);
+  --c-tlp-tag-fg: var(--bg-0);
+  --c-tlp-l0: var(--accent);
+  --c-tlp-l1: var(--alert);
+}
+:root[data-theme="slate"] .tdock-strip {
+  --c-tlp: #1e282c;
+  --c-tlp-hd: #1c282c;
+  --c-tlp-line: #2c363c;
+  --c-tlp-btn: #2f383d;
+  --c-tlp-btn-line: #475258;
+  --c-tlp-play: #2a3338;
+  --c-tlp-play-ico: #4c90f0;
+  --c-tlp-fg: #e5e8eb;
+  --c-tlp-ico: #d5dce0;
+  --c-tlp-day: #c7d0d5;
+  --c-tlp-tick: #6a757b;
+  --c-tlp-rule: #2c373c;
+  --c-tlp-legend: #222c30;
+  --c-tlp-range: #2c3842;
+  --c-tlp-grip: #8f99a8;
+  --c-tlp-head: #f3f6f8;
+  --c-tlp-tag: #e0e8ee;
+  --c-tlp-tag-fg: #1a2228;
+  --c-tlp-l0: #5480de;
+  --c-tlp-l1: #e45862;
+}
+.tlp {
+  position: relative;
+  background: var(--c-tlp);
+  border: 1px solid var(--c-tlp-line);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+.tlp-hd {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 1px;
+  height: 38px;
+  background: var(--c-tlp-hd);
+}
+.tlp-title {
+  position: absolute;
+  left: 11px;
+  top: 9px;
+  font: 700 15.5px/20px var(--font-sans);
+  color: var(--c-tlp-fg);
+}
+.tlp-transport {
+  position: absolute;
+  /* The copy centres the transport at 51% of the panel width. */
+  left: calc(51% - 67px);
+  top: 7px;
+  display: flex;
+  gap: 7px;
+}
+.tlp-btn {
+  width: 28px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: var(--c-tlp-btn);
+  border: 1px solid var(--c-tlp-btn-line);
+  border-radius: 3px;
+  color: var(--c-tlp-fg);
+  font: 400 14px/1 var(--font-sans);
+  cursor: pointer;
+}
+.tlp-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.tlp-play {
+  width: 62px;
+  margin-left: 2px;
+  background: var(--c-tlp-play);
+}
+.tlp-play svg {
+  color: var(--c-tlp-play-ico);
+}
+.tlp-tools {
+  position: absolute;
+  right: 14px;
+  top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.tlp-ico {
+  display: flex;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--c-tlp-ico);
+  cursor: pointer;
+}
+.tlp-ico[aria-pressed="false"] {
+  opacity: 0.6;
+}
+.tlp-x {
+  margin-left: 10px;
+  color: var(--c-tlp-fg);
+}
+.tlp-body {
+  position: absolute;
+  left: 10px;
+  top: 40px;
+}
+/* The ruler: a major tick every 99.2px over twelve minors, a hairline under
+   it and another between the lanes, as the copy draws them. */
+.tlp-ruler {
+  position: absolute;
+  left: -8px;
+  right: 0;
+  top: 0;
+  height: 28px;
+  border-bottom: 1px solid var(--c-tlp-rule);
+  background:
+    repeating-linear-gradient(
+        to right,
+        var(--c-tlp-tick) 0 1px,
+        transparent 1px 99.2px
+      )
+      8px 16px / 100% 10px no-repeat,
+    repeating-linear-gradient(
+        to right,
+        var(--c-tlp-tick) 0 1px,
+        transparent 1px 8.27px
+      )
+      8px 20px / 100% 6px no-repeat;
+}
+.tlp-day {
+  position: absolute;
+  top: 0;
+  margin-left: 4px;
+  font: 400 13px/18px var(--font-sans);
+  color: var(--c-tlp-day);
+  white-space: nowrap;
+}
+.tlp-lane {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 43px;
+}
+.tlp-lane + .tlp-lane {
+  border-top: 1px solid var(--c-tlp-rule);
+}
+.tlp-tile {
+  position: absolute;
+  top: 0;
+  width: 36px;
+  height: 35px;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+.tlp-tile:hover {
+  outline: 2px solid var(--c-tlp-head);
+}
+.tlp-head {
+  position: absolute;
+  top: 2px;
+  bottom: 0;
+  width: 1px;
+  background: var(--c-tlp-head);
+  pointer-events: none;
+}
+.tlp-pin {
+  position: absolute;
+  left: -8px;
+  top: -8px;
+  width: 17px;
+  height: 19px;
+  overflow: visible;
+  fill: var(--c-tlp-head);
+  stroke: var(--c-tlp-btn);
+}
+.tlp-tag {
+  position: absolute;
+  right: -3px;
+  top: 8px;
+  width: 70px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 2px;
+  background: var(--c-tlp-tag);
+  color: var(--c-tlp-tag-fg);
+  font: 400 13px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+.tlp-tag.r {
+  right: auto;
+  left: -3px;
+}
+.tlp-legend {
+  position: absolute;
+  right: 0;
+  top: 74px;
+  width: 205px;
+  padding-top: 2px;
+  background: var(--c-tlp-legend);
+}
+.tlp-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 31px;
+  padding: 0 14px 0 10px;
+  font: 400 15px/1 var(--font-sans);
+  color: var(--c-tlp-fg);
+}
+.tlp-key i {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+}
+.tlp-key span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tlp-key b {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.tlp-range {
+  position: absolute;
+  left: 1px;
+  height: 21px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  background: var(--c-tlp-range);
+  font: 400 13px/1 var(--font-sans);
+  color: var(--c-tlp-day);
+}
+.tlp-grip {
+  font-size: 11px;
+  letter-spacing: -1px;
+  color: var(--c-tlp-grip);
+}
+.tlp-range-l {
+  position: absolute;
+  right: 0;
+  width: 205px;
+  height: 21px;
+  background: var(--c-tlp-legend);
 }

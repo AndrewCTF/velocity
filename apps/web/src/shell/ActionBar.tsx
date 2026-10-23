@@ -121,13 +121,15 @@ export function ActionBar(): JSX.Element {
           aria-expanded={open}
           aria-haspopup="menu"
           title="Restrict the map to particular aircraft categories or vessel types"
-          className={`flex h-6 items-center gap-[6px] rounded-sm border px-[9px] text-[12px] ${
+          // The panel's field-button idiom (the copy's "Default styling"
+          // select): 26px, 14px sans, a filled bg-3 face with a hairline.
+          className={`flex h-[26px] items-center gap-[7px] rounded-[3px] border px-[10px] text-[14px] ${
             clauses.length > 0
               ? "border-accent-line bg-accent-dim text-accent-fg"
-              : "border-line-2 text-txt-1 hover:bg-(--hover)"
+              : "border-line-2 bg-bg-3 text-txt-0 hover:bg-(--hover)"
           }`}
         >
-          <Icon name="filter" className="h-3 w-3" />
+          <Icon name="filter" className="h-[14px] w-[14px]" />
           Filter contact type
           {clauses.length > 0 && <span className="mono">{clauses.length}</span>}
           <Icon name="chevron-down" className="h-3 w-3" />
@@ -136,7 +138,7 @@ export function ActionBar(): JSX.Element {
           <div
             role="menu"
             aria-label="Contact type"
-            className="absolute bottom-[30px] left-0 z-(--z-dropdown) max-h-[60vh] w-[240px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-(--sh-pop)"
+            className="absolute top-[30px] left-0 z-(--z-dropdown) max-h-[60vh] w-[240px] overflow-auto rounded-sm border border-line-2 bg-bg-2 py-1 shadow-(--sh-pop)"
           >
             {TYPE_FACETS.map(({ facet, group, labels }) => (
               <div key={facet}>
@@ -189,7 +191,7 @@ export function ActionBar(): JSX.Element {
           type="button"
           onClick={() => removeClause(c.facet, c.value, c.mode)}
           title={`Remove this ${c.mode === "only" ? "include" : "exclude"} filter`}
-          className="flex h-6 shrink-0 items-center gap-[5px] rounded-sm border border-accent-line bg-accent-dim px-[8px] text-[12px] text-accent-fg hover:brightness-125"
+          className="flex h-[26px] shrink-0 items-center gap-[5px] rounded-[3px] border border-accent-line bg-accent-dim px-[8px] text-[14px] text-accent-fg hover:brightness-125"
         >
           {c.mode === "not" ? "not " : ""}
           {clauseLabel(c.facet, c.value)}
@@ -204,9 +206,9 @@ export function ActionBar(): JSX.Element {
         disabled={!selected}
         onClick={() => select(null)}
         title={selected ? `Deselect ${selected}` : "Nothing is selected."}
-        className={`h-6 rounded-sm border border-line-2 px-[9px] text-[12px] ${
+        className={`h-[26px] rounded-[3px] border border-line-2 bg-bg-3 px-[10px] text-[14px] ${
           selected
-            ? "text-txt-1 hover:bg-(--hover)"
+            ? "text-txt-0 hover:bg-(--hover)"
             : "cursor-not-allowed text-txt-3"
         }`}
       >
@@ -221,13 +223,13 @@ export function ActionBar(): JSX.Element {
             ? "Drop every contact-type filter"
             : "No filters are set."
         }
-        className={`flex h-6 items-center gap-[6px] rounded-sm px-[11px] text-[12px] ${
+        className={`flex h-[26px] items-center gap-[6px] rounded-[3px] border px-[10px] text-[14px] ${
           clauses.length > 0
-            ? "bg-accent text-(--on-accent) hover:brightness-110"
-            : "cursor-not-allowed border border-line-2 text-txt-3"
+            ? "border-accent bg-accent text-(--on-accent) hover:brightness-110"
+            : "cursor-not-allowed border-line-2 bg-bg-3 text-txt-3"
         }`}
       >
-        <Icon name="x" className="h-3 w-3" />
+        <Icon name="x" className="h-[14px] w-[14px]" />
         Clear filters
       </button>
     </>

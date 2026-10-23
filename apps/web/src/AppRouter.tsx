@@ -4,6 +4,7 @@ import {
   Routes,
   Route,
   Link,
+  Navigate,
   useLocation,
 } from "react-router-dom";
 import { App } from "./App.js";
@@ -74,16 +75,35 @@ export function AppRouter(): JSX.Element {
       <AuthProvider>
         <TopBar />
         <PredictedMotionBadge />
-        <LowEndBanner />
-        <DegradedBanner />
+        {/* Notices float in one fixed stack over the map, under the menu
+            row. In flow above the shell they pushed the whole window down
+            by their height. Each keeps its own dismiss. */}
+        <div className="notice-stack">
+          <LowEndBanner />
+          <DegradedBanner />
+        </div>
         <MfaBanner />
         <OnboardingGate />
         <AiSetupGate />
         <Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="/" element={<DashboardRoute />} />
-            <Route path="/2d" element={<App2D />} />
-            <Route path="/studio" element={<StudioPage />} />
+            <Route
+              path="/2d"
+              element={
+                <SignedIn>
+                  <App2D />
+                </SignedIn>
+              }
+            />
+            <Route
+              path="/studio"
+              element={
+                <SignedIn>
+                  <StudioPage />
+                </SignedIn>
+              }
+            />
             <Route path="/news" element={<VelocityNewsPage />} />
             <Route path="/news/:id" element={<StoryView />} />
             <Route path="/login" element={<LoginPage />} />
@@ -99,11 +119,27 @@ export function AppRouter(): JSX.Element {
 }
 
 // The "/" route now renders the SINGLE Gotham console shell (App) for every mode
-// (design §6.0 — the parallel "Normal" shell is retired). dashboardMode selects a
-// view PRESET of that one shell: 'professional' = Command (dense, all apps),
-// 'normal' = Field (a lighter landing). App reads the mode and adapts.
+// (design §6.0 — the parallel "Normal" shell and its Field preset are retired).
+// With accounts configured, sign-in happens before the dashboard, not inside it.
 function DashboardRoute(): JSX.Element {
-  return <App />;
+  return (
+    <SignedIn>
+      <App />
+    </SignedIn>
+  );
+}
+
+function SignedIn({ children }: { children: JSX.Element }): JSX.Element {
+  const { user, loading } = useAuth();
+  // Dev server only (stripped from builds): headless screenshot runs have no account.
+  const devSkip =
+    import.meta.env.DEV &&
+    sessionStorage.getItem("velocity.devNoLogin") === "1";
+  if (isSupabaseConfigured && !devSkip) {
+    if (loading) return <RouteLoading />;
+    if (!user) return <Navigate to="/login" replace />;
+  }
+  return children;
 }
 
 function TopBar(): JSX.Element | null {

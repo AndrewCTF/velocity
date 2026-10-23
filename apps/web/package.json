@@ -17,6 +17,7 @@
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
+    "@fontsource/source-sans-3": "^5.3.1",
     "@macrostrat/cesium-martini": "^1.6.0",
     "@osint/shared": "workspace:*",
     "@sparkjsdev/spark": "^2.2.0",

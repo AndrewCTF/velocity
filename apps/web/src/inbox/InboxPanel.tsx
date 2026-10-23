@@ -290,7 +290,7 @@ export function InboxPanel({
           standing loop for triage. Ack = keep the finding, dismiss = noise. */}
       {woBriefs.length > 0 && (
         <div className="border border-accent-line rounded-sm">
-          <div className="px-2 py-1 mono text-[10px] uppercase tracking-[0.5px] text-accent border-b border-accent-line/60">
+          <div className="k-band text-accent">
             Watch Officer · {woBriefs.length}
           </div>
           <ul className="divide-y divide-line">
@@ -378,7 +378,7 @@ export function InboxPanel({
           or rejects (marks it and moves on) each scored candidate. */}
       {(mergeCandidates.length > 0 || mergeError) && (
         <div className="border border-line rounded-sm">
-          <div className="px-2 py-1 mono text-[10px] uppercase tracking-[0.5px] text-txt-3 border-b border-line">
+          <div className="k-band">
             Merge review · {mergeCandidates.length}
           </div>
           {mergeError && (
@@ -436,7 +436,7 @@ export function InboxPanel({
       {/* saved-search subscriptions (§6.5) — standing queries that notify on growth */}
       {savedSearches.length > 0 && (
         <div className="border border-line rounded-sm">
-          <div className="px-2 py-1 mono text-[10px] uppercase tracking-[0.5px] text-txt-3 border-b border-line">
+          <div className="k-band">
             Subscriptions · {savedSearches.length}
           </div>
           {savedSearches.map((s) => (

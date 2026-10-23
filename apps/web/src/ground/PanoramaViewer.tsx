@@ -20,6 +20,8 @@ export function PanoramaViewer(): JSX.Element | null {
   const setDetections = useGround((s) => s.setDetections);
   const [detecting, setDetecting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // The reference swaps a detection box's contents for its unit symbol.
+  const [symbols, setSymbols] = useState(false);
   const imgWrapRef = useRef<HTMLDivElement>(null);
 
   const photo =
@@ -80,6 +82,15 @@ export function PanoramaViewer(): JSX.Element | null {
         <span className="mono text-[10px] uppercase tracking-[0.6px] text-txt-2 truncate">
           {photo.source} · {photo.photo_id.slice(0, 16)}
         </span>
+        {dets.length > 0 && (
+          <Btn
+            size="sm"
+            tone={symbols ? "accent" : "neutral"}
+            onClick={() => setSymbols((v) => !v)}
+          >
+            {symbols ? "boxes" : "unit symbols"}
+          </Btn>
+        )}
         {isDesktop() ? (
           <Btn
             size="sm"
@@ -107,7 +118,7 @@ export function PanoramaViewer(): JSX.Element | null {
             style={{ imageRendering: "auto" }}
           />
           <div className="absolute inset-0">
-            <BboxOverlay dets={dets} />
+            <BboxOverlay dets={dets} symbols={symbols} />
           </div>
         </div>
       </div>
@@ -126,8 +137,8 @@ export function PanoramaViewer(): JSX.Element | null {
         ) : (
           <MicroLabel>
             {isDesktop()
-              ? "no detections yet: run detect"
-              : "detection needs desktop app"}
+              ? "no detections for this photo yet: run detect"
+              : "no detection boxes for this photo: detection runs in the desktop app (CUDA YOLO)"}
           </MicroLabel>
         )}
         {!isDesktop() && <Caveat level="NO CV // WEBSITE" tone="warn" />}

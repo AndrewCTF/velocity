@@ -12,6 +12,12 @@ import {
 } from "./freshness.js";
 import { useSettings } from "../../state/settings.js";
 import { liveHidden, registerLiveLayer } from "../liveVisibility.js";
+import { useSituationFocus } from "../../state/situationFocus.js";
+import {
+  useLayerStyles,
+  scaleMul,
+  tintOf,
+} from "../../layer-editor/layerStyleStore.js";
 
 // Generic batched-primitive renderer for high-count map layers. Renders icons +
 // labels as ONE Cesium.BillboardCollection + ONE Cesium.LabelCollection
@@ -171,6 +177,21 @@ export interface PrimitiveLayerOpts {
    * share one; layers on different update cadences must not. Defaults to
    * 'static' — the long tail of reference markers that never tick. */
   poolKey?: string;
+  /** Registry layer id. When set, the Layer editor's colour/size override for
+   * this id (layer-editor/layerStyleStore) is applied, and restyles in place. */
+  layerId?: string;
+  /** Under Slate, label only the contacts that matter (selected, hovered,
+   *  linked to the open situation, flagged), as the reference frames do;
+   *  every other contact keeps its label spec and shows it on hover. Set by
+   *  the aircraft and vessel layers. Other schemes are unaffected. */
+  quietLabels?: boolean;
+}
+
+function quietScheme(): boolean {
+  return (
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.theme === "slate"
+  );
 }
 
 interface Prim {
@@ -290,10 +311,16 @@ export class PrimitiveEntityLayer {
   private lastMirrorMs = 0;
   private wasAnimating = false;
   private layerOpacity = 1;
+  // Layer-editor override (layerStyleStore): tint replaces the style's tint,
+  // scale multiplies every icon scale. Refreshed on store change only.
+  private ovTint: Cesium.Color | null = null;
+  private ovScale = 1;
+  private removeStyleSub: (() => void) | null = null;
   private removePreUpdate: (() => void) | null = null;
   private removeCameraChanged: (() => void) | null = null;
   private removeFilterSub: (() => void) | null = null;
   private removeCorroborationSub: (() => void) | null = null;
+  private removeFocusSub: (() => void) | null = null;
   // Camera tilted toward the horizon → icons stand up as side silhouettes.
   private tiltActive = false;
   private unregisterLive: (() => void) | null = null;
@@ -320,6 +347,30 @@ export class PrimitiveEntityLayer {
     // Replay hides the live map; these pixels follow no data source, so they
     // register to be hidden with it (globe/liveVisibility.ts).
     this.unregisterLive = registerLiveLayer(this);
+    if (opts.quietLabels) {
+      // A hover, a selection or a newly opened situation changes which few
+      // contacts carry a label; re-evaluate just those ids, now, rather than
+      // waiting for their next poll.
+      const unFocus = useSituationFocus.subscribe((st, prev) => {
+        if (st.hoverId !== prev.hoverId) {
+          this.relabel(prev.hoverId);
+          this.relabel(st.hoverId);
+        }
+        if (st.linked !== prev.linked) {
+          for (const id of prev.linked) this.relabel(id);
+          for (const id of st.linked) this.relabel(id);
+        }
+      });
+      const unSel = useSelection.subscribe((st, prev) => {
+        if (st.selectedEntityId === prev.selectedEntityId) return;
+        this.relabel(prev.selectedEntityId);
+        this.relabel(st.selectedEntityId);
+      });
+      this.removeFocusSub = () => {
+        unFocus();
+        unSel();
+      };
+    }
     if (opts.sideStyleFn) {
       // Re-evaluate stand-up mode whenever the camera moves (ctrl-drag tilt).
       // §5.2.2: 0.15 (was 0.05) — 0.05 fired camera.changed every ~5% viewport
@@ -355,6 +406,18 @@ export class PrimitiveEntityLayer {
     // "filter toggle freezes the map" spike). With this, the adapter's
     // unchanged-position skip can run filter-independently — a stationary contact
     // is never re-synced just to keep its dim correct; the dim is corrected here.
+    const layerId = opts.layerId;
+    if (layerId) {
+      this.readOverride(layerId);
+      this.removeStyleSub = useLayerStyles.subscribe((st, prev) => {
+        if (st.overrides[layerId] === prev.overrides[layerId]) return;
+        this.readOverride(layerId);
+        // Re-sync every icon from its last props: upsert in place, no rebuild.
+        for (const p of [...this.prims.values()]) this.sync(p.entity, p.props);
+        if (this.tiltActive) this.applyTiltToAll();
+        scene.requestRender();
+      });
+    }
     if (opts.filter) {
       this.removeFilterSub = useFilters.subscribe((st, prev) => {
         if (st.clauses !== prev.clauses) this.reapplyDim();
@@ -392,6 +455,12 @@ export class PrimitiveEntityLayer {
         p.bb.color = p.tint.withAlpha(this.layerOpacity * dim);
     }
     if (changed) this.scene.requestRender();
+  }
+
+  private readOverride(id: string): void {
+    const c = tintOf(id);
+    this.ovTint = c ? Cesium.Color.fromCssColorString(c) : null;
+    this.ovScale = scaleMul(id);
   }
 
   private posOf(entity: Cesium.Entity): Cesium.Cartesian3 | undefined {
@@ -462,9 +531,22 @@ export class PrimitiveEntityLayer {
     return this.labelOps < LABEL_OPS_PER_FRAME;
   }
 
-  private wantLabel(id: string, emergency: boolean): boolean {
+  private wantLabel(
+    id: string,
+    emergency: boolean,
+    props: Record<string, unknown> = {},
+  ): boolean {
     if (emergency) return true;
     if (useSelection.getState().selectedEntityId === id) return true;
+    if (this.opts.quietLabels && quietScheme()) {
+      const f = useSituationFocus.getState();
+      return (
+        f.hoverId === id ||
+        f.linked.has(id) ||
+        props["darkCandidate"] === true ||
+        Boolean(props["sanctioned"])
+      );
+    }
     return (
       this.scene.camera.positionCartographic.height < LABEL_MATERIALIZE_ALT_M
     );
@@ -476,8 +558,9 @@ export class PrimitiveEntityLayer {
     const id = String(entity.id);
     const pos = this.posOf(entity);
     if (!pos) return;
-    const s = this.opts.styleFn(props);
-    const tint = s.color ?? Cesium.Color.WHITE;
+    const s0 = this.opts.styleFn(props);
+    const s = { ...s0, scale: s0.scale * this.ovScale };
+    const tint = this.ovTint ?? s.color ?? Cesium.Color.WHITE;
     const rot = s.rotationRad ?? 0;
     const dimFactor = this.dimFactorFor(props);
     const labelText = this.opts.labelFn(props);
@@ -487,7 +570,7 @@ export class PrimitiveEntityLayer {
     // caches the side sprite the moment tilt engages.
     const side =
       this.opts.sideStyleFn && this.tiltActive
-        ? this.opts.sideStyleFn(props)
+        ? this.scaled(this.opts.sideStyleFn(props))
         : null;
 
     let p = this.prims.get(id);
@@ -507,7 +590,7 @@ export class PrimitiveEntityLayer {
       let lbl: Cesium.Label | null = null;
       if (
         labelText &&
-        this.wantLabel(id, !!s.emergency) &&
+        this.wantLabel(id, !!s.emergency, props) &&
         this.labelBudgetLeft()
       ) {
         lbl = this.lblColl.add({
@@ -564,7 +647,7 @@ export class PrimitiveEntityLayer {
       // §5.5: materialize the Cesium Label only inside the ddc draw window (or for
       // selected/emergency). Beyond it, destroy the label so world view holds ~0
       // labels. Recreated lazily on zoom-in — same visible set as today.
-      if (labelText && this.wantLabel(id, !!s.emergency)) {
+      if (labelText && this.wantLabel(id, !!s.emergency, props)) {
         if (!p.lbl) {
           if (this.labelBudgetLeft()) {
             p.lbl = this.lblColl.add({
@@ -621,6 +704,10 @@ export class PrimitiveEntityLayer {
     this.scene.requestRender();
   }
 
+  private scaled(st: PrimitiveStyle): PrimitiveStyle {
+    return this.ovScale === 1 ? st : { ...st, scale: st.scale * this.ovScale };
+  }
+
   private computeTilt(): boolean {
     // pitch: −π/2 straight down → 0 at the horizon. Stand icons up only when
     // tilted past STANDUP_PITCH AND zoomed in below STANDUP_MAX_HEIGHT_M.
@@ -667,7 +754,7 @@ export class PrimitiveEntityLayer {
       // tilt has engaged (recompute always so a category change since the last
       // stand-up is reflected).
       if (this.tiltActive) {
-        const side = sideFn(p.props);
+        const side = this.scaled(sideFn(p.props));
         p.sideImage = side.imageUri;
         p.sideScale = side.scale;
       }
@@ -686,10 +773,31 @@ export class PrimitiveEntityLayer {
       p.bb.show = !hidden;
       if (p.lbl) p.lbl.show = !hidden;
     }
+  }
+
+  // Add or drop one contact's label to match wantLabel, outside a sync. Single
+  // ids only (hover, selection, the open situation's links), so no budget.
+  private relabel(id: string | null): void {
+    if (!id) return;
+    const p = this.prims.get(id);
+    if (!p || !p.labelText) return;
+    const want = this.wantLabel(id, p.emergency, p.props);
+    if (want && !p.lbl) {
+      p.lbl = this.lblColl.add({
+        ...this.opts.labelBase(p.labelText),
+        position: p.bb.position,
+        id: { id },
+      });
+    } else if (!want && p.lbl) {
+      this.lblColl.remove(p.lbl);
+      p.lbl = null;
+    } else return;
     this.scene.requestRender();
   }
 
   destroy(): void {
+    this.removeFocusSub?.();
+    this.removeFocusSub = null;
     this.removePreUpdate?.();
     this.removePreUpdate = null;
     this.removeCameraChanged?.();
@@ -700,6 +808,8 @@ export class PrimitiveEntityLayer {
     this.removeCorroborationSub = null;
     this.unregisterLive?.();
     this.unregisterLive = null;
+    this.removeStyleSub?.();
+    this.removeStyleSub = null;
     if (this.usesShared) {
       // Only OUR billboards/labels leave the shared collection; the container
       // itself outlives this layer and is torn down when the last ref goes.

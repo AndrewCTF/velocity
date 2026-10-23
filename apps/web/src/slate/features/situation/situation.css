@@ -1,0 +1,144 @@
+/* Situation object view (features copy t66). The copy's page rules
+   (gotham/gotham/features.html <style>), scoped under .sl-sitobj; the box sits
+   at the copy's frame position minus the 96 px the app frame starts at. */
+.slate-shell .sl-sitobj {
+  position: absolute;
+  left: 54px;
+  top: 100px;
+  width: 870px;
+  height: 968px;
+  max-height: calc(100% - 110px);
+  overflow: hidden auto;
+  z-index: 30;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --t0: #f6f7f9;
+  --t1: #e5e8eb;
+  --t2: #9fabb2;
+}
+.slate-shell .sl-sitobj > *,
+.slate-shell .sl-sitobj div > div,
+.slate-shell .sl-sitobj .sl-hull > * {
+  position: absolute;
+}
+.slate-shell .sl-sitobj .t {
+  white-space: nowrap;
+  line-height: 20px;
+  height: 20px;
+  color: var(--t1);
+  font-size: 15px;
+  letter-spacing: 0.045em;
+}
+.slate-shell .sl-sitobj .mono {
+  font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+  font-size: 14.8px;
+  line-height: 17.2px;
+  color: #dfe6ea;
+  white-space: pre;
+  letter-spacing: 0;
+}
+.slate-shell .sl-sitobj .mono .chip {
+  background: #345e74;
+  color: #cfe8f6;
+  border-radius: 2px;
+  padding: 1px 0;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.slate-shell .sl-sitobj .gridbg {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+/* Controls drawn as the copy's text. */
+.slate-shell .sl-sitobj .sl-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.slate-shell .sl-sitobj .sl-btn {
+  border: 1.2px solid #5a666d;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 18px;
+  color: #f1f4f6;
+  letter-spacing: 0.04em;
+  background: none;
+  cursor: pointer;
+}
+.slate-shell .sl-sitobj .sl-filter {
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-family: inherit;
+  color: #e5e8eb;
+}
+.slate-shell .sl-sitobj .sl-filter::placeholder {
+  color: #9fabb2;
+}
+.slate-shell .sl-sitobj .sl-pill {
+  background: #308ac2;
+  border-radius: 13px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slate-shell .sl-sitobj .sl-tag {
+  background: #323c42;
+  color: #d5dce0;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+.slate-shell .sl-sitobj .sl-hull {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.slate-shell .sl-sitobj .sl-sitempty {
+  color: #9fabb2;
+  font-size: 15px;
+  line-height: 20px;
+  white-space: normal;
+}
+.slate-shell .sl-sitobj .sl-sittab {
+  overflow-y: auto;
+  color: #e5e8eb;
+  font-size: 15px;
+}
+.slate-shell .sl-sitobj .sl-sittab > * {
+  position: static;
+}
+.slate-shell .sl-sitobj .sl-sittab .row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid #2a3436;
+}
+.slate-shell .sl-sitobj .sl-sittab .row .mono {
+  white-space: pre-wrap;
+}
+.slate-shell .sl-sitobj .sl-sittab .kvrow {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 0;
+  border-bottom: 1px solid #2a3436;
+  color: #e5e8eb;
+  font-size: 15px;
+}

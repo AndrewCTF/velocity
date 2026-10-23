@@ -20,14 +20,27 @@ const KM_PER_NM = 1.852;
 export interface MapAction {
   label: string;
   run: () => void | Promise<void>;
+  /** Blueprint sprite id the menu draws beside the label. */
+  icon?: string;
+  /** Draw a rule above this item. */
+  sep?: boolean;
 }
 
+const pointFeature = (lat: number, lon: number): string =>
+  JSON.stringify({
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [lon, lat] },
+    properties: {},
+  });
+
 // Point actions — the canonical right-click list. ContextMenu renders these
-// verbatim so the two surfaces stay identical.
+// verbatim so the two surfaces stay identical. The first six are the reference
+// menu's own items in its order; the app's other point actions follow.
 export function pointActions(lat: number, lon: number): MapAction[] {
   return [
     {
-      label: "Collect imagery here",
+      label: "Collect satellite imagery...",
+      icon: "satellite",
       run: () =>
         useChip.getState().setFocus({
           entityId: `aoi:${lat.toFixed(3)},${lon.toFixed(3)}`,
@@ -37,15 +50,8 @@ export function pointActions(lat: number, lon: number): MapAction[] {
         }),
     },
     {
-      label: "Ground recon here",
-      run: () => useGround.getState().openAt({ lat, lon, radiusKm: 2 }),
-    },
-    {
-      label: "Imagery diff here",
-      run: () => useImageryDiff.getState().openAt({ lat, lon }),
-    },
-    {
-      label: "Search objects nearby (50 km)",
+      label: "Geosearch",
+      icon: "geosearch",
       run: () =>
         useGeoScope.getState().setScope({
           lat,
@@ -55,27 +61,8 @@ export function pointActions(lat: number, lon: number): MapAction[] {
         }),
     },
     {
-      label: "AI assess this location",
-      run: () =>
-        useAgent
-          .getState()
-          .ask(
-            `Assess the location at ${lat.toFixed(4)}, ${lon.toFixed(4)}: what is here, notable activity, and risks?`,
-          ),
-    },
-    {
-      label: "Geosearch",
-      run: () =>
-        window.dispatchEvent(
-          new KeyboardEvent("keydown", {
-            key: "k",
-            metaKey: true,
-            bubbles: true,
-          }),
-        ),
-    },
-    {
-      label: "Create watchbox",
+      label: "Create geofence",
+      icon: "polygon-filter",
       run: () =>
         useWatchboxes.getState().add({
           label: `Watchbox ${lat.toFixed(1)},${lon.toFixed(1)}`,
@@ -95,7 +82,55 @@ export function pointActions(lat: number, lon: number): MapAction[] {
         }),
     },
     {
+      label: "Copy coordinates",
+      icon: "locate",
+      sep: true,
+      run: () =>
+        navigator.clipboard?.writeText(`${lat.toFixed(5)},${lon.toFixed(5)}`),
+    },
+    {
+      label: "Copy",
+      icon: "duplicate",
+      run: () => navigator.clipboard?.writeText(pointFeature(lat, lon)),
+    },
+    {
+      label: "Export",
+      icon: "export",
+      run: () => {
+        const url = URL.createObjectURL(
+          new Blob([pointFeature(lat, lon)], { type: "application/geo+json" }),
+        );
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `point-${lat.toFixed(4)}_${lon.toFixed(4)}.geojson`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      },
+    },
+    {
+      label: "Ground recon here",
+      icon: "walk",
+      sep: true,
+      run: () => useGround.getState().openAt({ lat, lon, radiusKm: 2 }),
+    },
+    {
+      label: "Imagery diff here",
+      icon: "comparison",
+      run: () => useImageryDiff.getState().openAt({ lat, lon }),
+    },
+    {
+      label: "AI assess this location",
+      icon: "predictive-analysis",
+      run: () =>
+        useAgent
+          .getState()
+          .ask(
+            `Assess the location at ${lat.toFixed(4)}, ${lon.toFixed(4)}: what is here, notable activity, and risks?`,
+          ),
+    },
+    {
       label: "Add annotation",
+      icon: "annotation",
       run: () =>
         useAnnotations.getState().add({
           kind: "point",
@@ -105,12 +140,8 @@ export function pointActions(lat: number, lon: number): MapAction[] {
         }),
     },
     {
-      label: "Copy coordinates",
-      run: () =>
-        navigator.clipboard?.writeText(`${lat.toFixed(5)},${lon.toFixed(5)}`),
-    },
-    {
       label: "Create situation here",
+      icon: "flag",
       run: async () => {
         const id = await useSituations.getState().create({
           name: `Situation ${lat.toFixed(1)},${lon.toFixed(1)}`,

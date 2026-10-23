@@ -14,6 +14,10 @@
 // `norad: 0` means "we don't pin a specific catalogue number; classify this
 // constellation purely by name substring". Where a real, stable NORAD id is
 // known for a representative satellite it's filled in (best-effort, public).
+// Every pinned id was checked against CelesTrak's GP OBJECT_NAME on 2026-10-23
+// (BlackSky is catalogued as GLOBAL-n, so its ids classify it and the name
+// rule does not). A pinned id wins over the name, so a wrong one mislabels
+// whatever owns that number: re-check with gp.php?CATNR=<id> when editing.
 
 export type SensorKind = "SAR" | "EO" | "MSI" | "RF";
 
@@ -36,7 +40,7 @@ export const SENSOR_SATS: readonly SensorSat[] = [
     operator: "ICEYE",
   },
   {
-    norad: 44389,
+    norad: 44390,
     name: "ICEYE-X4",
     match: "iceye",
     sensor: "SAR",
@@ -50,8 +54,8 @@ export const SENSOR_SATS: readonly SensorSat[] = [
     operator: "ICEYE",
   },
   {
-    norad: 48918,
-    name: "ICEYE-X8",
+    norad: 46496,
+    name: "ICEYE-X7",
     match: "iceye",
     sensor: "SAR",
     operator: "ICEYE",
@@ -64,22 +68,22 @@ export const SENSOR_SATS: readonly SensorSat[] = [
     operator: "ICEYE",
   },
   {
-    norad: 46266,
-    name: "CAPELLA-2 (Sequoia)",
+    norad: 57693,
+    name: "CAPELLA-11 (ACADIA-1)",
     match: "capella",
     sensor: "SAR",
     operator: "Capella Space",
   },
   {
-    norad: 48601,
-    name: "CAPELLA-3 (Whitney)",
+    norad: 59444,
+    name: "CAPELLA-14 (ACADIA-4)",
     match: "capella",
     sensor: "SAR",
     operator: "Capella Space",
   },
   {
-    norad: 48602,
-    name: "CAPELLA-4 (Whitney)",
+    norad: 60419,
+    name: "CAPELLA-13 (ACADIA-3)",
     match: "capella",
     sensor: "SAR",
     operator: "Capella Space",
@@ -92,18 +96,41 @@ export const SENSOR_SATS: readonly SensorSat[] = [
     operator: "Capella Space",
   },
   {
-    norad: 56212,
-    name: "UMBRA-04",
+    norad: 58297,
+    name: "UMBRA-07",
     match: "umbra",
     sensor: "SAR",
     operator: "Umbra",
   },
   {
-    norad: 56216,
-    name: "UMBRA-05",
+    norad: 60541,
+    name: "UMBRA-09",
     match: "umbra",
     sensor: "SAR",
     operator: "Umbra",
+  },
+  // Sentinel-1 classifies by NORAD id only: "sentinel-1" never equals an alpha
+  // token, so Sentinel-2/3/6 (optical/altimetry) cannot fall into SAR by name.
+  {
+    norad: 39634,
+    name: "SENTINEL-1A",
+    match: "sentinel-1",
+    sensor: "SAR",
+    operator: "ESA Copernicus",
+  },
+  {
+    norad: 62261,
+    name: "SENTINEL-1C",
+    match: "sentinel-1",
+    sensor: "SAR",
+    operator: "ESA Copernicus",
+  },
+  {
+    norad: 66315,
+    name: "SENTINEL-1D",
+    match: "sentinel-1",
+    sensor: "SAR",
+    operator: "ESA Copernicus",
   },
   {
     norad: 0,
@@ -117,14 +144,14 @@ export const SENSOR_SATS: readonly SensorSat[] = [
   // Planet SkySat — sub-metre EO; Planet Dove/Flock — ~3 m daily MSI.
   {
     norad: 39418,
-    name: "SKYSAT-1",
+    name: "SKYSAT-A",
     match: "skysat",
     sensor: "EO",
     operator: "Planet",
   },
   {
     norad: 40072,
-    name: "SKYSAT-2",
+    name: "SKYSAT-B",
     match: "skysat",
     sensor: "EO",
     operator: "Planet",
@@ -166,22 +193,22 @@ export const SENSOR_SATS: readonly SensorSat[] = [
   },
   // BlackSky Global — rapid-revisit high-res EO.
   {
-    norad: 46106,
-    name: "BLACKSKY GLOBAL 7",
+    norad: 43812,
+    name: "BLACKSKY GLOBAL-2",
     match: "blacksky",
     sensor: "EO",
     operator: "BlackSky",
   },
   {
-    norad: 46107,
-    name: "BLACKSKY GLOBAL 8",
+    norad: 47971,
+    name: "BLACKSKY GLOBAL-9",
     match: "blacksky",
     sensor: "EO",
     operator: "BlackSky",
   },
   {
-    norad: 48270,
-    name: "BLACKSKY GLOBAL 9",
+    norad: 49469,
+    name: "BLACKSKY GLOBAL-14",
     match: "blacksky",
     sensor: "EO",
     operator: "BlackSky",
@@ -197,21 +224,21 @@ export const SENSOR_SATS: readonly SensorSat[] = [
   // ── RF (Radio-Frequency geolocation) — emitter mapping, AIS/RF survey ──────
   // HawkEye 360 flies in clusters; Spire LEMUR does RF (AIS/ADS-B) + GNSS-RO.
   {
-    norad: 43799,
+    norad: 43765,
     name: "HAWK-A (HawkEye 360)",
     match: "hawk",
     sensor: "RF",
     operator: "HawkEye 360",
   },
   {
-    norad: 43797,
+    norad: 43794,
     name: "HAWK-B (HawkEye 360)",
     match: "hawk",
     sensor: "RF",
     operator: "HawkEye 360",
   },
   {
-    norad: 43798,
+    norad: 43799,
     name: "HAWK-C (HawkEye 360)",
     match: "hawk",
     sensor: "RF",

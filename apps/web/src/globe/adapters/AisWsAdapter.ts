@@ -82,6 +82,7 @@ export class AisWsAdapter implements LayerAdapter {
     await viewer.dataSources.add(this.ds);
     dropVisualizers(this.ds);
     this.prim = new PrimitiveEntityLayer(viewer.scene, {
+      layerId: this.props.ctx.descriptor.id,
       styleFn: (props) => {
         const st = vesselStyle(props);
         return {
@@ -91,6 +92,7 @@ export class AisWsAdapter implements LayerAdapter {
         };
       },
       poolKey: "vessel", // ticks with the other vessel layers, never with static markers
+      quietLabels: true,
       labelFn: vesselLabelText,
       billboardBase: () => ({
         alignedAxis: Cesium.Cartesian3.UNIT_Z,

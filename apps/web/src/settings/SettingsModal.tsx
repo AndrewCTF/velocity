@@ -5,11 +5,7 @@ import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { apiFetch } from "../transport/http.js";
 import { KeysPanel } from "./KeysPanel.js";
-import {
-  useDashboardMode,
-  type DashboardMode,
-} from "../state/dashboardMode.js";
-import { useSettings } from "../state/settings.js";
+import { useSettings, validHomeView } from "../state/settings.js";
 import {
   MAP_QUALITIES,
   QUALITY_LABELS,
@@ -138,32 +134,22 @@ export function SettingsModal({
           {/* Supabase mode only: a keyless box has no account to secure. */}
           {isSupabaseConfigured && user && (
             <div className="mb-4 pb-3 border-b border-line">
-              <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3">
-                Account security
-              </div>
+              <div className="k-band -mx-4 mb-2">Account security</div>
               <AccountSecurity />
             </div>
           )}
 
-          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2">
-            Colour scheme
-          </div>
+          <div className="k-band -mx-4 mb-2">Interface</div>
+          <InterfacePicker />
+
+          <div className="k-band -mx-4 mb-2 mt-4">Colour scheme</div>
           <SchemePicker />
 
-          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
-            Dashboard
-          </div>
-          <DashboardToggle />
-
-          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
-            Aircraft motion
-          </div>
+          <div className="k-band -mx-4 mb-2 mt-4">Aircraft motion</div>
           <DeadReckonToggle />
           <CorroborationToggle />
 
-          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
-            Display
-          </div>
+          <div className="k-band -mx-4 mb-2 mt-4">Display</div>
           <MapQualityPreset />
           <div className="mt-2">
             <RenderQualitySlider />
@@ -172,20 +158,19 @@ export function SettingsModal({
             <GovernorToggle />
           </div>
 
-          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
-            Local AI inference
-          </div>
+          <div className="k-band -mx-4 mb-2 mt-4">Map defaults</div>
+          <MapDefaults />
+
+          <div className="k-band -mx-4 mb-2 mt-4">Local AI inference</div>
           <LocalAiToggle />
           <div className="mt-2.5">
             <LocalAiSection />
           </div>
 
-          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
-            Alert rules
-          </div>
+          <div className="k-band -mx-4 mb-2 mt-4">Alert rules</div>
           <AlertRulesSection />
 
-          <div className="mono text-[10px] uppercase tracking-[0.7px] text-txt-3 mb-2 mt-4">
+          <div className="k-band -mx-4 mb-2 mt-4">
             API keys · bring your own
           </div>
           <KeysPanel />
@@ -210,6 +195,64 @@ export function SettingsModal({
           </a>
         </div>
       </div>
+    </div>
+  );
+}
+
+// The new interface (the default; the slate scheme swaps the shell too) or the
+// classic console as an opt-in. The new one carries a picture and a WIP mark.
+function InterfacePicker(): JSX.Element {
+  const mode = useTheme((s) => s.mode);
+  const setMode = useTheme((s) => s.setMode);
+  const isNew = mode === "slate";
+  const card = (on: boolean): string =>
+    `flex flex-col gap-1.5 rounded-sm border p-1.5 text-left ${
+      on
+        ? "border-accent-line bg-accent-dim text-txt-0"
+        : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
+    }`;
+  return (
+    <div
+      className="grid grid-cols-2 gap-1.5"
+      role="radiogroup"
+      aria-label="Interface"
+    >
+      <button
+        type="button"
+        role="radio"
+        aria-checked={isNew}
+        onClick={() => setMode("slate")}
+        className={card(isNew)}
+      >
+        <span className="flex items-center gap-1.5 text-[12px] font-semibold">
+          New interface
+          <span className="rounded-sm border border-warn px-1 text-[10px] uppercase text-warn">
+            WIP
+          </span>
+        </span>
+        <img
+          src={`${import.meta.env.BASE_URL}ui-preview-slate.jpg`}
+          alt="Preview of the new interface"
+          className="w-full rounded-sm border border-line-2"
+        />
+        <span className="text-[11px] text-txt-2">
+          The default. Work in progress: some controls and panels are still
+          missing.
+        </span>
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={!isNew}
+        onClick={() => setMode("dark")}
+        className={card(!isNew)}
+      >
+        <span className="text-[12px] font-semibold">Classic</span>
+        <span className="text-[11px] text-txt-2">
+          The previous console. Opt in if you need a control the new interface
+          lacks.
+        </span>
+      </button>
     </div>
   );
 }
@@ -261,50 +304,6 @@ function SchemePicker(): JSX.Element {
             <span className="mono min-w-0 flex-1 truncate text-[11px]">
               {s.label}
             </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// Switch between the new approachable "Normal" dashboard (default) and the dense
-// "Professional" COP. Persisted via the dashboardMode store; the "/" route
-// re-renders into the chosen shell. The map/globe is identical between them.
-function DashboardToggle(): JSX.Element {
-  const mode = useDashboardMode((s) => s.mode);
-  const setMode = useDashboardMode((s) => s.setMode);
-  const opts: { id: DashboardMode; label: string; hint: string }[] = [
-    {
-      id: "professional",
-      label: "Professional",
-      hint: "Dense, full-tool COP (default)",
-    },
-    { id: "normal", label: "Normal", hint: "Clean, guided layout" },
-  ];
-  return (
-    <div
-      className="flex gap-1.5"
-      role="radiogroup"
-      aria-label="Dashboard layout"
-    >
-      {opts.map((o) => {
-        const on = mode === o.id;
-        return (
-          <button
-            key={o.id}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => setMode(o.id)}
-            className={`flex-1 text-left rounded-sm border px-2.5 py-2 transition-colors ${
-              on
-                ? "border-accent-line bg-accent-dim text-txt-0"
-                : "border-line text-txt-2 hover:border-accent-line hover:text-txt-1"
-            }`}
-          >
-            <div className="mono text-[11px] font-medium">{o.label}</div>
-            <div className="mono text-[10px] text-txt-3 mt-0.5">{o.hint}</div>
           </button>
         );
       })}
@@ -624,6 +623,104 @@ function RenderQualitySlider(): JSX.Element {
         Higher = sharper (renders at native device pixels); lower = higher FPS
         (fewer pixels). Resolution and frame rate trade off directly. Default
         2.0×.
+      </div>
+    </div>
+  );
+}
+
+// Home view for the zoom-out / reset-view action (globe/camera.ts flyToGlobal).
+// No "use current view" button: the modal has no handle on the Cesium viewer.
+// A custom basemap form is not offered either; a new tile host needs a proxied
+// egress path on the backend first.
+export function MapDefaults(): JSX.Element {
+  const home = useSettings((s) => s.homeView);
+  const set = useSettings((s) => s.set);
+  const [lon, setLon] = useState(home ? String(home.lon) : "");
+  const [lat, setLat] = useState(home ? String(home.lat) : "");
+  const [km, setKm] = useState(home ? String(home.height / 1000) : "");
+  const draft = validHomeView({
+    lon: Number(lon),
+    lat: Number(lat),
+    height: Number(km) * 1000,
+  });
+  const filled = lon.trim() !== "" && lat.trim() !== "" && km.trim() !== "";
+  const field =
+    "w-full mono text-[11px] border border-line bg-bg-2 px-2 py-1 text-txt-0";
+  return (
+    <div className="w-full rounded-sm border border-line px-2.5 py-2">
+      <div className="mono text-[11px] font-medium text-txt-1 mb-2">
+        Home view
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        <label className="mono text-[10px] text-txt-3">
+          Longitude
+          <input
+            className={field}
+            inputMode="decimal"
+            value={lon}
+            onChange={(e) => setLon(e.target.value)}
+            placeholder="20"
+          />
+        </label>
+        <label className="mono text-[10px] text-txt-3">
+          Latitude
+          <input
+            className={field}
+            inputMode="decimal"
+            value={lat}
+            onChange={(e) => setLat(e.target.value)}
+            placeholder="35"
+          />
+        </label>
+        <label className="mono text-[10px] text-txt-3">
+          Height (km)
+          <input
+            className={field}
+            inputMode="decimal"
+            value={km}
+            onChange={(e) => setKm(e.target.value)}
+            placeholder="20000"
+          />
+        </label>
+      </div>
+      {filled && !draft && (
+        <div className="mono text-[10px] text-alert mt-1.5">
+          Longitude runs -180 to 180, latitude -90 to 90, height above 0.
+        </div>
+      )}
+      <div className="flex gap-1.5 mt-2">
+        <button
+          type="button"
+          disabled={!draft}
+          onClick={() => draft && set("homeView", draft)}
+          className="mono text-[10px] px-2 py-1 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent disabled:opacity-50"
+        >
+          Save home view
+        </button>
+        <button
+          type="button"
+          disabled={!home}
+          onClick={() => {
+            set("homeView", null);
+            setLon("");
+            setLat("");
+            setKm("");
+          }}
+          className="mono text-[10px] px-2 py-1 border border-line rounded-sm text-txt-2 hover:border-accent-line hover:text-accent disabled:opacity-50"
+        >
+          Use whole globe
+        </button>
+      </div>
+      <div className="k-kv -mx-2.5 mono text-[11px]">
+        <span className="k">Current</span>
+        <span className="v">
+          {home
+            ? `${home.lon}, ${home.lat} · ${Math.round(home.height / 1000)} km`
+            : "whole globe (default)"}
+        </span>
+      </div>
+      <div className="mono text-[10px] text-txt-3 leading-snug">
+        Zoom out to the whole globe flies here when a home view is saved.
       </div>
     </div>
   );

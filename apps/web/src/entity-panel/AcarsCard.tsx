@@ -99,11 +99,7 @@ export function AcarsCard({
                     {systemOf(m)}
                   </span>
                   <span
-                    className={`mono text-[10px] uppercase px-1 rounded-sm shrink-0 ${
-                      originOf(m) === "pilot"
-                        ? "text-warn border border-[rgba(245,158,11,0.4)]"
-                        : "text-txt-3 border border-line"
-                    }`}
+                    className={`k-chip shrink-0 ${originOf(m) === "pilot" ? "w" : ""}`}
                   >
                     {originOf(m) === "pilot" ? "pilot" : "system"}
                   </span>

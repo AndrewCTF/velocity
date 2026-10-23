@@ -3,6 +3,7 @@
 
 import { create } from "zustand";
 import type { Alert } from "@osint/shared";
+import { useTheme } from "./theme.js";
 
 export type FeedStatus = "green" | "amber" | "red" | "unknown";
 
@@ -197,7 +198,10 @@ interface ImageryState {
 // Community tier). Implemented as a runtime swap inside the existing
 // viewer so the toggle does NOT remount Cesium.
 export const useImagery = create<ImageryState>((set) => ({
-  mode: "2d-dark",
+  // Slate (the default scheme) lands on keyless Esri World Imagery, which
+  // GlobeCanvas draws darkened, as the reference workspace frames do. Every
+  // other scheme keeps the proxied dark canvas.
+  mode: useTheme.getState().mode === "slate" ? "esri-imagery" : "2d-dark",
   setMode: (m) => set({ mode: m }),
   overlay: null,
   setOverlay: (o) => set({ overlay: o }),

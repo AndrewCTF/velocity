@@ -184,16 +184,16 @@ Supabase instead (`docs/security/auth-and-sessions.md`).
 
 ## The apps
 
-Velocity isn't one mega-dashboard; it's a workspace of fourteen apps that all
+Velocity isn't one mega-dashboard; it's a workspace of eighteen apps that all
 share the same selection and time context, so switching never loses the object
 you had selected. The launcher in the top bar groups them:
 
 | Group       | Apps                                                                   | What they're for                                                                                                                                                                                                                              |
 | ----------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Live**    | Map · Sim                                                              | The Cesium globe (always mounted behind everything else) and a browser war-game overlay.                                                                                                                                                      |
-| **AI**      | AI                                                                     | The analyst agent, automated watch and alerts, and the local model manager in one place.                                                                                                                                                      |
-| **Analyze** | Explorer · Graph · Investigate · Targeting · Video · Country · Markets | Filter the live object store, grow a link-analysis graph, run digital OSINT (domains/people/wallets), a notional kill-chain board, FMV/ground recon, per-country World-Bank/UN stat dossiers, and indices/commodities/FX with a stress index. |
-| **Data**    | Foundry · Workflows                                                    | Bring your own data through governed pipelines; automate the live feeds with a node-graph editor.                                                                                                                                             |
+| **AI**      | AI · Models                                                            | The analyst agent, automated watch and alerts, and a registry of local models (installed, catalog, presets, engine).                                                                                                                                                      |
+| **Analyze** | Explorer · Graph · Investigate · Targeting · Video · Country · Markets · Quiver · Vertex | Filter the live object store, grow a link-analysis graph, run digital OSINT (domains/people/wallets), a notional kill-chain board, FMV/ground recon, per-country World-Bank/UN stat dossiers, indices/commodities/FX with a stress index, time-series cards over the recorded archive, and a system graph of sources, feeds and layers. |
+| **Data**    | Foundry · Workflows · Workshop                                         | Bring your own data through governed pipelines; automate the live feeds with a node-graph editor; compose modules from live widgets.                                                                                                                                             |
 | **Product** | Reports                                                                | Case files, watch-officer briefs, dossiers, and case→report export.                                                                                                                                                                           |
 | **3D**      | City 3D                                                                | Gaussian-splat city scenes built from a keyless satellite AOI.                                                                                                                                                                                |
 

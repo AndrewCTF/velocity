@@ -77,9 +77,7 @@ function SectionLabel({
   children: React.ReactNode;
 }): JSX.Element {
   return (
-    <div className="mono text-[10px] uppercase tracking-[0.5px] text-txt-3 mt-1">
-      {children}
-    </div>
+    <div className="k-band">{children}</div>
   );
 }
 

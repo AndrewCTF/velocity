@@ -288,55 +288,62 @@
   --on-warn: var(--ink-dark);
 }
 
-/* Slate — Radix Colors slate (dark) with teal as the accent, so blue stays a
-   data colour. Steps 1-6 are the substrate, 11/12 the text; fills are step 9,
-   text-on-substrate hues step 11. */
+/* Slate: colours mode-sampled from Palantir Gotham workspace frames
+   (rxKghrZU5w8 t231/t78, 2021; gotham/_kit/gotham-shell.css), type Source Sans 3
+   per gotham/_kit/METHOD.md. Not a Blueprint scheme: the sampled greys are greener
+   than the published ramp, so it carries no `blueprint` claim. Substrate = rail,
+   bg-1 = situation panel, bg-2 = card, bg-3 = section band, hover = card footer,
+   accent = confirm card, alert = hostile symbol, banner = classification bar.
+   Text ramp sampled from the same frames (menu, body, kbd, search placeholder). */
 :root[data-theme="slate"] {
   color-scheme: dark;
-  --bg-0: #111113;
-  --bg-1: #18191b;
-  --bg-2: #212225;
-  --bg-3: #272a2d;
-  --bg-4: #363a3f;
-  --panel-bg: #18191b;
-  --line: rgba(216, 244, 246, 0.09);
-  --line-2: rgba(221, 234, 248, 0.18);
-  --txt-0: #edeef0;
-  --txt-1: #d4d6da;
-  --txt-2: #b0b4ba;
-  --txt-3: #b0b4ba;
-  --txt-4: #b0b4ba;
-  --accent: #12a594;
-  --accent-dim: rgba(18, 165, 148, 0.2);
-  --accent-line: rgba(18, 165, 148, 0.55);
-  --accent-fg: #0bd8b6;
-  --warn: #ffc53d;
-  --warn-bg: rgba(255, 197, 61, 0.16);
-  --warn-line: rgba(255, 197, 61, 0.4);
-  --warn-fg: #ffca16;
-  --alert: #e5484d;
-  --alert-bg: rgba(229, 72, 77, 0.16);
-  --alert-line: rgba(229, 72, 77, 0.4);
-  --alert-fg: #ff9592;
-  --ok: #30a46c;
-  --ok-bg: rgba(48, 164, 108, 0.16);
-  --ok-line: rgba(48, 164, 108, 0.4);
-  --ok-fg: #3dd68c;
-  --mag: #c765dd;
-  --mag-dim: rgba(199, 101, 221, 0.16);
-  --mag-line: rgba(199, 101, 221, 0.5);
-  --mag-fg: #e796f3;
-  --sev-low: #d4d6da;
-  --hover: #272a2d;
-  --cls-unclas-bg: #0c3b1f;
-  --cls-unclas-fg: #86e0a6;
-  --cls-exercise-bg: #3a2a05;
-  --cls-exercise-fg: #f5c451;
-  --on-accent: var(--ink-dark);
+  --bg-0: #181c20;
+  --bg-1: #1c282a;
+  --bg-2: #222e2e;
+  --bg-3: #2e383a;
+  --bg-4: #323e40;
+  --panel-bg: #1c282a;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --txt-0: #f1f4f5;
+  --txt-1: #e4e9ea;
+  --txt-2: #dfe5e7;
+  --txt-3: #a9b3b8;
+  --txt-4: #a9b3b8;
+  --accent: #1876b6;
+  --accent-dim: rgba(24, 118, 182, 0.22);
+  --accent-line: rgba(24, 118, 182, 0.6);
+  --accent-fg: #8ac4ee;
+  --warn: #ec9a3c;
+  --warn-bg: rgba(236, 154, 60, 0.16);
+  --warn-line: rgba(236, 154, 60, 0.4);
+  --warn-fg: #fbb360;
+  --alert: #d93a46;
+  --alert-bg: rgba(217, 58, 70, 0.16);
+  --alert-line: rgba(217, 58, 70, 0.4);
+  --alert-fg: #fa999c;
+  --ok: #32a467;
+  --ok-bg: rgba(50, 164, 103, 0.16);
+  --ok-line: rgba(50, 164, 103, 0.38);
+  --ok-fg: #72ca9b;
+  --mag: #d946ef;
+  --mag-dim: rgba(217, 70, 239, 0.16);
+  --mag-line: rgba(217, 70, 239, 0.5);
+  --mag-fg: #f0a8f8;
+  --sev-low: #dfe5e7;
+  --on-accent: #ffffff;
   --on-mag: var(--ink-dark);
-  --on-alert: var(--ink-dark);
+  --on-alert: #ffffff;
   --on-ok: var(--ink-dark);
   --on-warn: var(--ink-dark);
+  --hover: #2e3a3c;
+  --cls-unclas-bg: #526472;
+  --cls-unclas-fg: #ffffff;
+  --cls-exercise-bg: #4c3a2a;
+  --cls-exercise-fg: #fbd065;
+  --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
 }
 
 /* Night watch — Radix Colors sand (dark) with amber as the accent, for a
@@ -821,6 +828,7 @@
   --scroll-thumb-hover: rgba(255, 255, 255, 0.22);
 }
 
+
 /* Scrollbars follow the scheme. These were hardcoded white alphas, so on a
    light scheme the thumb was invisible against the track it needed to sit on.
    `--scroll-thumb` is set per family and consumed by the rules below. */
@@ -904,4 +912,24 @@ body,
   letter-spacing: 0.8px;
   font-weight: 600;
   line-height: 1.1;
+}
+
+/* Slate sets UI text in one face: the reference workspace renders labels,
+   ids and readouts alike in Source Sans 3, with tabular figures where columns
+   align. `.mono`/`.micro` are layout labels here, not code; code surfaces
+   (textarea/pre editors) keep var(--font-mono) via their own classes. */
+:root[data-theme="slate"] .mono {
+  font-family: var(--font-sans);
+}
+:root[data-theme="slate"] .micro {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+:root[data-theme="slate"] textarea.mono,
+:root[data-theme="slate"] pre.mono,
+:root[data-theme="slate"] code.mono {
+  font-family: var(--font-mono);
 }

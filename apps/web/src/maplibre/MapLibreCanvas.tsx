@@ -18,6 +18,7 @@ const VIEWPORT_LAYERS = new Set([
   "maritime.keyless",
   "maritime.digitraffic",
 ]);
+import { destinationPoint } from "../globe/projection.js";
 
 interface Props {
   registry: LayerRegistry;
@@ -144,6 +145,7 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
       for (const layerId of [
         `${id}__pts`,
         `${id}__clusters`,
+        `${id}__cluster_badge`,
         `${id}__cluster_count`,
       ]) {
         if (map.getLayer(layerId)) map.removeLayer(layerId);
@@ -187,7 +189,7 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
         // it back in the click handler.
         cluster: clusterable,
         clusterMaxZoom: 5,
-        clusterRadius: 40,
+        clusterRadius: 60,
       });
       const radius = [
         "interpolate",
@@ -213,33 +215,44 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
           "circle-opacity": d.opacity,
         },
       });
-      // Clustered sources (aircraft + vessel) get their own paint layers — a
-      // teal/emerald bubble with the count rendered as a symbol on top. We
-      // colour-key the bubble to the layer accent so vessels (green) and
-      // aircraft (teal) remain visually distinguishable when both are dense.
+      // Clustered sources (aircraft + vessel) draw the reference's asset
+      // bubbles (feature page G35): a translucent grey disc sized by the count,
+      // a thin light rim, and the count in a small light badge at its centre.
       if (clusterable) {
-        const clusterColor = d.emits?.includes("vessel")
-          ? "#34d399"
-          : "#2dd4bf";
         map.addLayer({
           id: `${d.id}__clusters`,
           type: "circle",
           source: d.id,
           filter: ["has", "point_count"],
           paint: {
-            "circle-color": clusterColor,
-            "circle-opacity": 0.5,
+            "circle-color": "#ffffff",
+            "circle-opacity": 0.1,
             "circle-radius": [
-              "step",
-              ["get", "point_count"],
-              8,
-              50,
-              12,
-              200,
-              18,
-            ],
-            "circle-stroke-color": "#0d1117",
-            "circle-stroke-width": 1.5,
+              "interpolate",
+              ["linear"],
+              ["sqrt", ["get", "point_count"]],
+              1,
+              15,
+              3,
+              30,
+              5,
+              38,
+              30,
+              60,
+            ] as unknown as number,
+            "circle-stroke-color": "#a9b0b5",
+            "circle-stroke-opacity": 0.75,
+            "circle-stroke-width": 1,
+          },
+        });
+        map.addLayer({
+          id: `${d.id}__cluster_badge`,
+          type: "circle",
+          source: d.id,
+          filter: ["has", "point_count"],
+          paint: {
+            "circle-color": "#d3d8db",
+            "circle-radius": 8,
           },
         });
         map.addLayer({
@@ -253,8 +266,9 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
             // Only Noto Sans PBFs are bundled under /fonts (see glyphs above);
             // 'Open Sans *' 404s and the count renders invisible.
             "text-font": ["Noto Sans Medium"] as unknown as string[],
+            "text-allow-overlap": true,
           },
-          paint: { "text-color": "#0b0e14" },
+          paint: { "text-color": "#1d2226" },
         });
       }
       const pull = async () => {
@@ -380,6 +394,109 @@ export function MapLibreCanvas({ registry }: Props): JSX.Element {
       map.off("moveend", onMoveEnd);
     };
   }, [registry, ready]);
+
+  // Range rings (feature page G35): rings every 12 km out to 72 km around
+  // the nearest seaport to the map centre (WPI index), thin grey lines with
+  // the port's name, refreshed when the map settles at harbour scale.
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
+    const SRC = "__rangeRings";
+    const empty: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: [],
+    };
+    map.addSource(SRC, { type: "geojson", data: empty });
+    map.addLayer({
+      id: `${SRC}__line`,
+      type: "line",
+      source: SRC,
+      filter: ["==", ["geometry-type"], "LineString"],
+      paint: { "line-color": "#8c9296", "line-width": 1, "line-opacity": 0.8 },
+    });
+    map.addLayer({
+      id: `${SRC}__label`,
+      type: "symbol",
+      source: SRC,
+      filter: ["==", ["geometry-type"], "Point"],
+      layout: {
+        "text-field": ["get", "name"],
+        "text-size": 11,
+        "text-font": ["Noto Sans Regular"] as unknown as string[],
+        "text-offset": [0, -1.2],
+      },
+      paint: { "text-color": "#8f969b" },
+    });
+    let seq = 0;
+    const refresh = async (): Promise<void> => {
+      const my = ++seq;
+      const src = map.getSource(SRC) as maplibregl.GeoJSONSource | undefined;
+      if (!src) return;
+      if (map.getZoom() < 7) {
+        src.setData(empty);
+        return;
+      }
+      const c = map.getCenter();
+      const pad = 0.6;
+      try {
+        const r = await apiFetch(
+          `/api/places/ports?bbox=${c.lng - pad},${c.lat - pad},${c.lng + pad},${c.lat + pad}&limit=50`,
+        );
+        if (!r.ok || my !== seq) return;
+        const fc = (await r.json()) as {
+          features?: {
+            geometry: { coordinates: number[] };
+            properties: { name?: string };
+          }[];
+        };
+        const near = (fc.features ?? [])
+          .map((f) => {
+            const [lon = 0, lat = 0] = f.geometry.coordinates;
+            return {
+              lon,
+              lat,
+              name: f.properties.name ?? "",
+              d: Math.hypot(lon - c.lng, lat - c.lat),
+            };
+          })
+          .sort((a, b) => a.d - b.d)[0];
+        if (!near) {
+          src.setData(empty);
+          return;
+        }
+        const features: GeoJSON.Feature[] = [
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [near.lon, near.lat] },
+            properties: { name: near.name },
+          },
+        ];
+        for (let k = 1; k <= 6; k++) {
+          const ring: [number, number][] = [];
+          for (let b = 0; b <= 360; b += 4) {
+            const p = destinationPoint(near.lat, near.lon, b, 12 * k);
+            ring.push([p.lon, p.lat]);
+          }
+          features.push({
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: ring },
+            properties: {},
+          });
+        }
+        src.setData({ type: "FeatureCollection", features });
+      } catch {
+        /* rings are furniture; a failed lookup leaves the last set */
+      }
+    };
+    void refresh();
+    map.on("moveend", refresh);
+    return () => {
+      map.off("moveend", refresh);
+      for (const l of [`${SRC}__line`, `${SRC}__label`])
+        if (map.getLayer(l)) map.removeLayer(l);
+      if (map.getSource(SRC)) map.removeSource(SRC);
+    };
+  }, [ready]);
 
   // Selection track polyline — magenta/violet line through the selected
   // entity's last ~60 positions, mirroring the Cesium `__selectionTrack`

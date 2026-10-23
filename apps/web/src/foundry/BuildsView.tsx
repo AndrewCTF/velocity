@@ -68,7 +68,7 @@ function SchedulesSection(): JSX.Element {
 
   return (
     <div className="space-y-2.5">
-      <div className="text-[11px] font-semibold tracking-[0.09em] uppercase text-txt-2">
+      <div className="k-band">
         Schedules
       </div>
       <div className="flex items-end gap-2 rounded-md border border-line-2 bg-bg-1 p-3 flex-wrap">

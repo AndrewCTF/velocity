@@ -731,6 +731,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
 
     if (this.props.styleKind === "aircraft") {
       this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
+        layerId: this.props.ctx.descriptor.id,
         styleFn: (props) => {
           const s = aircraftStyle(props);
           // No color → white tint (the SVG already carries the category colour;
@@ -791,9 +792,11 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         // BillboardCollection rebuilds its whole vertex buffer when any member
         // is dirty, so a per-tick layer must not share with static ones.
         poolKey: "aircraft",
+        quietLabels: true,
       });
     } else if (this.props.styleKind === "vessel") {
       this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
+        layerId: this.props.ctx.descriptor.id,
         styleFn: (props) => {
           const s = vesselStyle(props);
           // No color → white tint (the SVG carries the category / dark-vessel red).
@@ -840,6 +843,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         pulse: false,
         filter: true,
         poolKey: "vessel", // ticks with the other vessel layers, not with static markers
+        quietLabels: true,
       });
       this.vesselCluster = new VesselClusterPrimitive(viewer, () => {
         const t = viewer.clock.currentTime;
@@ -859,6 +863,7 @@ export class PollGeoJsonAdapter implements LayerAdapter {
       const cfg = BATCHED[this.props.styleKind]!;
       this.primStatic = !!cfg.static;
       this.primRenderer = new PrimitiveEntityLayer(viewer.scene, {
+        layerId: this.props.ctx.descriptor.id,
         styleFn: (props) => cfg.style(props),
         labelFn: cfg.label,
         billboardBase: () => ({
@@ -883,7 +888,12 @@ export class PollGeoJsonAdapter implements LayerAdapter {
     // Every branch above paints this layer's pixels itself, and its entities are
     // graphics-less (applyStyle sets polygon/point/label only for the Entity-API
     // kinds), so the data source's visualizers would walk nothing every frame.
-    if (this.primRenderer) dropVisualizers(this.ds);
+    if (this.primRenderer) {
+      dropVisualizers(this.ds);
+      // The compositor sets opacity at spawn, before this await-ed attach built
+      // the renderer; replay the last value so it is not silently dropped.
+      this.primRenderer.setLayerOpacity(this.layerOpacity);
+    }
     if (this.props.refreshOnMove) {
       // ONE settle timer for the whole map, with a concurrency cap, instead of a
       // private 200 ms debounce per adapter. Sixteen layers register for
@@ -997,7 +1007,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
   // walking ds.entities and setting billboard alpha, but aircraft icons live in
   // a primitive collection the entity walk can't reach — so the compositor calls
   // this. No-op (null renderer) for every other styleKind.
+  private layerOpacity = 1;
   setLayerOpacity(opacity: number): void {
+    this.layerOpacity = opacity;
     this.primRenderer?.setLayerOpacity(opacity);
   }
 

@@ -28,6 +28,18 @@ const HEX_ALERT = "#ef4444";
 const HEX_OK = "#34d399";
 const HEX_TXT2 = "#8b98a8";
 
+// Slate draws contacts as the reference frames do: light grey silhouettes,
+// with only the exceptions in colour (emergency, dark vessel, search and
+// rescue stay red). Read per call so a scheme switch restyles on the next
+// update; the icon cache is keyed by colour, so both palettes coexist.
+const HEX_MONO = "#e8edee";
+function monoSymbology(): boolean {
+  return (
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.theme === "slate"
+  );
+}
+
 // Flightradar24-style aircraft category palette
 const HEX_AIRLINER = "#facc15"; // flightradar accent yellow
 const HEX_PRIVATE = "#2dd4bf"; // cyan for light/private
@@ -114,6 +126,7 @@ export function aircraftStyle(props: Record<string, unknown>): AircraftStyle {
   // Priority: emergency → military → ADS-B category → default airliner.
   // Each branch picks (icon, color, scale) together so the FR24-like
   // category map stays consistent.
+  const mono = monoSymbology();
   let kind: AircraftKind;
   let hex: string;
   let scale: number;
@@ -127,28 +140,28 @@ export function aircraftStyle(props: Record<string, unknown>): AircraftStyle {
     imageUri = cachedIcon(`aircraft:${hex}`, () => icons.aircraft(hex));
   } else if (military) {
     kind = "military";
-    hex = HEX_MIL;
+    hex = mono ? HEX_MONO : HEX_MIL;
     scale = 1.2;
     imageUri = cachedIcon(`aircraft:${hex}`, () => icons.aircraft(hex));
   } else if (category === "A7" || category === "A6") {
     kind = "helicopter";
-    hex = HEX_HELI;
+    hex = mono ? HEX_MONO : HEX_HELI;
     scale = 0.9;
     imageUri = cachedIcon(`heli:${hex}`, () => icons.helicopter(hex));
   } else if (category === "B1") {
     kind = "glider";
-    hex = HEX_GLIDER;
+    hex = mono ? HEX_MONO : HEX_GLIDER;
     scale = 1.0;
     imageUri = cachedIcon(`glider:${hex}`, () => icons.glider(hex));
   } else if (category === "A1" || category === "A2") {
     kind = "private";
-    hex = HEX_PRIVATE;
+    hex = mono ? HEX_MONO : HEX_PRIVATE;
     scale = 1.0;
     imageUri = cachedIcon(`private:${hex}`, () => icons.privateAircraft(hex));
   } else {
     // A3/A4/A5 large jets, plus anything without a category (OpenSky etc.).
     kind = "airliner";
-    hex = HEX_AIRLINER;
+    hex = mono ? HEX_MONO : HEX_AIRLINER;
     scale = 1.1;
     imageUri = cachedIcon(`aircraft:${hex}`, () => icons.aircraft(hex));
   }
@@ -351,7 +364,7 @@ export function vesselStyle(
   // Dark-vessel override: alert red diamond regardless of category. Movement
   // anomalies (anchored / unusually fast) only color-shift when we don't have
   // a more informative category — once we know it's a tanker, keep it amber.
-  let hex = visual.hex;
+  let hex = monoSymbology() && kind !== "sar" ? HEX_MONO : visual.hex;
   let imageUri: string;
   let scale = visual.scale;
   if (dark) {

@@ -256,7 +256,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
             key={p.label}
             type="button"
             onClick={() => applyPreset(p.on)}
-            className="mono text-[10px] uppercase tracking-[0.6px] px-1.5 py-[3px] rounded-sm border border-line text-txt-3 hover:text-accent hover:border-accent-line/50"
+            className="text-[10px] uppercase tracking-[0.6px] px-1.5 py-[3px] rounded-sm border border-line text-txt-3 hover:text-accent hover:border-accent-line/50"
           >
             {p.label}
           </button>
@@ -266,7 +266,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
       {/* Active — the layers currently live, pinned. */}
       {enabledLayers.length > 0 && (
         <div className="border-t border-[rgba(255,255,255,0.06)] pt-1.5">
-          <span className="mono text-[10px] tracking-[0.9px] uppercase text-accent">
+          <span className="text-[10px] tracking-[0.9px] uppercase text-accent">
             Active · {enabledLayers.length}
           </span>
           <div className="flex flex-wrap gap-1 mt-1">
@@ -276,7 +276,7 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
                 type="button"
                 onClick={() => registry.disable(l.id)}
                 title={`Disable ${l.title}`}
-                className="mono text-[10px] px-1.5 py-[2px] rounded-sm border border-accent-line/40 text-txt-2 hover:text-alert hover:border-alert/50 truncate max-w-[120px]"
+                className="text-[10px] px-1.5 py-[2px] rounded-sm border border-accent-line/40 text-txt-2 hover:text-alert hover:border-alert/50 truncate max-w-[120px]"
               >
                 {l.title}
                 <Icon name="x" className="w-3 h-3" />
@@ -303,18 +303,18 @@ export function LayerRail({ registry, viewer }: Props): JSX.Element {
               onClick={() =>
                 setCollapsed((c) => ({ ...c, [group]: !c[group] }))
               }
-              className="group flex items-center gap-1.5 w-full text-left border-t border-[rgba(255,255,255,0.1)] pt-3 hover:border-accent-line/40"
+              className="k-band group w-full text-left"
             >
               {/* Sequence number — Gotham numbered-group idiom */}
               <span className="mono text-[10px] tabular-nums text-txt-4 group-hover:text-accent shrink-0 w-[14px]">
                 {seq}
               </span>
-              <span className="mono text-[11px] font-semibold tracking-[0.11em] uppercase text-txt-1 group-hover:text-accent">
+              <span className="text-txt-1 group-hover:text-accent">
                 {GROUP_LABEL[group] ?? group}
               </span>
               <span className="flex-1 h-px bg-line" />
               {/* Active / total badge */}
-              <span className="mono text-[10px] tabular-nums text-txt-4 group-hover:text-txt-3 shrink-0">
+              <span className="k-n mono tabular-nums shrink-0">
                 {enabledCount > 0 ? (
                   <span>
                     <span className="text-accent">{enabledCount}</span>

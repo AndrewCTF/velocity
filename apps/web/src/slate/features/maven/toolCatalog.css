@@ -1,0 +1,210 @@
+/* toolCatalog.css: the reference Tools tab (row M6), from the copy page's
+   builder in its 1313 x 737 frame, multiplied by 1920/1313 to sit in the
+   328 px layers panel. Cards #252d2f on #2c3534, titles 12.4 px, notes 10 px. */
+.tcat {
+  padding: 0 9px 10px;
+}
+.tcat .card {
+  position: relative;
+  margin-top: 7px;
+  padding: 6px 8px 8px 39px;
+  background: #252d2f;
+  border: 1px solid #2c3534;
+  border-radius: 2px;
+}
+.tcat .card .gi {
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  width: 15px;
+  height: 15px;
+  color: #c6cdd0;
+  fill: currentColor;
+}
+.tcat .card h4 {
+  margin: 0;
+  font-size: 12.4px;
+  font-weight: 600;
+  color: #f3f5f5;
+  line-height: 17px;
+}
+.tcat .card p {
+  margin: 1px 0 0;
+  font-size: 10px;
+  line-height: 14.6px;
+  color: #9aa5a8;
+}
+.tcat .card .gw {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  margin-top: 6px;
+  font-size: 11.7px;
+  color: #8db4ea;
+}
+.tcat .tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 8px;
+  margin-top: 12px;
+}
+.tcat .tiles button {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.4px;
+  color: #e6eaea;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tcat .tiles button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.tcat .tiles button.on {
+  color: #8db4ea;
+}
+.tcat .tiles button:focus-visible {
+  outline: 1px solid #5b8fd9;
+}
+.tcat .tiles .th {
+  flex: none;
+  width: 31px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  background: #1c2426;
+  border: 1px solid #3a4446;
+  border-radius: 2px;
+  color: #9aa5a8;
+}
+.tcat .tiles button.on .th {
+  border-color: #5b8fd9;
+  color: #8db4ea;
+}
+.tcat .tiles .th svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+.tcat .empty {
+  padding: 10px 4px;
+  color: #9aa5a8;
+}
+
+/* Create vessel watch layer (row M12): the copy's 217 x 39 box and 32 x 17
+   pill in its 1313 frame, times 1920/1313. */
+.cvl {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+.cvl .box {
+  width: 360px;
+  padding: 8px 10px 9px;
+  background: #262c2c;
+  border-radius: 2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+.cvl .t {
+  font-size: 12.4px;
+  color: #f3f5f5;
+}
+.cvl .r {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12.4px;
+  color: #e6eaea;
+}
+.cvl svg {
+  width: 10px;
+  height: 10px;
+  fill: currentColor;
+  color: #c6cdd0;
+  flex: none;
+}
+.cvl .sel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 130px;
+}
+.cvl .sel.sym {
+  max-width: 110px;
+}
+.cvl select {
+  all: unset;
+  cursor: pointer;
+  font-size: 12.4px;
+  color: #e6eaea;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 116px;
+}
+.cvl select option {
+  background: #262c2c;
+  color: #e6eaea;
+}
+.cvl .sw {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.cvl .sw input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.cvl .sw i {
+  width: 20px;
+  height: 12px;
+  border-radius: 1px;
+}
+.cvl button {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.cvl .fold {
+  margin-left: auto;
+}
+.cvl .fold svg {
+  width: 13px;
+  height: 13px;
+}
+.cvl .pillb {
+  width: 47px;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: #262c2c;
+  border-radius: 2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+.cvl .pillb svg {
+  width: 13px;
+  height: 13px;
+}
+.cvl .pillb svg + svg {
+  width: 10px;
+  height: 10px;
+}
+.cvl button:focus-visible,
+.cvl select:focus-visible {
+  outline: 1px solid #5b8fd9;
+}
