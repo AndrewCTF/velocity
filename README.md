@@ -182,6 +182,10 @@ bundle, because anyone who loads the page can read it. Browsers sign in with
 Supabase instead (`docs/security/auth-and-sessions.md`).
 </details>
 
+## One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Velocity/)
+
 ## The apps
 
 Velocity isn't one mega-dashboard; it's a workspace of eighteen apps that all
