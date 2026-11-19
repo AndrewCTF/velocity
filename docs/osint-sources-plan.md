@@ -105,6 +105,7 @@ monkeypatches `fetch_json`/`fetch_json_post` and asserts the normalised dict sha
 | `greynoise_community(ip)` | `https://api.greynoise.io/v3/community/{ip}`                                               | key-optional (`GREYNOISE_API_KEY`)       | `{ip, classification, name, tags:[…], last_seen, noise:bool}`               |
 | `onionoo_exit(ip)`        | `https://onionoo.torproject.org/details?type=relay&running=true&search={ip}`               | keyless                                  | `{ip, is_tor_exit:bool, nickname, country}`                                 |
 | `feodo_listed(ip)`        | `https://feodotracker.abuse.ch/downloads/ipblocklist.json` (cache 1h, scan for ip)         | keyless                                  | `{ip, listed:bool, malware, first_seen}`                                    |
+| `netapi_listed(ip)`       | `https://netapi.com/api-json/?method=compromised-check&value={ip}` (cache 1h)              | keyless                                  | `{ip, listed:bool, reason, last_seen}`                                      |
 
 ### A3 `sources/threat_feeds.py` — url/hash/email threat
 
@@ -160,7 +161,7 @@ Owns `app/routes/osint.py`, `apps/web/src/osint/InvestigatePanel.tsx`, and
      (`has_subdomain`), certspotter certs (`cert:` nodes, `secured_by`), urlscan
      contacted ips (`ip:` nodes, `contacted`).
    - `_enrich_ip`: add bgpview/ripestat asn+peers (`asn:` `announces`/`peers_with`),
-     ripestat abuse email (`email:` `abuse_contact`), greynoise+onionoo+feodo →
+     ripestat abuse email (`email:` `abuse_contact`), greynoise+onionoo+feodo+netapi →
      `threat:` node `listed_by`/`tor_exit` when flagged.
    - `_investigate_email`: add emailrep (reputation → `threat:` when malicious/breach),
      libravatar presence prop.

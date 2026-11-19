@@ -10,6 +10,7 @@ returns a plain, normalised dict and never raises on upstream failure
   greynoise_community — GreyNoise Community scan classification (key-optional)
   onionoo_exit      — Tor onionoo relay search → exit-node flag (keyless)
   feodo_listed      — abuse.ch Feodo Tracker C2 IP blocklist   (keyless, 1h cache)
+  netapi_listed     — NetAPI honeypot attacker check, last 48h (keyless, 1h cache)
 """
 
 from __future__ import annotations
@@ -257,3 +258,32 @@ async def feodo_listed(ip: str) -> dict[str, Any]:
                 "first_seen": str(row.get("first_seen", "")),
             }
     return {"ip": v, "listed": False, "malware": "", "first_seen": ""}
+
+
+# ── NetAPI honeypot attacker check ───────────────────────────────────────────
+
+
+async def netapi_listed(ip: str) -> dict[str, Any]:
+    v = normalise_ip(ip)
+    if v is None:
+        return {"ip": ip, "listed": False, "reason": "", "last_seen": "", "note": "invalid ip"}
+    # One keyless lookup per ip, cached 1h. "listed_now" means the address
+    # attacked NetAPI's honeypot sensors in the last 48 hours; an address that
+    # only did so earlier comes back with listed False and its last date.
+    data = await fetch_json(
+        f"https://netapi.com/api-json/?method=compromised-check&value={v}", 3600.0
+    )
+    if not isinstance(data, dict) or "listed_now" not in data:
+        return {
+            "ip": v,
+            "listed": False,
+            "reason": "",
+            "last_seen": "",
+            "note": "netapi unavailable",
+        }
+    return {
+        "ip": v,
+        "listed": bool(data.get("listed_now")),
+        "reason": str(data.get("block_reason") or ""),
+        "last_seen": str(data.get("last_seen") or ""),
+    }

@@ -248,3 +248,68 @@ async def test_feodo_listed_upstream_down(monkeypatch) -> None:
     out = await N.feodo_listed("5.6.7.8")
     assert out["listed"] is False
     assert out["note"] == "feodo unavailable"
+
+
+# ── netapi_listed ─────────────────────────────────────────────────────────────
+
+_NETAPI = "https://netapi.com/api-json/?method=compromised-check&value="
+
+
+async def test_netapi_listed_true(monkeypatch) -> None:
+    _patch(monkeypatch, {
+        _NETAPI + "5.6.7.8": {
+            "value": "5.6.7.8",
+            "type": "ip",
+            "listed_now": True,
+            "listed_ever": True,
+            "first_seen": "2026-11-17",
+            "last_seen": "2026-11-17 21:01:15 UTC",
+            "block_reason": "NetAPI network sensors: service exploit",
+        },
+    })
+    out = await N.netapi_listed("5.6.7.8")
+    assert out == {
+        "ip": "5.6.7.8",
+        "listed": True,
+        "reason": "NetAPI network sensors: service exploit",
+        "last_seen": "2026-11-17 21:01:15 UTC",
+    }
+
+
+async def test_netapi_listed_false(monkeypatch) -> None:
+    _patch(monkeypatch, {
+        _NETAPI + "5.6.7.8": {
+            "value": "5.6.7.8",
+            "type": "ip",
+            "listed_now": False,
+            "listed_ever": False,
+            "first_seen": None,
+            "last_seen": None,
+            "block_reason": None,
+        },
+    })
+    out = await N.netapi_listed("5.6.7.8")
+    assert out == {"ip": "5.6.7.8", "listed": False, "reason": "", "last_seen": ""}
+
+
+async def test_netapi_listed_invalid_ip() -> None:
+    out = await N.netapi_listed("garbage")
+    assert out["listed"] is False
+    assert "note" in out
+
+
+async def test_netapi_listed_upstream_down(monkeypatch) -> None:
+    _patch(monkeypatch, {})
+    out = await N.netapi_listed("5.6.7.8")
+    assert out["listed"] is False
+    assert out["note"] == "netapi unavailable"
+
+
+async def test_netapi_listed_error_body(monkeypatch) -> None:
+    # An API error answer carries an "error" object instead of "listed_now".
+    _patch(monkeypatch, {
+        _NETAPI + "5.6.7.8": {"error": {"code": "invalid_value", "message": "Not a valid IP."}},
+    })
+    out = await N.netapi_listed("5.6.7.8")
+    assert out["listed"] is False
+    assert out["note"] == "netapi unavailable"

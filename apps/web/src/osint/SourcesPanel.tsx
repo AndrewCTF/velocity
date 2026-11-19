@@ -1217,6 +1217,7 @@ const OSINT_CONNECTORS: readonly (readonly [path: string, key: string])[] = [
   ["/api/osint/greynoise", "ip"],
   ["/api/osint/onionoo", "ip"],
   ["/api/osint/feodo", "ip"],
+  ["/api/osint/netapi", "ip"],
   ["/api/osint/urlhaus-host", "target"],
   ["/api/osint/urlhaus-url", "target"],
   ["/api/osint/malwarebazaar", "hash"],

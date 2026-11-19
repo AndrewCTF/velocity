@@ -198,6 +198,11 @@ async def feodo(ip: str = Query(..., max_length=64)) -> dict[str, Any]:
     return await netblock.feodo_listed(ip)
 
 
+@router.get("/netapi")
+async def netapi(ip: str = Query(..., max_length=64)) -> dict[str, Any]:
+    return await netblock.netapi_listed(ip)
+
+
 @router.get("/urlhaus-host")
 async def urlhaus_host(target: str = Query(..., max_length=253)) -> dict[str, Any]:
     return await threat_feeds.urlhaus_host(target)
@@ -567,11 +572,11 @@ async def _investigate_domain(g: _Graph, d: str) -> dict[str, Any]:
 
 
 async def _enrich_ip(g: _Graph, ip_addr: str) -> None:
-    geo, sh, bgp_r, ripe_r, gn_r, tor_r, feodo_r = await asyncio.gather(
+    geo, sh, bgp_r, ripe_r, gn_r, tor_r, feodo_r, netapi_r = await asyncio.gather(
         C.lookup_ip(ip_addr), C.lookup_shodan(ip_addr),
         netblock.bgpview_ip(ip_addr), netblock.ripestat_network(ip_addr),
         netblock.greynoise_community(ip_addr), netblock.onionoo_exit(ip_addr),
-        netblock.feodo_listed(ip_addr),
+        netblock.feodo_listed(ip_addr), netblock.netapi_listed(ip_addr),
     )
     iid = "ip:" + ip_addr
     if iid in g.objs and "note" not in geo:
@@ -623,7 +628,7 @@ async def _enrich_ip(g: _Graph, ip_addr: str) -> None:
 
     # Threat feeds: mint one shared threat:<ip> node from whichever flag(s) fired.
     is_malicious = gn_r.get("classification") == "malicious"
-    is_listed = bool(feodo_r.get("listed"))
+    is_listed = bool(feodo_r.get("listed")) or bool(netapi_r.get("listed"))
     is_tor = bool(tor_r.get("is_tor_exit"))
     if is_malicious or is_listed or is_tor:
         tid = g.obj("threat:" + ip_addr, "ThreatIndicator", "netblock-osint", {
@@ -632,6 +637,8 @@ async def _enrich_ip(g: _Graph, ip_addr: str) -> None:
             "greynoise_tags": gn_r.get("tags"),
             "feodo_malware": feodo_r.get("malware"),
             "feodo_first_seen": feodo_r.get("first_seen"),
+            "netapi_reason": netapi_r.get("reason") if netapi_r.get("listed") else None,
+            "netapi_last_seen": netapi_r.get("last_seen") if netapi_r.get("listed") else None,
             "tor_nickname": tor_r.get("nickname"),
         })
         if is_malicious or is_listed:

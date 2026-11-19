@@ -104,6 +104,10 @@ async def test_enrich_ip_mints_asn_and_tor_feodo_threat(monkeypatch) -> None:
         O.netblock, "feodo_listed",
         _noop_async({"listed": True, "malware": "Dridex", "first_seen": "2026-01-01"}),
     )
+    monkeypatch.setattr(
+        O.netblock, "netapi_listed",
+        _noop_async({"listed": False, "reason": "", "last_seen": ""}),
+    )
 
     g = O._Graph(ts=time.time())
     g.obj("ip:6.6.6.6", "IPAddress", "test", {"address": "6.6.6.6"})
@@ -128,6 +132,48 @@ async def test_enrich_ip_mints_asn_and_tor_feodo_threat(monkeypatch) -> None:
         lk.src == "ip:6.6.6.6" and lk.dst == "threat:6.6.6.6" and lk.rel == "tor_exit"
         for lk in g.links.values()
     )
+    assert "netapi_reason" not in g.objs["threat:6.6.6.6"].props
+
+
+async def test_enrich_ip_mints_threat_from_netapi_alone(monkeypatch) -> None:
+    monkeypatch.setattr(O.C, "lookup_ip", _noop_async({"asn": "", "org": "", "note": "no geo"}))
+    monkeypatch.setattr(O.C, "lookup_shodan", _noop_async({"ports": []}))
+    monkeypatch.setattr(O.netblock, "bgpview_ip", _noop_async({"prefixes": [], "asns": []}))
+    monkeypatch.setattr(
+        O.netblock, "ripestat_network",
+        _noop_async({"asns": [], "prefix": "", "abuse_email": ""}),
+    )
+    monkeypatch.setattr(
+        O.netblock, "greynoise_community",
+        _noop_async({"classification": "unknown", "noise": False}),
+    )
+    monkeypatch.setattr(O.netblock, "onionoo_exit", _noop_async({"is_tor_exit": False}))
+    monkeypatch.setattr(
+        O.netblock, "feodo_listed",
+        _noop_async({"listed": False, "malware": "", "first_seen": ""}),
+    )
+    monkeypatch.setattr(
+        O.netblock, "netapi_listed",
+        _noop_async({
+            "listed": True,
+            "reason": "NetAPI network sensors: service exploit",
+            "last_seen": "2026-11-17 21:01:15 UTC",
+        }),
+    )
+
+    g = O._Graph(ts=time.time())
+    g.obj("ip:6.6.6.6", "IPAddress", "test", {"address": "6.6.6.6"})
+    await O._enrich_ip(g, "6.6.6.6")
+
+    assert "threat:6.6.6.6" in g.objs
+    props = g.objs["threat:6.6.6.6"].props
+    assert props["netapi_reason"] == "NetAPI network sensors: service exploit"
+    assert props["netapi_last_seen"] == "2026-11-17 21:01:15 UTC"
+    assert any(
+        lk.src == "ip:6.6.6.6" and lk.dst == "threat:6.6.6.6" and lk.rel == "listed_by"
+        for lk in g.links.values()
+    )
+    assert not any(lk.rel == "tor_exit" for lk in g.links.values())
 
 
 # ── email: emailrep + libravatar ─────────────────────────────────────────────────

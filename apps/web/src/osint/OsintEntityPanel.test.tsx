@@ -67,6 +67,14 @@ mockedFetch.mockImplementation(async (url: string) => {
       tags: ["scanner"],
     });
   }
+  if (u.startsWith("/api/osint/netapi?ip=203.0.113.9")) {
+    return jsonResponse({
+      ip: "203.0.113.9",
+      listed: true,
+      reason: "NetAPI network sensors: service exploit",
+      last_seen: "2026-11-17 21:01:15 UTC",
+    });
+  }
   return jsonResponse({ note: "no data" });
 });
 
@@ -147,6 +155,24 @@ describe("OsintEntityPanel — new ontology kinds", () => {
     expect(
       screen.queryByText("Exposure (Shodan InternetDB)"),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("NetAPI honeypot attackers"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("ip:203.0.113.9 renders the NetAPI card with the attack and last seen", async () => {
+    render(<OsintEntityPanel id="ip:203.0.113.9" />);
+    expect(
+      await screen.findByText("NetAPI honeypot attackers"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("NetAPI network sensors: service exploit"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("2026-11-17 21:01:15 UTC")).toBeInTheDocument();
+    expect(mockedFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/osint/netapi?ip=203.0.113.9"),
+      expect.anything(),
+    );
   });
 
   it("renders header + Search around for an unrecognized kind without crashing", async () => {

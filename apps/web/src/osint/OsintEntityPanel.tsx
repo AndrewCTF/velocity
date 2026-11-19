@@ -570,6 +570,31 @@ function FeodoCard({ target }: { target: string }): JSX.Element | null {
   );
 }
 
+interface NetapiListed {
+  listed?: boolean;
+  reason?: string;
+  last_seen?: string;
+  note?: string;
+}
+
+function NetapiCard({ target }: { target: string }): JSX.Element | null {
+  const { data } = useOsint<NetapiListed>("netapi", target, "ip");
+  if (!data || data.note || !data.listed) return null;
+  return (
+    <Widget title="NetAPI honeypot attackers">
+      <Row
+        k="attack"
+        v={
+          <span style={{ color: "var(--alert)" }}>
+            {data.reason || "listed"}
+          </span>
+        }
+      />
+      {data.last_seen && <Row k="last seen" v={data.last_seen} />}
+    </Widget>
+  );
+}
+
 interface EmailRep {
   reputation?: string;
   suspicious?: boolean;
@@ -1156,6 +1181,7 @@ export function OsintEntityPanel({ id }: { id: string }): JSX.Element {
           <GreynoiseCard target={target} />
           <TorExitCard target={target} />
           <FeodoCard target={target} />
+          <NetapiCard target={target} />
           <ThreatCard target={target} />
         </>
       )}
