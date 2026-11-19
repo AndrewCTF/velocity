@@ -591,6 +591,14 @@ shareable artifact: a self-describing **JSON** bundle, a self-contained **HTML**
 report with a provenance footnote on each claim, or a **PPTX** brief. Any AI-written
 narrative is confined to one labelled block — the rest is your cited evidence.
 
+## Density maps
+
+[`tools/density-map`](tools/density-map) draws "every aircraft position over a
+region in one day" maps from adsb.lol's open daily data, and `near.py` tells
+you which aircraft made a bright spot. Standalone Python, no running app needed.
+
+<img src="docs/media/density-germany-2026-11-17.jpg" alt="24 hours of air traffic over Germany" width="420">
+
 ## System requirements
 
 The heavy component is the **client**, a CesiumJS WebGL2 globe. It is GPU- and
