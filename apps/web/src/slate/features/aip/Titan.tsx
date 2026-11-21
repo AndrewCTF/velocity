@@ -36,7 +36,8 @@ import {
   type Src,
   type Status,
 } from "./dataB.js";
-import plateGlobe from "./plateGlobe.jpg";
+// shortcut: reference-derived image kept out of the repo; the page draws without it. Ship a licensed asset to restore it.
+const plateGlobe: string = "";
 
 export type TitanTab =
   | "Overview"
@@ -253,7 +254,7 @@ function Overview({
         <div>Not available</div>
       </Card>
       <section className="tt-plate" aria-label="Live picture">
-        <img src={plateGlobe} alt="" />
+        {plateGlobe && <img src={plateGlobe} alt="" />}
         <b>
           {c.st?.data
             ? `Live: ${comma(c.st.data.aircraft_count)} aircraft, ${comma(c.st.data.vessel_count)} vessels`

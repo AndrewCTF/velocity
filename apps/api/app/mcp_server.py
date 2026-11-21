@@ -34,10 +34,12 @@ import atexit
 import functools
 import inspect
 import json
+import math
 import os
 import subprocess
 import sys
 import time
+from collections import Counter
 from typing import Any
 from urllib.parse import quote, urlparse
 
@@ -49,6 +51,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.routing import Route
 
 from app.config import get_settings
+from app.intel.geo import NM_TO_KM, haversine_km
 from app.intel.shape import normalize_detail, shape
 
 mcp = FastMCP(
@@ -460,14 +463,226 @@ async def get_situation(detail: str = "short") -> dict[str, Any]:
     return shape(await _get("/api/intel/situation"), detail)
 
 
+# ── focus_area polygon support ────────────────────────────────────────────────
+# /api/intel/area only knows a circle. A ring is therefore served as its BOUNDING
+# circle (registered PRIMARY exactly like a plain focus_area call) and the bundle
+# that comes back is clipped to the ring here. No new route, no new dependency.
+
+_AREA_MAX_NM = 250.0  # routes/intel.py: radius_nm is Query(le=250)
+_RING_MAX_VERTICES = 500
+
+
+def _parse_ring(polygon: Any) -> list[tuple[float, float]]:
+    """Validate a ring of [lon, lat] pairs; return it open, as (lon, lat) tuples.
+
+    Raises ValueError with a one-line reason that names the offending vertex."""
+    if not isinstance(polygon, (list, tuple)):
+        raise ValueError("polygon must be a list of [lon, lat] pairs")
+    if len(polygon) > _RING_MAX_VERTICES + 1:  # +1: a closed ring repeats its first vertex
+        raise ValueError(f"polygon has {len(polygon)} entries; the limit is {_RING_MAX_VERTICES}")
+    ring: list[tuple[float, float]] = []
+    for i, vtx in enumerate(polygon):
+        if (
+            not isinstance(vtx, (list, tuple))
+            or len(vtx) not in (2, 3)  # GeoJSON positions may carry a third (altitude) member
+            or any(isinstance(c, bool) or not isinstance(c, (int, float)) for c in vtx)
+        ):
+            raise ValueError(f"vertex {i} must be a [lon, lat] pair of numbers")
+        try:
+            finite = all(math.isfinite(c) for c in vtx)
+        except OverflowError:  # an int too large to be a float
+            finite = False
+        if not finite:
+            raise ValueError(f"vertex {i} is not a finite number")
+        lon, lat = float(vtx[0]), float(vtx[1])
+        if not -180.0 <= lon <= 180.0:
+            raise ValueError(f"vertex {i}: lon {lon} is outside -180..180")
+        if not -90.0 <= lat <= 90.0:
+            raise ValueError(f"vertex {i}: lat {lat} is outside -90..90 (pairs are [lon, lat])")
+        ring.append((lon, lat))
+    if len(ring) > 1 and ring[0] == ring[-1]:
+        ring.pop()  # a closed ring repeats its first vertex; the open form is the working one
+    if len(ring) > _RING_MAX_VERTICES:
+        raise ValueError(f"polygon has {len(ring)} vertices; the limit is {_RING_MAX_VERTICES}")
+    if len(set(ring)) < 3:
+        raise ValueError("polygon needs at least 3 distinct vertices")
+    (x0, y0), (x1, y1) = ring[0], next(p for p in ring if p != ring[0])
+    if all(abs((x1 - x0) * (y - y0) - (y1 - y0) * (x - x0)) < 1e-12 for x, y in ring):
+        raise ValueError("polygon vertices are collinear (zero area)")
+    return ring
+
+
+def _bounding_circle(ring: list[tuple[float, float]]) -> tuple[float, float, float]:
+    """(lat, lon, radius_nm) of a circle that holds every vertex of ``ring``.
+
+    The radius is the farthest vertex, measured from the centre that is actually
+    sent, + 1 % + 2 nm, rounded UP to a whole nm: ``aoi._clamp_radius`` floors with
+    ``int()`` (a fractional radius would shave the outermost vertex) and the 4 s
+    fetch cache keys the centre to 0.01 deg. Not clamped; the caller applies the
+    250 nm ceiling."""
+    # ponytail: lon is averaged as a plain number, so a ring that crosses the
+    # antimeridian lands its centre near lon 0 and is not supported; split it at 180.
+    c_lon = round(sum(x for x, _ in ring) / len(ring), 4)
+    c_lat = round(sum(y for _, y in ring) / len(ring), 4)
+    far_nm = max(haversine_km(c_lon, c_lat, x, y) for x, y in ring) / NM_TO_KM
+    return c_lat, c_lon, float(math.ceil(far_nm * 1.01 + 2.0))
+
+
+def _rec_lonlat(rec: Any) -> tuple[float, float] | None:
+    """(lon, lat) of one bundle record: flat ``lon``/``lat`` keys (aircraft, vessels,
+    grid and jamming cells) or a fusion alert's ``geom`` Point. None if it has none."""
+    if not isinstance(rec, dict):
+        return None
+    lon, lat = rec.get("lon"), rec.get("lat")
+    if lon is None and lat is None:
+        geom = rec.get("geom")
+        coords = geom.get("coordinates") if isinstance(geom, dict) else None
+        if isinstance(coords, (list, tuple)) and len(coords) >= 2:
+            lon, lat = coords[0], coords[1]
+    try:
+        return float(lon), float(lat)
+    except (TypeError, ValueError):
+        return None
+
+
+def _clip_area_bundle(
+    data: dict[str, Any], ring: list[tuple[float, float]]
+) -> tuple[dict[str, Any], dict[str, int], bool]:
+    """Clip an ``/api/intel/area`` bundle to ``ring`` -> (bundle, dropped-per-list,
+    rescoped). ``data`` is not mutated.
+
+    Every list of positioned records is cut to the ring; a record with no position
+    cannot be shown to be inside, so it goes. A section's totals are recomputed from
+    the clipped list only when that list was COMPLETE before clipping (the bundle's
+    own total equalled its length). The bundle caps its samples (50 aircraft and
+    vessels, 25 per anomaly list), and a total the ring cannot give is not invented
+    from a sample: the circle-level figure moves to ``<name>_in_circle`` and
+    ``rescoped`` is True. ``anomalies.score``/``threat_level`` are analytics
+    verdicts over the whole circle; they are never recomputed here, so they always
+    move. Grid cells and jamming hexes are kept by their centre point."""
+    from app.geo.adminshapes import _ring_contains  # noqa: PLC0415
+
+    xs, ys = [x for x, _ in ring], [y for _, y in ring]
+    box = (min(xs), min(ys), max(xs), max(ys))
+    dropped: dict[str, int] = {}
+    rescoped = False
+
+    def inside(rec: Any) -> bool:
+        ll = _rec_lonlat(rec)
+        return (
+            ll is not None
+            and box[0] <= ll[0] <= box[2]
+            and box[1] <= ll[1] <= box[3]
+            and _ring_contains(ring, ll[0], ll[1])
+        )
+
+    def clip(path: str, rows: list[Any]) -> list[Any]:
+        kept = [r for r in rows if inside(r)]
+        if len(kept) < len(rows):
+            dropped[path] = len(rows) - len(kept)
+        return kept
+
+    def rescope(sec: dict[str, Any], exact: dict[str, Any], complete: bool) -> dict[str, Any]:
+        nonlocal rescoped
+        new = dict(sec)
+        for key, value in exact.items():
+            if key not in new:
+                continue
+            if complete:
+                new[key] = value
+            else:
+                new[f"{key}_in_circle"] = new.pop(key)
+                rescoped = True
+        return new
+
+    out = dict(data)
+
+    ac = data.get("aircraft")
+    if isinstance(ac, dict) and isinstance(ac.get("sample"), list):
+        rows = clip("aircraft.sample", ac["sample"])
+        exact = {
+            "count": len(rows),
+            "by_category": dict(Counter(r.get("category") for r in rows)),
+            "gnss_degraded": sum(1 for r in rows if r.get("gnss_degraded")),
+        }
+        out["aircraft"] = {
+            **rescope(ac, exact, ac.get("count") == len(ac["sample"])),
+            "sample": rows,
+        }
+
+    dn = data.get("density")
+    if isinstance(dn, dict) and isinstance(dn.get("cells"), list):
+        rows = clip("density.cells", dn["cells"])
+        by_cat: Counter[str] = Counter()
+        for cell in rows:
+            by_cat.update(cell.get("by_category") or {})
+        exact = {
+            "total": sum(cell.get("count") or 0 for cell in rows),
+            "by_category": dict(by_cat),
+            "occupied_cells": len(rows),
+            "peak_cell": rows[0] if rows else None,  # cells arrive sorted by count
+        }
+        out["density"] = {
+            **rescope(dn, exact, dn.get("occupied_cells") == len(dn["cells"])),
+            "cells": rows,
+        }
+
+    jm = data.get("gps_jamming")
+    if isinstance(jm, dict) and isinstance(jm.get("cells"), list):
+        rows = clip("gps_jamming.cells", jm["cells"])
+        sev = Counter(c.get("severity") for c in rows)
+        new = dict(jm)
+        if isinstance(jm.get("summary"), dict):
+            exact = {
+                "cells_flagged": sum(1 for c in rows if c.get("severity") != "none"),
+                "high": sev["high"],
+                "medium": sev["medium"],
+                "low": sev["low"],
+            }
+            new["summary"] = rescope(
+                jm["summary"], exact, jm["summary"].get("cells_flagged") == len(jm["cells"])
+            )
+        new["cells"] = rows
+        if isinstance(jm.get("affected_aircraft_sample"), list):
+            new["affected_aircraft_sample"] = clip(
+                "gps_jamming.affected_aircraft_sample", jm["affected_aircraft_sample"]
+            )
+        out["gps_jamming"] = new
+
+    vs = data.get("vessels")
+    if isinstance(vs, dict) and isinstance(vs.get("vessels"), list):
+        rows = clip("vessels.vessels", vs["vessels"])
+        exact = {
+            "matched_total": len(rows),
+            "by_category": dict(Counter(v.get("category") for v in rows)),
+        }
+        out["vessels"] = {
+            **rescope(vs, exact, vs.get("matched_total") == len(vs["vessels"])),
+            "returned": len(rows),
+            "vessels": rows,
+        }
+
+    an = data.get("anomalies")
+    if isinstance(an, dict):
+        new = rescope(an, dict.fromkeys(("score", "threat_level")), False)
+        for key in ("emergency_aircraft", "jamming_hotspots", "dark_vessel_candidates",
+                    "fusion_alerts"):
+            if isinstance(an.get(key), list):
+                new[key] = clip(f"anomalies.{key}", an[key])
+        out["anomalies"] = new
+
+    return out, dropped, rescoped
+
+
 @mcp.tool()
 async def focus_area(
-    lat: float,
-    lon: float,
+    lat: float | None = None,
+    lon: float | None = None,
     radius_nm: float = 200.0,
     label: str | None = None,
     cell_deg: float = 1.0,
     detail: str = "short",
+    polygon: list[list[float]] | None = None,
 ) -> dict[str, Any]:
     """Load a region PRIMARY and return a full intel bundle for it in one call.
 
@@ -478,23 +693,80 @@ async def focus_area(
     (emergencies, jamming hotspots, dark vessels, alerts) with a threat level.
 
     Args:
-        lat, lon: centre of the area of interest.
+        lat, lon: centre of the area of interest. Required unless polygon is given,
+            in which case they are ignored.
         radius_nm: radius in nautical miles (1–250; default 200).
         label: optional human name for the AOI (e.g. "Kaliningrad").
         cell_deg: density grid cell size in degrees (0.1–10; default 1.0).
+        polygon: optional irregular region as ONE ring of [lon, lat] pairs (longitude
+            FIRST; 3–500 vertices, closed or open; no holes, no antimeridian crossing).
+            Overrides lat/lon/radius_nm: its bounding circle (max 250 nm, else
+            polygon_truncated) is loaded PRIMARY and every record outside the ring is
+            dropped. Grid cells and jamming hexes are kept by centre point, so use a
+            small cell_deg for a small ring. A total the capped samples cannot give for
+            the ring comes back as <name>_in_circle (the bounding circle's figure).
     """
+    if polygon is None:
+        if lat is None or lon is None:
+            return {
+                "error": "missing_area",
+                "detail": "give lat and lon (with radius_nm), or a polygon",
+            }
+        data = await _get(
+            "/api/intel/area",
+            {
+                "lat": lat,
+                "lon": lon,
+                "radius_nm": radius_nm,
+                "label": label,
+                "primary": True,
+                "cell_deg": cell_deg,
+            },
+        )
+        return shape(data, detail)
+
+    try:
+        ring = _parse_ring(polygon)
+    except ValueError as exc:
+        return {
+            "error": "bad_polygon",
+            "detail": str(exc),
+            "hint": "polygon is one ring of [lon, lat] pairs, longitude first, e.g. "
+            "[[24.0, 54.0], [25.0, 54.0], [24.5, 55.0]].",
+        }
+    c_lat, c_lon, need_nm = _bounding_circle(ring)
+    radius = min(need_nm, _AREA_MAX_NM)
     data = await _get(
         "/api/intel/area",
         {
-            "lat": lat,
-            "lon": lon,
-            "radius_nm": radius_nm,
+            "lat": c_lat,
+            "lon": c_lon,
+            "radius_nm": radius,
             "label": label,
             "primary": True,
             "cell_deg": cell_deg,
         },
     )
-    return shape(data, detail)
+    if "error" in data:
+        return shape(data, detail)
+    out, dropped, rescoped = _clip_area_bundle(data, ring)
+    out["polygon_vertices"] = len(ring)
+    out["bounding_circle"] = {"lat": c_lat, "lon": c_lon, "radius_nm": radius}
+    out["polygon_dropped"] = dropped
+    notes: list[str] = []
+    if need_nm > _AREA_MAX_NM:
+        out["polygon_truncated"] = True
+        notes.append(
+            f"Ring needs a {need_nm:.0f} nm circle; capped at 250 nm, so its outer edge "
+            "may be missing."
+        )
+    if rescoped:
+        notes.append(
+            "Totals suffixed _in_circle cover the bounding circle; lists are clipped to the ring."
+        )
+    if notes:
+        out["polygon_note"] = " ".join(notes)
+    return shape(out, detail)
 
 
 @mcp.tool()

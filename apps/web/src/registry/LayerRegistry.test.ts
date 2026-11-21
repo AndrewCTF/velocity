@@ -111,7 +111,12 @@ describe("LayerRegistry", () => {
     r.register(makeLayer("c"));
     r.reorder("c", 0);
     expect(r.list().map((l) => l.id)).toEqual(["c", "a", "b"]);
-    expect(listener).toHaveBeenLastCalledWith({ type: "reorder", id: "c", from: 2, to: 0 });
+    expect(listener).toHaveBeenLastCalledWith({
+      type: "reorder",
+      id: "c",
+      from: 2,
+      to: 0,
+    });
     expect(() => r.reorder("nope", 0)).toThrow(/unknown id/);
   });
 

@@ -18,7 +18,8 @@ import {
 } from "./data.js";
 import { apiFetch } from "../../../transport/http.js";
 import { setDragTitle } from "./drag.js";
-import world from "./eu-world.png";
+// shortcut: reference-derived image kept out of the repo; the page draws without it. Ship a licensed asset to restore it.
+const world: string = "";
 import "./gaia.css";
 
 // the plate's frame origin: world.png is 1100x360 drawn at frame (767, 304)
@@ -196,7 +197,7 @@ export function GaiaFrame({
           <div className="g-stage" style={{ aspectRatio: `${MW} / ${MH}` }}>
             <svg viewBox={`0 0 ${MW} ${MH}`} role="img" aria-label="World map">
               <rect width={MW} height={MH} fill="#14181c" />
-              <image href={world} width={1100} height={MH} />
+              <image href={world || undefined} width={1100} height={MH} />
               {theatres.map((t) => (
                 <path
                   key={t.lab}
@@ -365,12 +366,7 @@ export function GaiaFrame({
           >
             Reports
           </Btn>
-          <Btn
-            icon="lightbulb"
-            label="AI briefs"
-            why={NOWHY}
-            className="g-tab"
-          >
+          <Btn icon="lightbulb" label="AI briefs" why={NOWHY} className="g-tab">
             AI briefs
           </Btn>
           <span className="g-gap" />

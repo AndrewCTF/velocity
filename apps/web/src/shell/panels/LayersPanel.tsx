@@ -3,10 +3,7 @@ import type * as Cesium from "cesium";
 import type { LayerRegistry } from "../../registry/LayerRegistry.js";
 import { Icon } from "../../normal/Icon.js";
 import { LayerRail } from "../../layer-rail/LayerRail.js";
-import {
-  useLayerCounts,
-  rowState,
-} from "../../layer-rail/useLayerCounts.js";
+import { useLayerCounts, rowState } from "../../layer-rail/useLayerCounts.js";
 import {
   tierOf,
   TIER_META,
@@ -201,7 +198,7 @@ export function LayersPanel({
             const open = openIds[folder.id] ?? folder.defaultOpen ?? on > 0;
             return (
               <section key={folder.id} aria-label={folder.label}>
-                <div className="k-band">
+                <div data-layer-folder className="k-band">
                   <button
                     type="button"
                     onClick={() => toggleOpen(folder.id)}
@@ -242,6 +239,7 @@ export function LayersPanel({
                         type="button"
                         onClick={() => toggleRow(registry, row)}
                         aria-pressed={en}
+                        data-layer-row
                         className="flex h-[29px] w-full items-center gap-[10px] pl-[30px] pr-[14px] text-left hover:bg-(--hover)"
                       >
                         <Icon

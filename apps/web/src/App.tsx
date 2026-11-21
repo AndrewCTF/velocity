@@ -38,9 +38,15 @@ import { TaskingPanel } from "./tasking/TaskingPanel.js";
 import { TargetKanbanPanel } from "./target-kanban/TargetKanbanPanel.js";
 import { FmvPanel } from "./fmv/FmvPanel.js";
 import { GlobeCanvas } from "./globe/GlobeCanvas.js";
+import { RequireWebGL2 } from "./globe/NoWebGL.js";
 import { GlobeOverlays } from "./globe/GlobeOverlays.js";
 import { GlobeToolbar } from "./globe/GlobeToolbar.js";
 import { GlobeTheater } from "./globe/GlobeTheater.js";
+import { PhoneMapButtons } from "./globe/PhoneMapButtons.js";
+import { useIsMobile } from "./shell/useIsMobile.js";
+import { usePhoneSheet } from "./shell/phoneSheet.js";
+import { PhoneNotice } from "./shell/PhoneNotice.js";
+import { useAgent } from "./state/agent.js";
 import { AgentConsole } from "./command-bar/AgentConsole.js";
 import { LayerRegistry } from "./registry/LayerRegistry.js";
 import { registerDefaults } from "./registry/defaults.js";
@@ -95,6 +101,13 @@ export function App(): JSX.Element {
   const [viewer, setViewer] = useState<Cesium.Viewer | null>(null);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
+  // On a phone the map carries two buttons, not the desktop furniture: the
+  // coordinate readouts, legend and scale bar (GlobeOverlays), the 13-button
+  // tool rail (behind More until asked for) and the COP picker.
+  const phone = useIsMobile();
+  const phoneTools = usePhoneSheet((s) => s.tools);
+  // On a phone Alerts is one of the sheets, so it closes when another opens.
+  const phoneAlerts = usePhoneSheet((s) => s.open === "alerts");
   // The settings modal lived only in AppRouter's TopBar, which returns null on
   // `/`. So on the console — the one route with a Settings button — nothing
   // hosted the modal and the button did nothing.
@@ -351,7 +364,8 @@ export function App(): JSX.Element {
 
   // Slate (the default scheme) renders the reference workspace page as the
   // shell; every other scheme keeps the grid console. Same props, same slots.
-  const Shell = scheme === "slate" ? SlateShell : Console;
+  // Phones keep the phone-first console; the Slate shell is desktop-only for now.
+  const Shell = scheme === "slate" && !phone ? SlateShell : Console;
 
   return (
     <>
@@ -382,6 +396,18 @@ export function App(): JSX.Element {
           APP_META[activeApp].chrome === "full" ||
           (scheme === "slate" && SLATE_BLEED.has(activeApp))
         }
+        onOpenAlerts={() => usePhoneSheet.getState().toggle("alerts")}
+        phoneMore={[
+          {
+            label: "Analyst agent",
+            hint: "ask about what is on the map",
+            icon: "sparkle",
+            run: () => {
+              usePhoneSheet.getState().show(null);
+              useAgent.getState().setOpen(true);
+            },
+          },
+        ]}
         // A full-bleed app owns the whole body, so the panel column it would
         // open into is not mounted. Asking for a panel returns to the map.
         onPanelWhileBleed={goToMap}
@@ -411,14 +437,18 @@ export function App(): JSX.Element {
             <>
               <div className="csl2-globe">
                 <ErrorBoundary label="globe">
-                  <GlobeCanvas
-                    ionToken={config?.cesiumIonToken ?? ""}
-                    registry={registry}
-                    onViewerReady={onViewerReady}
-                    imageryMode={imageryMode}
-                    enableGoogle3D={config?.features.enableGoogle3D ?? false}
-                    googleApiKey={config?.googleApiKey ?? ""}
-                  />
+                  {/* A device with no WebGL 2 gets the reason and a way out
+                      instead of the generic panel-error notice. */}
+                  <RequireWebGL2>
+                    <GlobeCanvas
+                      ionToken={config?.cesiumIonToken ?? ""}
+                      registry={registry}
+                      onViewerReady={onViewerReady}
+                      imageryMode={imageryMode}
+                      enableGoogle3D={config?.features.enableGoogle3D ?? false}
+                      googleApiKey={config?.googleApiKey ?? ""}
+                    />
+                  </RequireWebGL2>
                 </ErrorBoundary>
               </div>
               {!config && <BootLoading />}
@@ -428,10 +458,13 @@ export function App(): JSX.Element {
               <GlobeTheater viewer={viewer} />
               {/* The Slate map is the reference's bare map: no legend, scale
                   or cursor readouts. */}
-              {scheme !== "slate" && <GlobeOverlays viewer={viewer} />}
-              <GlobeToolbar viewer={viewer} />
+              {!phone && scheme !== "slate" && (
+                <GlobeOverlays viewer={viewer} />
+              )}
+              {(!phone || phoneTools) && <GlobeToolbar viewer={viewer} />}
+              <PhoneMapButtons viewer={viewer} />
               <MapToolPanels viewer={viewer} />
-              <CopControl viewer={viewer} registry={registry} />
+              {!phone && <CopControl viewer={viewer} registry={registry} />}
               <AuthNotice />
               {/* Kept on Slate too: it is a security notice, dismissible once. */}
               <OpenModeBanner open={Boolean(config?.openMode)} />
@@ -455,8 +488,10 @@ export function App(): JSX.Element {
         }
       />
       <AlertsPanel
-        open={alertsOpen}
-        onClose={() => setAlertsOpen(false)}
+        open={phone ? phoneAlerts : alertsOpen}
+        onClose={() =>
+          phone ? usePhoneSheet.getState().show(null) : setAlertsOpen(false)
+        }
         viewer={viewer}
       />
       {/* The inbox's recorded home is the title bar (REHOMED `inbox`), and this
@@ -895,44 +930,48 @@ export function OpenModeBanner({
   // paragraph over the map. The chip opens the full sentence and its dismiss.
   if (!expanded)
     return (
-      <div className="map-banner flex justify-center px-3 pointer-events-none">
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          aria-expanded={false}
-          title="This server answers compute and model requests without authentication"
-          className="pointer-events-auto flex h-6 items-center gap-1.5 rounded-sm border border-warn bg-bg-1/95 px-2 mono text-[10px] uppercase tracking-[0.6px] text-warn"
-        >
-          Open mode
-        </button>
-      </div>
+      <PhoneNotice>
+        <div className="map-banner flex justify-center px-3 pointer-events-none">
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            aria-expanded={false}
+            title="This server answers compute and model requests without authentication"
+            className="pointer-events-auto flex h-6 items-center gap-1.5 rounded-sm border border-warn bg-bg-1/95 px-2 mono text-[10px] uppercase tracking-[0.6px] text-warn"
+          >
+            Open mode
+          </button>
+        </div>
+      </PhoneNotice>
     );
   return (
-    <div className="map-banner flex justify-center px-3 pointer-events-none">
-      <div className="pointer-events-auto flex items-center gap-2 bg-bg-1/95 border border-warn rounded-sm px-3 py-1.5 shadow-lg max-w-xl">
-        <button
-          type="button"
-          onClick={() => setExpanded(false)}
-          aria-expanded
-          className="mono text-[10px] uppercase tracking-[0.6px] text-warn"
-        >
-          Open mode
-        </button>
-        <span className="text-[11px] text-txt-2 leading-snug">
-          Compute/LLM endpoints are served without authentication (keyless +
-          ALLOW_UNAUTHENTICATED). Fine for a trusted local box; set API_KEY or
-          Supabase before exposing it.
-        </span>
-        <button
-          type="button"
-          onClick={close}
-          className="mono text-[10px] text-txt-3 hover:text-txt-0 px-1"
-          aria-label="Dismiss open-mode banner"
-        >
-          ✕
-        </button>
+    <PhoneNotice>
+      <div className="map-banner flex justify-center px-3 pointer-events-none">
+        <div className="pointer-events-auto flex items-center gap-2 bg-bg-1/95 border border-warn rounded-sm px-3 py-1.5 shadow-lg max-w-xl">
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            aria-expanded
+            className="mono text-[10px] uppercase tracking-[0.6px] text-warn"
+          >
+            Open mode
+          </button>
+          <span className="text-[11px] text-txt-2 leading-snug">
+            Compute/LLM endpoints are served without authentication (keyless +
+            ALLOW_UNAUTHENTICATED). Fine for a trusted local box; set API_KEY or
+            Supabase before exposing it.
+          </span>
+          <button
+            type="button"
+            onClick={close}
+            className="mono text-[10px] text-txt-3 hover:text-txt-0 px-1"
+            aria-label="Dismiss open-mode banner"
+          >
+            ✕
+          </button>
+        </div>
       </div>
-    </div>
+    </PhoneNotice>
   );
 }
 

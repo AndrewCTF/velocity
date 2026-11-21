@@ -135,7 +135,7 @@ export function GroundReconPanel({ viewer }: { viewer: unknown }): JSX.Element {
       <Widget title="Ground Recon">
         <Caveat level="NO AOI" tone="warn" />
         <p className="text-[10px] text-txt-3 mt-2 leading-snug">
-          Right-click the map →{" "}
+          Right-click or long-press the map →{" "}
           <span className="text-txt-1">Ground recon here</span> to load
           street-level photos, weather, area imagery, and (in the desktop app)
           live detection boxes.

@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ConsoleShell } from "./ConsoleShell.js";
+import { useSelection } from "../state/stores.js";
 
 function Boom(): never {
   throw new Error("inspector blew up");
@@ -97,5 +98,91 @@ describe("ConsoleShell", () => {
       expect(screen.getByText("globe-zone")).toBeInTheDocument();
       expect(screen.getByText("bottom-zone")).toBeInTheDocument();
     });
+  });
+});
+
+// The 2D map on a phone, 2026-10-18. Before: the desktop command bar was the
+// phone's top row and ran 94 elements past the right edge, and panels opened
+// full-screen from a floating "Panels" button. Now it is the 3D console's
+// phone grammar: the map, a floating top row, a tab bar, bottom sheets.
+describe("ConsoleShell on a phone", () => {
+  function phone(): void {
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: q.includes("max-width: 767px"),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+    render(
+      <ConsoleShell
+        top={<div>top-zone</div>}
+        left={<div>left-zone</div>}
+        globe={<div>globe-zone</div>}
+        right={<div>right-zone</div>}
+        bottom={<div>bottom-zone</div>}
+        phoneLead={<a href="/">lead</a>}
+      />,
+    );
+  }
+  const tab = (name: string): HTMLElement =>
+    within(
+      document.querySelector<HTMLElement>("nav[data-primary-nav]")!,
+    ).getByRole("button", { name });
+
+  afterEach(() => {
+    act(() => useSelection.getState().select(null));
+    vi.unstubAllGlobals();
+  });
+
+  it("is the map, a floating top row and a tab bar; the desktop bar and band are gone", () => {
+    phone();
+    expect(screen.getByText("globe-zone")).toBeInTheDocument();
+    expect(screen.queryByRole("banner")).toBeNull();
+    expect(screen.queryByText("top-zone")).toBeNull();
+    expect(screen.getByText("lead")).toBeInTheDocument();
+    expect(
+      [...document.querySelectorAll("nav[data-primary-nav] button")].map(
+        (b) => b.textContent,
+      ),
+    ).toEqual(["Layers", "Selection", "Timeline", "Search"]);
+  });
+
+  it("opens the command bar as the Search sheet, from its tab or the search pill", () => {
+    phone();
+    fireEvent.click(tab("Search"));
+    expect(screen.getByRole("region", { name: "Search" })).toBeInTheDocument();
+    expect(screen.getByText("top-zone")).toBeInTheDocument();
+    fireEvent.click(tab("Search"));
+    expect(screen.queryByText("top-zone")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Search places/ }));
+    expect(screen.getByText("top-zone")).toBeInTheDocument();
+  });
+
+  it("keeps the timeline mounted, hidden until its tab asks", () => {
+    phone();
+    const node = screen.getByText("bottom-zone");
+    expect(node.closest(".psheet")).toHaveAttribute("hidden");
+    fireEvent.click(tab("Timeline"));
+    expect(node.closest(".psheet")).not.toHaveAttribute("hidden");
+    expect(screen.getByText("bottom-zone")).toBe(node);
+  });
+
+  it("raises the Selection sheet to a peek when a contact is picked", () => {
+    phone();
+    act(() => useSelection.getState().select("aircraft:abc123"));
+    expect(screen.getByRole("region", { name: "Selection" })).toHaveAttribute(
+      "data-detent",
+      "peek",
+    );
+    act(() => useSelection.getState().select(null));
+    expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
   });
 });

@@ -9,7 +9,10 @@
   background: #1b2227;
   border: 1px solid #2d383e;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
-  font: 400 15.5px/20px "Source Sans 3", "Segoe UI", sans-serif;
+  font:
+    400 15.5px/20px "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
 }
 .gx-cmenu .gx-it {
   all: unset;

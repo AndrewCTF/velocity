@@ -10,5 +10,8 @@ import "../../../index.css";
 import { SlateFoundry } from "./FoundryApp.js";
 import type { Page } from "./nav.js";
 
-const page = (new URLSearchParams(location.search).get("page") ?? "d187") as Page;
-createRoot(document.getElementById("fx-root")!).render(<SlateFoundry viewer={null} initial={page} />);
+const page = (new URLSearchParams(location.search).get("page") ??
+  "d187") as Page;
+createRoot(document.getElementById("fx-root")!).render(
+  <SlateFoundry viewer={null} initial={page} />,
+);

@@ -153,7 +153,14 @@ export function FoundryApp({
         <div className="px-3 py-2 border-t border-line-2 text-[9px] uppercase tracking-[0.4px] text-txt-4">
           keyless · local
         </div>
-        <div style={{ position: "relative", padding: "8px 12px", marginTop: "auto", marginBottom: "40px" }}>
+        <div
+          style={{
+            position: "relative",
+            padding: "8px 12px",
+            marginTop: "auto",
+            marginBottom: "40px",
+          }}
+        >
           <button
             type="button"
             className="foundry-new"
@@ -165,7 +172,11 @@ export function FoundryApp({
             + New
           </button>
           {newOpen && (
-            <div role="menu" aria-label="New resource" className="foundry-new-menu">
+            <div
+              role="menu"
+              aria-label="New resource"
+              className="foundry-new-menu"
+            >
               {NEW_ITEMS.map((it) => (
                 <button
                   key={it.id}

@@ -2,12 +2,45 @@
 // (fetch_live in _build_gotham_a.py), read once per open, and the selection.
 import { useMemo, useState } from "react";
 import {
-  PORTS, chokesOf, gulfWarnings, placeFor, portsOf, results, series, shown, useJson, useVessels,
-  type Alert, type Choke, type Evidence, type Fix, type Hit, type Port, type Res, type Rule, type Sanc,
-  type Standing, type Status, type Vessel, type Warning, type Watch,
+  PORTS,
+  chokesOf,
+  gulfWarnings,
+  placeFor,
+  portsOf,
+  results,
+  series,
+  shown,
+  useJson,
+  useVessels,
+  type Alert,
+  type Choke,
+  type Evidence,
+  type Fix,
+  type Hit,
+  type Port,
+  type Res,
+  type Rule,
+  type Sanc,
+  type Standing,
+  type Status,
+  type Vessel,
+  type Warning,
+  type Watch,
 } from "./data.js";
 
-export type Page = "explorer" | "browser" | "cov" | "chat" | "inbox" | "slides" | "dossier" | "menubar" | "graph2" | "timeline" | "gaia" | "video";
+export type Page =
+  | "explorer"
+  | "browser"
+  | "cov"
+  | "chat"
+  | "inbox"
+  | "slides"
+  | "dossier"
+  | "menubar"
+  | "graph2"
+  | "timeline"
+  | "gaia"
+  | "video";
 
 export interface Ctx {
   go: (p: Page) => void;
@@ -49,7 +82,9 @@ export function useModel(go: (p: Page) => void): Ctx {
   const ru = useJson<Rule[]>("/api/alerts/rules");
   const ev = useJson<Evidence[]>("/api/evidence");
   const wa = useJson<{ features: Warning[] }>("/api/maritime/warnings");
-  const ch = useJson<Parameters<typeof chokesOf>[0]>("/api/maritime/chokepoints");
+  const ch = useJson<Parameters<typeof chokesOf>[0]>(
+    "/api/maritime/chokepoints",
+  );
   const br = useJson<{ briefs: unknown[] }>("/api/watch-officer/briefs");
   const wt = useJson<Watch>("/api/intel/watch");
   const [kw, setKw] = useState("Al Hamriyah");
@@ -62,9 +97,16 @@ export function useModel(go: (p: Page) => void): Ctx {
   // the default object is the nearest hit; the list keeps the copy's order
   // (selected third) for that default, so a click only moves the highlight
   const list = useMemo(() => shown(res, res[0] ?? null), [res]);
-  const sel = (selM !== null ? res.find((r) => r.mmsi === selM) : undefined) ?? res[0] ?? null;
-  const ent = useJson<{ flag_country?: string | null }>(sel ? `/api/entity/vessel:${sel.mmsi}` : null);
-  const sc = useJson<Sanc>(sel ? `/api/sanctions/lookup?mmsi=${sel.mmsi}` : null);
+  const sel =
+    (selM !== null ? res.find((r) => r.mmsi === selM) : undefined) ??
+    res[0] ??
+    null;
+  const ent = useJson<{ flag_country?: string | null }>(
+    sel ? `/api/entity/vessel:${sel.mmsi}` : null,
+  );
+  const sc = useJson<Sanc>(
+    sel ? `/api/sanctions/lookup?mmsi=${sel.mmsi}` : null,
+  );
   const hi = useJson<{ tracks: { points: number[][] }[] }>(
     sel ? `/api/history/track?id=vessel:${sel.mmsi}&limit=500` : null,
   );

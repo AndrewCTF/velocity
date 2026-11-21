@@ -205,8 +205,7 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
       fallback: icao.toUpperCase(),
     });
     const endPos = new Cesium.CallbackPositionProperty(
-      (_time, result) =>
-        result ?? livePositions[livePositions.length - 1]!,
+      (_time, result) => result ?? livePositions[livePositions.length - 1]!,
       false,
     );
     if (!chipEntity) {
@@ -217,9 +216,8 @@ export function installSelectionTrack(viewer: Cesium.Viewer): () => void {
           text,
           font: '600 13px "Source Sans 3", "Segoe UI", sans-serif',
           fillColor: Cesium.Color.WHITE,
-          backgroundColor: Cesium.Color.fromCssColorString("#2d2f33").withAlpha(
-            0.85,
-          ),
+          backgroundColor:
+            Cesium.Color.fromCssColorString("#2d2f33").withAlpha(0.85),
           showBackground: true,
           outlineColor: OUTLINE,
           outlineWidth: 2,

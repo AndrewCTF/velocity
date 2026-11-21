@@ -43,7 +43,11 @@ export function ContextMenu(): JSX.Element | null {
   return (
     <div
       role="menu"
-      aria-label={inArea ? `Drawn area ${area!.south.toFixed(4)},${area!.west.toFixed(4)} to ${area!.north.toFixed(4)},${area!.east.toFixed(4)}` : `Map point ${lat.toFixed(4)}, ${lon.toFixed(4)}`}
+      aria-label={
+        inArea
+          ? `Drawn area ${area!.south.toFixed(4)},${area!.west.toFixed(4)} to ${area!.north.toFixed(4)},${area!.east.toFixed(4)}`
+          : `Map point ${lat.toFixed(4)}, ${lon.toFixed(4)}`
+      }
       onClick={(e) => e.stopPropagation()}
       className="gx-cmenu"
       style={{ left, top }}
@@ -66,7 +70,10 @@ export function ContextMenu(): JSX.Element | null {
         </Fragment>
       ))}
       <div className="gx-sep" role="separator" />
-      <div className="gx-coord" data-testid={inArea ? "d92-area-footer" : "d90-coord-footer"}>
+      <div
+        className="gx-coord"
+        data-testid={inArea ? "d92-area-footer" : "d90-coord-footer"}
+      >
         {inArea
           ? `${area!.south.toFixed(4)},${area!.west.toFixed(4)} to ${area!.north.toFixed(4)},${area!.east.toFixed(4)}`
           : `${lat.toFixed(4)}, ${lon.toFixed(4)}`}

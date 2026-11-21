@@ -33,7 +33,8 @@ import {
   type SarFC,
   type WarnP,
 } from "./data.js";
-import lightHormuz from "./lightHormuz.png";
+// shortcut: reference-derived image kept out of the repo; the page draws without it. Ship a licensed asset to restore it.
+const lightHormuz: string = "";
 import "./terminal.css";
 
 const SAR_PATH = "/api/intel/dark-vessels/sar?aoi=hormuz";
@@ -319,7 +320,7 @@ function MapPlate({
         </defs>
         <g clipPath={`url(#${id})`}>
           <image
-            href={lightHormuz}
+            href={lightHormuz || undefined}
             x={fx - sx * k}
             y={fy - sy * k}
             width={1882 * k}

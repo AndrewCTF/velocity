@@ -284,7 +284,9 @@
   font-size: 12.5px;
   cursor: pointer;
 }
-.slate-shell .sl-back-to-list:hover { color: #c6cdd0; }
+.slate-shell .sl-back-to-list:hover {
+  color: #c6cdd0;
+}
 .slate-shell .sl-series-rows {
   display: flex;
   flex-direction: column;

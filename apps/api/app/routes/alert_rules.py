@@ -26,6 +26,8 @@ analyst-reachable, unlike the operator-gated control blocks (G7, 2026-09).
 from __future__ import annotations
 
 import asyncio
+import re
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -49,7 +51,27 @@ KINDS = {
 # control.py HTTP primitive — no new client, no new dependency.
 # "email" is deliberately absent: nothing sends email yet, and a rule that
 # silently never delivers is worse than a 400 at creation (2026-07-12).
-CHANNELS = {"inapp", "discord", "webhook"}
+# "ntfy" posts to an ntfy topic URL (ntfy.sh or self-hosted), so a firing lands
+# as a phone notification with no Discord account and no app of ours.
+CHANNELS = {"inapp", "discord", "webhook", "ntfy"}
+SINK_CHANNELS = ("discord", "webhook", "ntfy")
+_NTFY_TOPIC_RE = re.compile(r"^[-_A-Za-z0-9]{1,64}$")
+
+
+def ntfy_target(url: str) -> tuple[str, str]:
+    """Split an ntfy topic URL into (server base, topic).
+
+    ntfy's JSON publish goes to the server ROOT with the topic in the body, so
+    ``https://ntfy.sh/my-topic`` -> ("https://ntfy.sh", "my-topic"). A server
+    mounted under a sub-path keeps it: ``https://host/ntfy/t`` -> base
+    ``https://host/ntfy``. Raises ValueError when the last segment is not a
+    valid ntfy topic name."""
+    parts = urlsplit(url.strip())
+    segs = [p for p in parts.path.split("/") if p]
+    if not segs or not _NTFY_TOPIC_RE.match(segs[-1]):
+        raise ValueError("ntfy sink_url must end in a topic, e.g. https://ntfy.sh/my-topic")
+    base_path = "/" + "/".join(segs[:-1]) if len(segs) > 1 else ""
+    return f"{parts.scheme}://{parts.netloc}{base_path}", segs[-1]
 
 
 def _use_local(s: Settings) -> bool:
@@ -146,12 +168,17 @@ def _validate(body: AlertRuleIn) -> None:
         )
     if body.channel not in CHANNELS:
         raise HTTPException(status_code=400, detail="unknown channel")
-    if body.channel in ("discord", "webhook"):
+    if body.channel in SINK_CHANNELS:
         if not body.sink_url:
             raise HTTPException(
                 status_code=400,
                 detail=f"channel {body.channel!r} requires sink_url",
             )
+        if body.channel == "ntfy":
+            try:
+                ntfy_target(body.sink_url)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
         try:
             check_sink_url(body.sink_url)
         except WorkflowError as exc:

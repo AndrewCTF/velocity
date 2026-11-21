@@ -116,13 +116,17 @@ export function AnnotationPanel(): JSX.Element {
     if (!draw) return;
     const k = draft.kind;
     if (k === "line" || k === "arrow" || k === "freehand") {
-      setStatus("Click points on the map; right-click to finish.");
+      setStatus(
+        "Click points on the map; right-click or long-press (1.5 s) to finish.",
+      );
       draw.drawPolyline((verts) => {
         add({ ...draftBase(), coords: verts.map((v) => [v.lon, v.lat]) });
         setStatus(null);
       });
     } else if (k === "polygon" || k === "corridor") {
-      setStatus("Click the corners; right-click to close the shape.");
+      setStatus(
+        "Click the corners; right-click or long-press (1.5 s) to close the shape.",
+      );
       draw.drawPolygon((ring) => {
         add({ ...draftBase(), coords: ring.map((v) => [v.lon, v.lat]) });
         setStatus(null);

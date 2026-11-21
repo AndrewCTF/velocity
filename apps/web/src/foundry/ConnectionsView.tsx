@@ -64,7 +64,13 @@ interface SourcePreset {
   installed: boolean;
 }
 
-export const HTTP_FORMATS = ["json", "csv", "geojson", "rss", "ndjson"] as const;
+export const HTTP_FORMATS = [
+  "json",
+  "csv",
+  "geojson",
+  "rss",
+  "ndjson",
+] as const;
 
 export function httpConfigFor(input: {
   url: string;
@@ -79,7 +85,8 @@ export function httpConfigFor(input: {
     interval_s: input.intervalS || 300,
   };
   if (input.rowsPath.trim()) config.rows_path = input.rowsPath.trim();
-  if (input.authHeaderEnv.trim()) config.auth_header_env = input.authHeaderEnv.trim();
+  if (input.authHeaderEnv.trim())
+    config.auth_header_env = input.authHeaderEnv.trim();
   return config;
 }
 
@@ -88,11 +95,15 @@ export function validateHttpConfig(config: {
   format: string;
   rowsPath: string;
 }): string | null {
-  if (!/^https?:\/\//i.test(config.url)) return "Feed URL must use http or https";
+  if (!/^https?:\/\//i.test(config.url))
+    return "Feed URL must use http or https";
   if (!HTTP_FORMATS.includes(config.format as (typeof HTTP_FORMATS)[number])) {
     return "Format must be json, csv, geojson, rss or ndjson";
   }
-  if (config.rowsPath && !/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(config.rowsPath)) {
+  if (
+    config.rowsPath &&
+    !/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(config.rowsPath)
+  ) {
     return "Rows path must be a dotted path of bare keys";
   }
   return null;
@@ -262,7 +273,10 @@ function ConnectionEditor({
         ? (identifierError("table", table) ??
           identifierError("cursor_column", cursorColumn))
         : null;
-    const badHttp = kind === "http" ? validateHttpConfig({ url: srcUrl, format, rowsPath }) : null;
+    const badHttp =
+      kind === "http"
+        ? validateHttpConfig({ url: srcUrl, format, rowsPath })
+        : null;
     const bad = badIdentifier ?? badHttp;
     if (bad) {
       setError(bad);
@@ -376,7 +390,11 @@ function ConnectionEditor({
         </div>
         <Field
           label="Target dataset"
-          hint={kind === "http" ? "rows are replaced as a new version each poll" : "rows are appended as a new version"}
+          hint={
+            kind === "http"
+              ? "rows are replaced as a new version each poll"
+              : "rows are appended as a new version"
+          }
         >
           <Select
             value={datasetId}
@@ -428,7 +446,10 @@ function ConnectionEditor({
         )}
         {kind === "http" && (
           <>
-            <Field label="Feed URL" hint="public http(s) feed; SSRF-checked on every poll">
+            <Field
+              label="Feed URL"
+              hint="public http(s) feed; SSRF-checked on every poll"
+            >
               <input
                 value={srcUrl}
                 onChange={(e) => setSrcUrl(e.target.value)}
@@ -444,7 +465,10 @@ function ConnectionEditor({
                   options={HTTP_FORMATS.map((f) => ({ value: f, label: f }))}
                 />
               </Field>
-              <Field label="Rows path" hint="optional dotted bare keys, e.g. data.items">
+              <Field
+                label="Rows path"
+                hint="optional dotted bare keys, e.g. data.items"
+              >
                 <input
                   value={rowsPath}
                   onChange={(e) => setRowsPath(e.target.value)}
@@ -673,7 +697,11 @@ function ConnectionCard({
 // feeds. Installation creates a dataset and an http connection with the same
 // config, which then polls on its interval until disabled or deleted.
 
-function SourcePresets({ onInstalled }: { onInstalled: () => void }): JSX.Element {
+function SourcePresets({
+  onInstalled,
+}: {
+  onInstalled: () => void;
+}): JSX.Element {
   const [presets, setPresets] = useState<SourcePreset[]>([]);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -682,7 +710,7 @@ function SourcePresets({ onInstalled }: { onInstalled: () => void }): JSX.Elemen
   const load = useCallback(async (): Promise<void> => {
     const r = await apiFetch("/api/foundry/source-presets").catch(() => null);
     if (r && r.ok) {
-      const body = await r.json() as unknown;
+      const body = (await r.json()) as unknown;
       setPresets(Array.isArray(body) ? body : []);
     }
   }, []);
@@ -697,18 +725,24 @@ function SourcePresets({ onInstalled }: { onInstalled: () => void }): JSX.Elemen
     }).catch(() => null);
     setBusy(null);
     if (!r || !r.ok) {
-      const detail = r ? ((await r.json().catch(() => null))?.detail ?? null) : null;
-      setError(typeof detail === "string" ? detail : "Could not install preset");
+      const detail = r
+        ? ((await r.json().catch(() => null))?.detail ?? null)
+        : null;
+      setError(
+        typeof detail === "string" ? detail : "Could not install preset",
+      );
       return;
     }
     await load();
     onInstalled();
   };
 
-  const shown = presets.filter((p) => {
-    const q = query.trim().toLowerCase();
-    return !q || `${p.title} ${p.category} ${p.id}`.toLowerCase().includes(q);
-  }).slice(0, 40);
+  const shown = presets
+    .filter((p) => {
+      const q = query.trim().toLowerCase();
+      return !q || `${p.title} ${p.category} ${p.id}`.toLowerCase().includes(q);
+    })
+    .slice(0, 40);
 
   return (
     <section className="space-y-2">
@@ -716,7 +750,8 @@ function SourcePresets({ onInstalled }: { onInstalled: () => void }): JSX.Elemen
         Feed presets
       </h3>
       <p className="text-[11px] text-txt-3">
-        Curated public feeds. Installing creates a dataset and polls it on the preset interval.
+        Curated public feeds. Installing creates a dataset and polls it on the
+        preset interval.
       </p>
       <input
         value={query}
@@ -731,9 +766,14 @@ function SourcePresets({ onInstalled }: { onInstalled: () => void }): JSX.Elemen
         </p>
       )}
       <div className="rounded-md border border-line-2 bg-bg-1 divide-y divide-line max-h-72 overflow-auto">
-        {shown.length === 0 && <p className="px-3 py-2 text-[11px] text-txt-3">No presets match.</p>}
+        {shown.length === 0 && (
+          <p className="px-3 py-2 text-[11px] text-txt-3">No presets match.</p>
+        )}
         {shown.map((p) => (
-          <div key={p.id} className="flex items-center justify-between gap-3 px-3 py-2">
+          <div
+            key={p.id}
+            className="flex items-center justify-between gap-3 px-3 py-2"
+          >
             <div className="min-w-0">
               <div className="text-[11px] text-txt-1 truncate">{p.title}</div>
               <div className="mono text-[10px] text-txt-3">
@@ -745,13 +785,19 @@ function SourcePresets({ onInstalled }: { onInstalled: () => void }): JSX.Elemen
               disabled={p.installed || busy === p.id}
               onClick={() => void install(p.id)}
             >
-              {busy === p.id ? "installing…" : p.installed ? "installed" : "Install"}
+              {busy === p.id
+                ? "installing…"
+                : p.installed
+                  ? "installed"
+                  : "Install"}
             </Btn>
           </div>
         ))}
       </div>
       {query && presets.length > shown.length && (
-        <p className="text-[10px] text-txt-3">Showing {shown.length} of {presets.length}. Refine the search.</p>
+        <p className="text-[10px] text-txt-3">
+          Showing {shown.length} of {presets.length}. Refine the search.
+        </p>
       )}
     </section>
   );

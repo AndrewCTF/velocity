@@ -1589,7 +1589,9 @@ export function SourcesPanel(): JSX.Element {
             </select>
           </div>
           {catalogError !== null && (
-            <div className="mt-[4px] text-[11px] text-alert">{catalogError}</div>
+            <div className="mt-[4px] text-[11px] text-alert">
+              {catalogError}
+            </div>
           )}
           <div className="mt-[4px] text-[11px] text-txt-3">
             {health
@@ -1600,7 +1602,10 @@ export function SourcesPanel(): JSX.Element {
           </div>
         </div>
         {shown.map((s) => (
-          <div key={s.id} className="border-b border-line-2 px-[12px] py-[4px].5">
+          <div
+            key={s.id}
+            className="border-b border-line-2 px-[12px] py-[4px].5"
+          >
             <div className="flex flex-wrap items-baseline gap-[8px]">
               <span className="text-[12px] text-txt-0">{s.name}</span>
               <span className="mono text-[10px] text-txt-3">{s.category}</span>

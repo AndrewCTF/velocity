@@ -28,11 +28,20 @@ export interface Nav {
   /** opens the apps menu (each page toolbar's Apps button) */
   menu: () => void;
   /** the token-driven Foundry workbench this surface replaced under Slate */
-  workbench: (view?: "home" | "datasets" | "pipeline" | "builds" | "ontology" | "connections") => void;
+  workbench: (
+    view?:
+      "home" | "datasets" | "pipeline" | "builds" | "ontology" | "connections",
+  ) => void;
 }
 
 export const MENU: Array<[string, Array<[Page, string]>]> = [
-  ["Control Panel", [["d182", "Map defaults"], ["d183", "Custom base map"]]],
+  [
+    "Control Panel",
+    [
+      ["d182", "Map defaults"],
+      ["d183", "Custom base map"],
+    ],
+  ],
   [
     "Ontology Manager",
     [
@@ -58,5 +67,11 @@ export const MENU: Array<[string, Array<[Page, string]>]> = [
       ["d199", "Layer style by function"],
     ],
   ],
-  ["Map (legacy)", [["d200", "Selection card"], ["d201", "Legend and page tabs"]]],
+  [
+    "Map (legacy)",
+    [
+      ["d200", "Selection card"],
+      ["d201", "Legend and page tabs"],
+    ],
+  ],
 ];

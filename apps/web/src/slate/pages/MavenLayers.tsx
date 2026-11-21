@@ -173,63 +173,67 @@ export function MavenLayers({
       ? Number((s.label.match(/\(([\d,]+)\)/)?.[1] ?? "0").replace(/,/g, ""))
       : 0;
     return (
-    <>
-      {renameLabel === row.label ? (
-        <InlineRename row={row} registry={registry} onDone={() => setRenameLabel(null)} />
-      ) : (
-      <Row
-        key={`${kid ? "k" : "o"}:${row.label}`}
-        kid={kid}
-        icon={on ? "antenna" : "circle"}
-        label={s.label}
-        right={
-          <LayerMenu
+      <>
+        {renameLabel === row.label ? (
+          <InlineRename
             row={row}
-            count={count}
-            viewer={viewer ?? null}
-            onToggleHide={() => toggleRow(registry, row)}
-            onDrillIn={() => {
-              setOpen((o) => ({ ...o, [row.label]: true }));
-              setQ(row.label);
+            registry={registry}
+            onDone={() => setRenameLabel(null)}
+          />
+        ) : (
+          <Row
+            key={`${kid ? "k" : "o"}:${row.label}`}
+            kid={kid}
+            icon={on ? "antenna" : "circle"}
+            label={s.label}
+            right={
+              <LayerMenu
+                row={row}
+                count={count}
+                viewer={viewer ?? null}
+                onToggleHide={() => toggleRow(registry, row)}
+                onDrillIn={() => {
+                  setOpen((o) => ({ ...o, [row.label]: true }));
+                  setQ(row.label);
+                }}
+                onCentre={() => {
+                  if (viewer?.camera) return;
+                }}
+                onSelect={() => usePalette.getState().setOpen(true)}
+                onRename={() => setRenameLabel(row.label)}
+                onDelete={() => {
+                  // Velocity layers are registry descriptors, not deletable
+                  // documents; deleting just turns the row off.
+                  toggleRow(registry, row);
+                }}
+              />
+            }
+            pressed={on}
+            title={on ? `Hide ${row.label}` : `Show ${row.label}`}
+            onClick={() => toggleRow(registry, row)}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData("text/plain", row.label);
+              e.dataTransfer.effectAllowed = "move";
             }}
-            onCentre={() => {
-              if (viewer?.camera) return;
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
             }}
-            onSelect={() => usePalette.getState().setOpen(true)}
-            onRename={() => setRenameLabel(row.label)}
-            onDelete={() => {
-              // Velocity layers are registry descriptors, not deletable
-              // documents; deleting just turns the row off.
-              toggleRow(registry, row);
+            onDrop={(e) => {
+              e.preventDefault();
+              const from = e.dataTransfer.getData("text/plain");
+              if (!from || from === row.label) return;
+              const fromRow = allRows.find((r) => r.label === from);
+              if (!fromRow) return;
+              const toIdx = allRows.indexOf(row);
+              if (toIdx < 0) return;
+              moveRow(registry, fromRow, toIdx);
             }}
           />
-        }
-        pressed={on}
-        title={on ? `Hide ${row.label}` : `Show ${row.label}`}
-        onClick={() => toggleRow(registry, row)}
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData("text/plain", row.label);
-          e.dataTransfer.effectAllowed = "move";
-        }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          const from = e.dataTransfer.getData("text/plain");
-          if (!from || from === row.label) return;
-          const fromRow = allRows.find((r) => r.label === from);
-          if (!fromRow) return;
-          const toIdx = allRows.indexOf(row);
-          if (toIdx < 0) return;
-          moveRow(registry, fromRow, toIdx);
-        }}
-      />
-      )}
-      {on && <InlineLegend row={row} hidden={!on} />}
-    </>
+        )}
+        {on && <InlineLegend row={row} hidden={!on} />}
+      </>
     );
   };
 
@@ -267,7 +271,9 @@ export function MavenLayers({
               <BpIcon name="layers" size={28} />
             </div>
             <div className="mv-empty-title">No layers</div>
-            <div className="mv-empty-sub">Add data to your map to get started</div>
+            <div className="mv-empty-sub">
+              Add data to your map to get started
+            </div>
             <AddToMapMenu onAddOverlays={() => setTab("sources")} />
           </div>
         ) : (

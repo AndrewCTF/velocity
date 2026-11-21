@@ -13,6 +13,7 @@ import type { Chokepoint } from "../registry/chokepoints.js";
 import { Brand, StatusDot, Caveat } from "../shell/instruments.js";
 import { useAgent } from "../state/agent.js";
 import { apiFetch } from "../transport/http.js";
+import { useIsMobile } from "../shell/useIsMobile.js";
 
 interface Props {
   viewer: Cesium.Viewer | null;
@@ -44,6 +45,7 @@ export function CommandBar({
   classification = "UNCLAS",
   onOpenAlerts,
 }: Props): JSX.Element {
+  const phone = useIsMobile();
   const setActiveAoi = useAoi((s) => s.setActive);
   const imageryMode = useImagery((s) => s.mode);
   const setImageryMode = useImagery((s) => s.setMode);
@@ -60,6 +62,22 @@ export function CommandBar({
     if (c) flyToChokepoint(viewer, c);
     else flyToGlobal(viewer);
   };
+
+  // On a phone the bar is the Search sheet (ConsoleShell): the controls a 2D map
+  // needs on a small screen, stacked, each at full width. The brand, the app
+  // switcher, the ticker, the clock and the stats are the desktop's frame, and
+  // the marking is already on the map's top row.
+  if (phone)
+    return (
+      <div className="flex flex-col gap-3 p-4">
+        <SearchField viewer={viewer} wide />
+        <div className="flex flex-wrap items-center gap-3">
+          <AoiSelector onPick={onPickAoi} />
+          <BasemapPicker mode={imageryMode} onChange={setImageryMode} />
+          <SimToggle />
+        </div>
+      </div>
+    );
 
   return (
     <div className="flex h-full items-stretch">

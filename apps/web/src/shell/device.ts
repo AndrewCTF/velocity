@@ -4,14 +4,15 @@
 // frame to interpolate (planes freeze). Mobile clients get a smaller payload,
 // fewer entities, a slower cadence and a lower render scale.
 //
-// Touch + small-screen is the signal (a coarse pointer catches phones/tablets;
-// the width bound keeps desktop touchscreens out of the mobile budget).
+// Touch-only is the signal: a coarse PRIMARY pointer with no hover is a phone
+// or tablet at any width. It used to be coarse AND <= 1024 px, which handed a
+// landscape tablet (1194 px iPad Pro) the full desktop world-view socket
+// (measured 2026-10-17: /ws/adsb opened, aircraft polled with no bbox). A
+// touchscreen laptop still reads hover-capable from its trackpad, so it keeps
+// the desktop budget.
 export function isMobileDevice(): boolean {
   if (typeof matchMedia === "undefined") return false;
-  return (
-    matchMedia("(pointer: coarse)").matches &&
-    matchMedia("(max-width: 1024px)").matches
-  );
+  return matchMedia("(pointer: coarse) and (hover: none)").matches;
 }
 
 // Graded device capability tier — a supplement to the binary isMobileDevice()

@@ -112,7 +112,9 @@ export function CopEditor({
 
   const drawLine = (side: "friendly" | "hostile"): void => {
     if (!draw) return;
-    setStatus("click vertices; right-click or Finish to commit…");
+    setStatus(
+      "click vertices; right-click, long-press (1.5 s) or Finish to commit…",
+    );
     draw.drawPolyline((verts) => {
       addLine({
         side,
@@ -127,7 +129,9 @@ export function CopEditor({
   // gentler terrain (ground). Stores the dense routed path as a friendly line.
   const drawRoute = (mode: RouteMode): void => {
     if (!draw) return;
-    setStatus(`click ${mode} waypoints; right-click / Finish to route…`);
+    setStatus(
+      `click ${mode} waypoints; right-click, long-press (1.5 s) or Finish to route…`,
+    );
     draw.drawPolyline((verts) => {
       if (verts.length < 2) {
         setStatus("need ≥2 waypoints");

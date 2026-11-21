@@ -30,33 +30,57 @@ interface Ctx {
 }
 
 const nm = (d: Dataset | undefined, id: string): string => d?.name ?? id;
-const stTone = (s: string): "ok" | "bad" | undefined => (s === "succeeded" ? "ok" : s === "failed" ? "bad" : undefined);
+const stTone = (s: string): "ok" | "bad" | undefined =>
+  s === "succeeded" ? "ok" : s === "failed" ? "bad" : undefined;
 const stLabel = (s: string): string => (s === "succeeded" ? "Succeeded" : s);
 
 function BuildStatus({ b }: { b: Build }): JSX.Element {
   return (
     <Chip tone={stTone(b.status)}>
-      <Ico n={b.status === "succeeded" ? "tick-circle" : b.status === "failed" ? "error" : "time"} size={12} />
+      <Ico
+        n={
+          b.status === "succeeded"
+            ? "tick-circle"
+            : b.status === "failed"
+              ? "error"
+              : "time"
+        }
+        size={12}
+      />
       {stLabel(b.status)}
     </Chip>
   );
 }
 
-function RightPanel({ c, onLineage }: { c: Ctx; onLineage: (id?: string) => void }): JSX.Element {
+function RightPanel({
+  c,
+  onLineage,
+}: {
+  c: Ctx;
+  onLineage: (id?: string) => void;
+}): JSX.Element {
   const inId = c.tf.inputs[0] ?? "";
-  const dsl: [string, Dataset | undefined][] = [[inId, c.tin], [c.tf.output_dataset_id, c.tout]];
+  const dsl: [string, Dataset | undefined][] = [
+    [inId, c.tin],
+    [c.tf.output_dataset_id, c.tout],
+  ];
   return (
     <aside className="pg-card" aria-label="Transform details">
       <h3>Transform details</h3>
       <div className="pg-pad pg-col" style={{ gap: 16 }}>
         <div>
           <b>Transform API</b>
-          <p className="pg-mut pg-sm" style={{ margin: "8px 0 4px" }}>{`Inputs (showing 1 of ${c.tf.inputs.length})`}</p>
+          <p
+            className="pg-mut pg-sm"
+            style={{ margin: "8px 0 4px" }}
+          >{`Inputs (showing 1 of ${c.tf.inputs.length})`}</p>
           <div className="pg-card pg-pad">
             <div className="pg-sm pg-mut">{`${nm(c.tin, inId)} · dataset`}</div>
             <div>{`${c.tin?.row_count ?? "n/a"} rows`}</div>
           </div>
-          <p className="pg-mut pg-sm" style={{ margin: "8px 0 4px" }}>Outputs (showing 1 of 1)</p>
+          <p className="pg-mut pg-sm" style={{ margin: "8px 0 4px" }}>
+            Outputs (showing 1 of 1)
+          </p>
           <div className="pg-card pg-pad">
             <div className="pg-sm pg-mut">{`${nm(c.tout, c.tf.output_dataset_id)} · dataset`}</div>
             <div>{`${c.tout?.row_count ?? "n/a"} rows`}</div>
@@ -64,11 +88,23 @@ function RightPanel({ c, onLineage }: { c: Ctx; onLineage: (id?: string) => void
         </div>
         <div>
           <b>Input datasets</b>
-          <div className="pg-col" style={{ gap: 4, marginTop: 8, alignItems: "flex-start" }}>
+          <div
+            className="pg-col"
+            style={{ gap: 4, marginTop: 8, alignItems: "flex-start" }}
+          >
             {dsl.map(([id, d]) => (
-              <button key={id} type="button" className="pg-link" title={`Preview ${nm(d, id)} in the lineage`} onClick={() => onLineage(id)}>
+              <button
+                key={id}
+                type="button"
+                className="pg-link"
+                title={`Preview ${nm(d, id)} in the lineage`}
+                onClick={() => onLineage(id)}
+              >
                 {nm(d, id)}
-                <span className="pg-mut pg-sm" style={{ display: "block", textDecoration: "none" }}>{`foundry://${id}`}</span>
+                <span
+                  className="pg-mut pg-sm"
+                  style={{ display: "block", textDecoration: "none" }}
+                >{`foundry://${id}`}</span>
               </button>
             ))}
           </div>
@@ -76,7 +112,12 @@ function RightPanel({ c, onLineage }: { c: Ctx; onLineage: (id?: string) => void
         <div>
           <b>Lineage</b>
           <div style={{ marginTop: 8 }}>
-            <button type="button" className="pg-link" title="Open the master lineage" onClick={() => onLineage()}>
+            <button
+              type="button"
+              className="pg-link"
+              title="Open the master lineage"
+              onClick={() => onLineage()}
+            >
               Master Lineage + builds
             </button>
             <div className="pg-mut pg-sm">/Velocity Foundry/lineage</div>
@@ -84,7 +125,13 @@ function RightPanel({ c, onLineage }: { c: Ctx; onLineage: (id?: string) => void
         </div>
         <div>
           <b>Linked ontology kinds</b>
-          <div style={{ marginTop: 8 }}>{c.boundKinds.length ? c.boundKinds[0] : <span className="pg-mut">none bound</span>}</div>
+          <div style={{ marginTop: 8 }}>
+            {c.boundKinds.length ? (
+              c.boundKinds[0]
+            ) : (
+              <span className="pg-mut">none bound</span>
+            )}
+          </div>
         </div>
       </div>
     </aside>
@@ -108,7 +155,9 @@ function TransformPage({
   onBack: () => void;
   onLineage: (id?: string) => void;
 }): JSX.Element {
-  const steps = c.tf.steps.map((st) => `${st.type}(${st.expr || st.column || ""})`).join(", ");
+  const steps = c.tf.steps
+    .map((st) => `${st.type}(${st.expr || st.column || ""})`)
+    .join(", ");
   const rows = c.tfBuilds.slice(0, 5);
   const ck = c.checks;
   const c0 = ck?.[0];
@@ -118,7 +167,12 @@ function TransformPage({
     <div className="pg-split">
       <div className="pg-col">
         <div className="pg-row">
-          <button type="button" className="pg-btn flat" title="Back to the transform catalogue" onClick={onBack}>
+          <button
+            type="button"
+            className="pg-btn flat"
+            title="Back to the transform catalogue"
+            onClick={onBack}
+          >
             <Ico n="arrow-left" />
             Transforms
           </button>
@@ -127,8 +181,13 @@ function TransformPage({
         <section className="pg-card">
           <h3>Summary</h3>
           <div className="pg-pad">
-            <p style={{ margin: 0 }}>{`Reads ${nm(c.tin, c.tf.inputs[0] ?? "")} and writes ${outName} in ${c.tf.steps.length} steps.`}</p>
-            <p className="pg-mut" style={{ margin: "8px 0 0" }}>{`Steps: ${steps}`}</p>
+            <p
+              style={{ margin: 0 }}
+            >{`Reads ${nm(c.tin, c.tf.inputs[0] ?? "")} and writes ${outName} in ${c.tf.steps.length} steps.`}</p>
+            <p
+              className="pg-mut"
+              style={{ margin: "8px 0 0" }}
+            >{`Steps: ${steps}`}</p>
           </div>
         </section>
         <section className="pg-card">
@@ -136,8 +195,18 @@ function TransformPage({
             <Ico n="git-merge" />
             {`Builds (${c.tfBuilds.length})`}
             <span className="pg-fill" />
-            {runMsg ? <span className="pg-mut pg-sm" style={{ fontWeight: 400 }}>{runMsg}</span> : null}
-            <button type="button" className="pg-btn" disabled={busy} title={busy ? "Building" : "Run build"} onClick={onRun}>
+            {runMsg ? (
+              <span className="pg-mut pg-sm" style={{ fontWeight: 400 }}>
+                {runMsg}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              className="pg-btn"
+              disabled={busy}
+              title={busy ? "Building" : "Run build"}
+              onClick={onRun}
+            >
               <Ico n="add" />
               Run build
             </button>
@@ -158,7 +227,10 @@ function TransformPage({
                 <tr key={b.id}>
                   <td>{b.id}</td>
                   <td>{tsFmt(b.started_at)}</td>
-                  <td className="pg-mut">{b.scope + (b.transform_id === null ? " (all transforms)" : "")}</td>
+                  <td className="pg-mut">
+                    {b.scope +
+                      (b.transform_id === null ? " (all transforms)" : "")}
+                  </td>
                   <td className="pg-mut">No checks yet</td>
                   <td>
                     <BuildStatus b={b} />
@@ -176,7 +248,12 @@ function TransformPage({
             </tbody>
           </table>
           <div className="pg-pad">
-            <button type="button" className="pg-link" title="View all builds" onClick={onAll}>
+            <button
+              type="button"
+              className="pg-link"
+              title="View all builds"
+              onClick={onAll}
+            >
               View all builds
             </button>
           </div>
@@ -186,8 +263,13 @@ function TransformPage({
             <Ico n="timeline-bar-chart" />
             Checks
           </h3>
-          <ul className="pg-pad" style={{ margin: 0, listStyle: "none", display: "grid", gap: 8 }}>
-            <li className="pg-mut">Datasets are checked using the following:</li>
+          <ul
+            className="pg-pad"
+            style={{ margin: 0, listStyle: "none", display: "grid", gap: 8 }}
+          >
+            <li className="pg-mut">
+              Datasets are checked using the following:
+            </li>
             {ck === null ? (
               <>
                 <li>{unavailable("Checks", null)}</li>
@@ -197,15 +279,21 @@ function TransformPage({
               <>
                 <li>
                   <b>{ck.length}</b>{" "}
-                  {c0 ? `check (${c0.name}: ${c0.type} on ${c0.params.column}, max age ${c0.params.max_age_s} s)` : "checks (none)"}
+                  {c0
+                    ? `check (${c0.name}: ${c0.type} on ${c0.params.column}, max age ${c0.params.max_age_s} s)`
+                    : "checks (none)"}
                 </li>
                 <li>
-                  <b>{c0 ? 1 : 0}</b> {c0 ? `dataset (${nm(c.ds.get(c0.dataset_id), c0.dataset_id)})` : "dataset (n/a)"}
+                  <b>{c0 ? 1 : 0}</b>{" "}
+                  {c0
+                    ? `dataset (${nm(c.ds.get(c0.dataset_id), c0.dataset_id)})`
+                    : "dataset (n/a)"}
                 </li>
               </>
             )}
             <li>
-              <b>0</b> evaluation libraries (no labelled evaluation set on this box)
+              <b>0</b> evaluation libraries (no labelled evaluation set on this
+              box)
             </li>
           </ul>
         </section>
@@ -220,7 +308,11 @@ function TransformPage({
             <dt>Previous version</dt>
             <dd className="pg-mut">n/a</dd>
             <dt>Last built</dt>
-            <dd>{c.tfBuilds[0] ? `Built ${tsFmt(c.tfBuilds[0].started_at, false)}` : "Never built"}</dd>
+            <dd>
+              {c.tfBuilds[0]
+                ? `Built ${tsFmt(c.tfBuilds[0].started_at, false)}`
+                : "Never built"}
+            </dd>
           </dl>
         </section>
       </div>
@@ -243,7 +335,12 @@ function Catalogue({
   setApp,
 }: {
   tfs: Transform[];
-  c: { ds: Map<string, Dataset>; builds: Build[]; bindings: number; tfName: string };
+  c: {
+    ds: Map<string, Dataset>;
+    builds: Build[];
+    bindings: number;
+    tfName: string;
+  };
   onOpen: (id: string) => void;
   setApp: (a: "models" | "foundry" | "workflows") => void;
 }): JSX.Element {
@@ -252,41 +349,85 @@ function Catalogue({
   const tf = tfs.find((t) => t.name === c.tfName);
   const nTfB = tf ? c.builds.filter((b) => b.transform_id === tf.id).length : 0;
   const nPipe = c.builds.filter((b) => b.scope === "pipeline").length;
-  const last = (t: Transform): Build | undefined => c.builds.find((b) => b.transform_id === t.id);
+  const last = (t: Transform): Build | undefined =>
+    c.builds.find((b) => b.transform_id === t.id);
   const keyOf = (t: Transform): StKey | null => {
     const b = last(t);
-    return !b ? "never" : b.status === "failed" ? "failed" : b.status === "succeeded" ? "succeeded" : null;
+    return !b
+      ? "never"
+      : b.status === "failed"
+        ? "failed"
+        : b.status === "succeeded"
+          ? "succeeded"
+          : null;
   };
-  const shown = tfs.filter((t) => t.name.toLowerCase().includes(q.trim().toLowerCase()) && (!stF.length || stF.includes(keyOf(t) as StKey)));
+  const shown = tfs.filter(
+    (t) =>
+      t.name.toLowerCase().includes(q.trim().toLowerCase()) &&
+      (!stF.length || stF.includes(keyOf(t) as StKey)),
+  );
   return (
     <div className="pg-col">
       <div>
         <h1>Manage Transforms, Models, and Flows</h1>
-        <p className="pg-mut" style={{ margin: "4px 0 0" }}>Explore and manage the lifecycle of transforms, builds and local language models per task.</p>
+        <p className="pg-mut" style={{ margin: "4px 0 0" }}>
+          Explore and manage the lifecycle of transforms, builds and local
+          language models per task.
+        </p>
       </div>
       <div className="pg-row">
-        <button type="button" className="pg-btn ok" title="New transform" onClick={() => setApp("foundry")}>
+        <button
+          type="button"
+          className="pg-btn ok"
+          title="New transform"
+          onClick={() => setApp("foundry")}
+        >
           <Ico n="add" />
           New transform
         </button>
-        <button type="button" className="pg-btn" title="Define Transforms" onClick={() => setApp("foundry")}>
+        <button
+          type="button"
+          className="pg-btn"
+          title="Define Transforms"
+          onClick={() => setApp("foundry")}
+        >
           <Ico n="edit" />
           Define Transforms
         </button>
-        <button type="button" className="pg-btn" title="Manage Installed Models" onClick={() => setApp("models")}>
+        <button
+          type="button"
+          className="pg-btn"
+          title="Manage Installed Models"
+          onClick={() => setApp("models")}
+        >
           <Ico n="upload" />
           Manage Installed Models
         </button>
-        <button type="button" className="pg-btn" title="Deploy To Workflows And Monitors" onClick={() => setApp("workflows")}>
+        <button
+          type="button"
+          className="pg-btn"
+          title="Deploy To Workflows And Monitors"
+          onClick={() => setApp("workflows")}
+        >
           <Ico n="desktop" />
           Deploy To Workflows And Monitors
         </button>
       </div>
       <div className="pg-split left">
-        <aside className="pg-card pg-pad pg-col" style={{ gap: 16 }} aria-label="Filters">
+        <aside
+          className="pg-card pg-pad pg-col"
+          style={{ gap: 16 }}
+          aria-label="Filters"
+        >
           <label className="pg-col" style={{ gap: 4 }}>
             <b className="pg-sm pg-mut">TRANSFORMS</b>
-            <input className="pg-in" placeholder="Search by transform name" aria-label="Search by transform name" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input
+              className="pg-in"
+              placeholder="Search by transform name"
+              aria-label="Search by transform name"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
           </label>
           <div>
             <b className="pg-sm pg-mut">SCOPES</b>
@@ -300,13 +441,28 @@ function Catalogue({
             </dl>
           </div>
           <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
-            <legend className="pg-sm pg-mut" style={{ fontWeight: 600, padding: 0 }}>
+            <legend
+              className="pg-sm pg-mut"
+              style={{ fontWeight: 600, padding: 0 }}
+            >
               STATUS
             </legend>
             {ST_ROWS.map(([k, lab, desc]) => (
-              <label key={k} className="pg-col" style={{ gap: 0, marginTop: 8 }}>
+              <label
+                key={k}
+                className="pg-col"
+                style={{ gap: 0, marginTop: 8 }}
+              >
                 <span className="pg-row">
-                  <input type="checkbox" checked={stF.includes(k)} onChange={() => setStF((f) => (f.includes(k) ? f.filter((x) => x !== k) : [...f, k]))} />
+                  <input
+                    type="checkbox"
+                    checked={stF.includes(k)}
+                    onChange={() =>
+                      setStF((f) =>
+                        f.includes(k) ? f.filter((x) => x !== k) : [...f, k],
+                      )
+                    }
+                  />
                   {lab}
                 </span>
                 <span className="pg-sm pg-mut" style={{ marginLeft: 24 }}>
@@ -337,7 +493,13 @@ function Catalogue({
                 return (
                   <tr key={t.id}>
                     <td>
-                      <button type="button" className="rowbtn" title={`Open ${t.name}`} aria-label={`Open ${t.name}`} onClick={() => onOpen(t.id)}>
+                      <button
+                        type="button"
+                        className="rowbtn"
+                        title={`Open ${t.name}`}
+                        aria-label={`Open ${t.name}`}
+                        onClick={() => onOpen(t.id)}
+                      >
                         {t.name}
                       </button>
                       <div className="pg-sm pg-mut">{`Velocity Foundry · transform · ${t.id}`}</div>
@@ -355,7 +517,13 @@ function Catalogue({
                       <div>{t.steps.map((st) => st.type).join(", ")}</div>
                       <div className="pg-sm pg-mut">{`${t.steps.length} steps`}</div>
                     </td>
-                    <td>{b ? `Built ${tsFmt(b.started_at)}` : <span className="pg-mut">Never built</span>}</td>
+                    <td>
+                      {b ? (
+                        `Built ${tsFmt(b.started_at)}`
+                      ) : (
+                        <span className="pg-mut">Never built</span>
+                      )}
+                    </td>
                     <td>{b ? <BuildStatus b={b} /> : null}</td>
                   </tr>
                 );
@@ -376,8 +544,25 @@ function Catalogue({
 }
 
 const PAIR = ["#264eb2", "#1f7a31"];
-const HEADS = ["Precision", "Recall", "F1 Score", "Prior", "Accuracy", "Row Count", "Matthews Correlation Coefficient", "ROC AUC Score", "Root Mean Squared Error"];
-const CHARTS = ["ROC Curve", "TPR Curve", "FPR Curve", "Lift Curve", "Score Distribution", "Residuals"];
+const HEADS = [
+  "Precision",
+  "Recall",
+  "F1 Score",
+  "Prior",
+  "Accuracy",
+  "Row Count",
+  "Matthews Correlation Coefficient",
+  "ROC AUC Score",
+  "Root Mean Squared Error",
+];
+const CHARTS = [
+  "ROC Curve",
+  "TPR Curve",
+  "FPR Curve",
+  "Lift Curve",
+  "Score Distribution",
+  "Residuals",
+];
 
 function Compare({
   c,
@@ -402,15 +587,35 @@ function Compare({
   const ok = c.builds.filter((b) => b.status === "succeeded").length;
   const fail = c.builds.filter((b) => b.status === "failed").length;
   const outName = nm(c.tout, c.tf.output_dataset_id);
-  const list = [...c.tfBuilds.slice(0, 4), ...c.builds.filter((x) => x.transform_id !== c.tf.id && !c.tfBuilds.includes(x)).slice(0, 2)];
-  const info: [string, (b: Build) => string][] = [["Started", (b) => tsFmt(b.started_at)], ["Rows out", (b) => String(b.rows_out)], ["Scope", (b) => b.scope]];
+  const list = [
+    ...c.tfBuilds.slice(0, 4),
+    ...c.builds
+      .filter((x) => x.transform_id !== c.tf.id && !c.tfBuilds.includes(x))
+      .slice(0, 2),
+  ];
+  const info: [string, (b: Build) => string][] = [
+    ["Started", (b) => tsFmt(b.started_at)],
+    ["Rows out", (b) => String(b.rows_out)],
+    ["Scope", (b) => b.scope],
+  ];
   return (
     <div className="pg-col">
       <div className="pg-row">
-        <button type="button" className="pg-btn sq" aria-label={`Back to ${c.tf.name}`} title={`Back to ${c.tf.name}`} onClick={onBack}>
+        <button
+          type="button"
+          className="pg-btn sq"
+          aria-label={`Back to ${c.tf.name}`}
+          title={`Back to ${c.tf.name}`}
+          onClick={onBack}
+        >
           <Ico n="arrow-left" />
         </button>
-        <button type="button" className="pg-btn" title="Home: manage transforms" onClick={onHome}>
+        <button
+          type="button"
+          className="pg-btn"
+          title="Home: manage transforms"
+          onClick={onHome}
+        >
           <Ico n="home" />
           Home
         </button>
@@ -428,55 +633,124 @@ function Compare({
           <Ico n="cross" size={12} />
           {`${fail} failed`}
         </Chip>
-        <button type="button" className="pg-btn" disabled={busy} title={busy ? "Building" : "Build all"} onClick={onRun}>
+        <button
+          type="button"
+          className="pg-btn"
+          disabled={busy}
+          title={busy ? "Building" : "Build all"}
+          onClick={onRun}
+        >
           <Ico n="build" />
           Build all
         </button>
       </div>
       <div className="pg-split left">
-        <aside className="pg-card pg-pad pg-col" style={{ gap: 16 }} aria-label="Builds to compare">
+        <aside
+          className="pg-card pg-pad pg-col"
+          style={{ gap: 16 }}
+          aria-label="Builds to compare"
+        >
           <div>
             <b className="pg-sm pg-mut">Viewing metrics on</b>
             <div>{outName}</div>
-            <div className="pg-sm pg-mut">Using latest values for each build</div>
+            <div className="pg-sm pg-mut">
+              Using latest values for each build
+            </div>
           </div>
           <div>
             <div className="pg-row">
               <b>Select builds</b>
               <span className="pg-fill" />
-              <button type="button" className="pg-link" title="Clear all" onClick={onClear}>
+              <button
+                type="button"
+                className="pg-link"
+                title="Clear all"
+                onClick={onClear}
+              >
                 Clear all
               </button>
             </div>
-            <p className="pg-sm pg-mut" style={{ margin: "4px 0 8px" }}>Add specific builds to the comparison dashboard.</p>
+            <p className="pg-sm pg-mut" style={{ margin: "4px 0 8px" }}>
+              Add specific builds to the comparison dashboard.
+            </p>
             <div className="pg-col" style={{ gap: 4 }}>
               {sel.map((b, i) => (
-                <span key={b.id} className="pg-row" style={{ background: PAIR[i], color: "#fff", borderRadius: 3, padding: "4px 8px" }}>
+                <span
+                  key={b.id}
+                  className="pg-row"
+                  style={{
+                    background: PAIR[i],
+                    color: "#fff",
+                    borderRadius: 3,
+                    padding: "4px 8px",
+                  }}
+                >
                   <Ico n="git-merge" size={12} />
                   <span className="pg-fill">{b.id}</span>
-                  <button type="button" aria-label={`Remove ${b.id}`} title={`Remove ${b.id}`} onClick={() => onToggle(b)} style={{ background: "none", border: 0, color: "#fff", cursor: "pointer" }}>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${b.id}`}
+                    title={`Remove ${b.id}`}
+                    onClick={() => onToggle(b)}
+                    style={{
+                      background: "none",
+                      border: 0,
+                      color: "#fff",
+                      cursor: "pointer",
+                    }}
+                  >
                     <Ico n="cross" size={12} />
                   </button>
                 </span>
               ))}
             </div>
-            <button type="button" className="pg-btn" style={{ marginTop: 8 }} aria-expanded={picker} title="Select builds" onClick={() => setPicker(!picker)}>
+            <button
+              type="button"
+              className="pg-btn"
+              style={{ marginTop: 8 }}
+              aria-expanded={picker}
+              title="Select builds"
+              onClick={() => setPicker(!picker)}
+            >
               Select builds…
             </button>
             {picker ? (
-              <ul className="pg-card" style={{ margin: "8px 0 0", padding: 0, listStyle: "none" }}>
+              <ul
+                className="pg-card"
+                style={{ margin: "8px 0 0", padding: 0, listStyle: "none" }}
+              >
                 {list.map((b) => (
                   <li key={b.id}>
-                    <button type="button" className="pg-btn flat" style={{ width: "100%", height: "auto", padding: "8px", justifyContent: "flex-start", whiteSpace: "normal", textAlign: "left" }} title={`Compare ${b.id}`} onClick={() => onToggle(b)}>
-                      <span style={{ width: 16 }}>{sel.includes(b) ? <Ico n="tick" size={12} /> : null}</span>
+                    <button
+                      type="button"
+                      className="pg-btn flat"
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        padding: "8px",
+                        justifyContent: "flex-start",
+                        whiteSpace: "normal",
+                        textAlign: "left",
+                      }}
+                      title={`Compare ${b.id}`}
+                      onClick={() => onToggle(b)}
+                    >
+                      <span style={{ width: 16 }}>
+                        {sel.includes(b) ? <Ico n="tick" size={12} /> : null}
+                      </span>
                       <span>
                         {b.id}
-                        <span className="pg-sm pg-mut" style={{ display: "block" }}>{`Started ${tsFmt(b.started_at)}`}</span>
+                        <span
+                          className="pg-sm pg-mut"
+                          style={{ display: "block" }}
+                        >{`Started ${tsFmt(b.started_at)}`}</span>
                       </span>
                     </button>
                   </li>
                 ))}
-                {list.length ? null : <li className="pg-note">No builds yet</li>}
+                {list.length ? null : (
+                  <li className="pg-note">No builds yet</li>
+                )}
               </ul>
             ) : null}
           </div>
@@ -489,7 +763,10 @@ function Compare({
                 <tr>
                   <th />
                   {sel.map((b, i) => (
-                    <th key={b.id} style={{ background: PAIR[i], color: "#fff" }}>
+                    <th
+                      key={b.id}
+                      style={{ background: PAIR[i], color: "#fff" }}
+                    >
                       {b.id}
                     </th>
                   ))}
@@ -506,7 +783,9 @@ function Compare({
                 ))}
               </tbody>
             </table>
-            <p className="pg-note" style={{ margin: 0 }}>No evaluation metrics: no labelled evaluation set on this box</p>
+            <p className="pg-note" style={{ margin: 0 }}>
+              No evaluation metrics: no labelled evaluation set on this box
+            </p>
           </section>
           <section className="pg-card" style={{ overflow: "auto" }}>
             <h3>Metrics</h3>
@@ -522,9 +801,13 @@ function Compare({
               <tbody>
                 {sel.map((b, i) => (
                   <tr key={b.id}>
-                    <td style={{ background: PAIR[i], color: "#fff" }}>{b.id}</td>
+                    <td style={{ background: PAIR[i], color: "#fff" }}>
+                      {b.id}
+                    </td>
                     {HEADS.map((h) => (
-                      <td key={h}>{h === "Row Count" ? String(b.rows_out) : "n/a"}</td>
+                      <td key={h}>
+                        {h === "Row Count" ? String(b.rows_out) : "n/a"}
+                      </td>
                     ))}
                   </tr>
                 ))}
@@ -535,7 +818,9 @@ function Compare({
             {CHARTS.map((ch) => (
               <section key={ch} className="pg-card">
                 <h3>{ch}</h3>
-                <p className="pg-note" style={{ margin: 0 }}>n/a: no evaluation set</p>
+                <p className="pg-note" style={{ margin: 0 }}>
+                  n/a: no evaluation set
+                </p>
               </section>
             ))}
           </div>
@@ -547,7 +832,13 @@ function Compare({
 
 type Page = "catalogue" | "page" | "eval";
 
-export function TransformsView({ nav, onLineage }: { nav: (v: FoundryNav) => void; onLineage: (id?: string) => void }): JSX.Element {
+export function TransformsView({
+  nav,
+  onLineage,
+}: {
+  nav: (v: FoundryNav) => void;
+  onLineage: (id?: string) => void;
+}): JSX.Element {
   const setAppView = useAppView((s) => s.setApp);
   const [nonce, setNonce] = useState(0);
   const tfR = useJson<Transform[]>("/api/foundry/transforms");
@@ -564,7 +855,10 @@ export function TransformsView({ nav, onLineage }: { nav: (v: FoundryNav) => voi
   const tfs = tfR?.data ?? [];
   const ds = new Map((dsR?.data ?? []).map((d) => [d.id, d]));
   const builds = bR?.data ?? [];
-  const tf = tfs.find((t) => t.id === tfId) ?? tfs.find((t) => t.name === "fast_vessels_tf") ?? tfs[0];
+  const tf =
+    tfs.find((t) => t.id === tfId) ??
+    tfs.find((t) => t.name === "fast_vessels_tf") ??
+    tfs[0];
   const shell = (body: JSX.Element): JSX.Element => (
     <div className="aip-pg">
       <PageNav here="transforms" nav={nav} />
@@ -573,8 +867,17 @@ export function TransformsView({ nav, onLineage }: { nav: (v: FoundryNav) => voi
       </div>
     </div>
   );
-  if (!tfR?.ok || !tf) return shell(<div className="pg-note">{tfR?.ok ? "No transform on this box" : unavailable("Transforms", tfR)}</div>);
-  const tfBuilds = builds.filter((b) => b.transform_id === tf.id || (b.log ?? []).some((l) => l.includes(tf.name + ":")));
+  if (!tfR?.ok || !tf)
+    return shell(
+      <div className="pg-note">
+        {tfR?.ok ? "No transform on this box" : unavailable("Transforms", tfR)}
+      </div>,
+    );
+  const tfBuilds = builds.filter(
+    (b) =>
+      b.transform_id === tf.id ||
+      (b.log ?? []).some((l) => l.includes(tf.name + ":")),
+  );
   const ctx: Ctx = {
     tf,
     tin: ds.get(tf.inputs[0] ?? ""),
@@ -583,7 +886,13 @@ export function TransformsView({ nav, onLineage }: { nav: (v: FoundryNav) => voi
     builds,
     checks: ckR?.ok ? (ckR.data ?? []) : null,
     ds,
-    boundKinds: (bnd?.data ?? []).filter((b) => b.dataset_id === tf.inputs[0] || b.dataset_id === tf.output_dataset_id).map((b) => b.object_kind),
+    boundKinds: (bnd?.data ?? [])
+      .filter(
+        (b) =>
+          b.dataset_id === tf.inputs[0] ||
+          b.dataset_id === tf.output_dataset_id,
+      )
+      .map((b) => b.object_kind),
   };
   const run = async (path: string): Promise<void> => {
     setBusy(true);
@@ -597,10 +906,20 @@ export function TransformsView({ nav, onLineage }: { nav: (v: FoundryNav) => voi
     setBusy(false);
     setNonce((n) => n + 1);
   };
-  const sel = (pairIds ? pairIds.map((id) => builds.find((b) => b.id === id)).filter((b): b is Build => Boolean(b)) : tfBuilds.slice(0, 2)).slice(0, 2);
+  const sel = (
+    pairIds
+      ? pairIds
+          .map((id) => builds.find((b) => b.id === id))
+          .filter((b): b is Build => Boolean(b))
+      : tfBuilds.slice(0, 2)
+  ).slice(0, 2);
   const toggle = (b: Build): void => {
     const cur = sel.map((x) => x.id);
-    setPairIds(cur.includes(b.id) ? cur.filter((x) => x !== b.id) : [...cur, b.id].slice(-2));
+    setPairIds(
+      cur.includes(b.id)
+        ? cur.filter((x) => x !== b.id)
+        : [...cur, b.id].slice(-2),
+    );
   };
   if (page === "catalogue")
     return shell(

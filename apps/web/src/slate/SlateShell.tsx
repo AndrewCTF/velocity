@@ -635,13 +635,25 @@ export function SlateShell({
                     <span className="lbl">{APP_META[id].label}</span>
                     {id === app && <span className="hint">open</span>}
                     {hoverApp === id && (
-                      <span className="sl-hovercard" aria-label="App details" data-testid="d64-hovercard">
-                        <span className="sl-hc-title">{APP_META[id].label}</span>
+                      <span
+                        className="sl-hovercard"
+                        aria-label="App details"
+                        data-testid="d64-hovercard"
+                      >
+                        <span className="sl-hc-title">
+                          {APP_META[id].label}
+                        </span>
                         <span className="sl-hc-hint">{APP_META[id].hint}</span>
                         <span className="sl-hc-counts">
-                          {(window as unknown as { __registry?: { list(): unknown[] } }).__registry?.list().length ?? 0}{" "}
+                          {(
+                            window as unknown as {
+                              __registry?: { list(): unknown[] };
+                            }
+                          ).__registry?.list().length ?? 0}{" "}
                           layers registered
-                          {aircraftLive !== null ? `, ${aircraftLive.toLocaleString()} aircraft live` : ""}
+                          {aircraftLive !== null
+                            ? `, ${aircraftLive.toLocaleString()} aircraft live`
+                            : ""}
                         </span>
                       </span>
                     )}

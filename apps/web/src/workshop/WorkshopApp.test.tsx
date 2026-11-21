@@ -9,7 +9,11 @@ import { apiFetch } from "../transport/http.js";
 const mockedFetch = vi.mocked(apiFetch);
 
 function json(body: unknown, status = 200): Response {
-  return { ok: status < 400, status, json: async () => body } as unknown as Response;
+  return {
+    ok: status < 400,
+    status,
+    json: async () => body,
+  } as unknown as Response;
 }
 
 describe("WorkshopApp", () => {
@@ -35,17 +39,27 @@ describe("WorkshopApp", () => {
     });
     render(<WorkshopApp />);
     await waitFor(() => expect(screen.getByText("16308")).toBeTruthy());
-    expect(await screen.findByText("No saved maps yet (HTTP 200, 0 maps).")).toBeTruthy();
-    expect(screen.getByText(/History is off in this profile \(HTTP 200, degraded\)/)).toBeTruthy();
+    expect(
+      await screen.findByText("No saved maps yet (HTTP 200, 0 maps)."),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/History is off in this profile \(HTTP 200, degraded\)/),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Source table" }));
     expect(await screen.findByText("CelesTrak")).toBeTruthy();
-    fireEvent.change(await screen.findByDisplayValue("All categories"), { target: { value: "sar" } });
+    fireEvent.change(await screen.findByDisplayValue("All categories"), {
+      target: { value: "sar" },
+    });
     await waitFor(() => expect(screen.queryByText("CelesTrak")).toBeNull());
     expect(screen.getByText("Sentinel-1")).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Module name"), { target: { value: "Watch floor" } });
-    const saved = JSON.parse(localStorage.getItem("velocity.workshop.modules.v1")!) as { name: string; widgets: unknown[] }[];
+    fireEvent.change(screen.getByLabelText("Module name"), {
+      target: { value: "Watch floor" },
+    });
+    const saved = JSON.parse(
+      localStorage.getItem("velocity.workshop.modules.v1")!,
+    ) as { name: string; widgets: unknown[] }[];
     expect(saved[0]!.name).toBe("Watch floor");
     expect(saved[0]!.widgets.length).toBe(4);
 
@@ -60,7 +74,15 @@ describe("WorkshopApp", () => {
         ? json({
             type: "FeatureCollection",
             features: [
-              { id: "chokepoint:strait-of-hormuz", properties: { name: "Strait of Hormuz", vessels: 42, stationary: 3, congestion: "elevated" } },
+              {
+                id: "chokepoint:strait-of-hormuz",
+                properties: {
+                  name: "Strait of Hormuz",
+                  vessels: 42,
+                  stationary: 3,
+                  congestion: "elevated",
+                },
+              },
             ],
           })
         : path === "/api/status"
@@ -79,6 +101,8 @@ describe("WorkshopApp", () => {
       path === "/api/status" ? json({}, 503) : json([]),
     );
     render(<WorkshopApp />);
-    expect(await screen.findByText("Platform status unavailable (HTTP 503).")).toBeTruthy();
+    expect(
+      await screen.findByText("Platform status unavailable (HTTP 503)."),
+    ).toBeTruthy();
   });
 });

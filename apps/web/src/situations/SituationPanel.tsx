@@ -325,8 +325,8 @@ function IntelTab({ objects }: { objects: OntObject[] }): JSX.Element {
       <div className="p-4">
         <Widget title="Linked intel" count={0}>
           <p className="text-txt-3 text-[11px]">
-            No linked intel yet. Right-click an entity → search-around, or
-            promote an incident from the Intel tab.
+            No linked intel yet. Right-click or long-press an entity →
+            search-around, or promote an incident from the Intel tab.
           </p>
         </Widget>
       </div>

@@ -7,10 +7,32 @@
 import { useState } from "react";
 import { Chip, Ico, PageNav, type FoundryNav } from "./pg.js";
 import { useJson, unavailable, type Res } from "./data.js";
-import { axis, busiest, catName, nodash, type Call, type CatEntry, type GuardB, type Hardware, type Models, type Src } from "./dataB.js";
+import {
+  axis,
+  busiest,
+  catName,
+  nodash,
+  type Call,
+  type CatEntry,
+  type GuardB,
+  type Hardware,
+  type Models,
+  type Src,
+} from "./dataB.js";
 
-export type CpTab = "Overview" | "Access permissions" | "Plugins and tools" | "Users" | "Usage and cost";
-const TABS: CpTab[] = ["Overview", "Access permissions", "Plugins and tools", "Users", "Usage and cost"];
+export type CpTab =
+  | "Overview"
+  | "Access permissions"
+  | "Plugins and tools"
+  | "Users"
+  | "Usage and cost";
+const TABS: CpTab[] = [
+  "Overview",
+  "Access permissions",
+  "Plugins and tools",
+  "Users",
+  "Usage and cost",
+];
 interface Row {
   name: string;
   by: string;
@@ -20,18 +42,27 @@ interface Row {
   cat: CatEntry | null;
 }
 const comma = (n: number): string => n.toLocaleString("en-US");
-const okFail = (src: Src[]): [number, number] => [src.reduce((a, x) => a + x.ok, 0), src.reduce((a, x) => a + x.fail, 0)];
+const okFail = (src: Src[]): [number, number] => [
+  src.reduce((a, x) => a + x.ok, 0),
+  src.reduce((a, x) => a + x.fail, 0),
+];
 
 function UsageChart({ src }: { src: Src[] }): JSX.Element {
   const hs = busiest(src);
-  if (!hs.length) return <p className="pg-note">No upstream request recorded since boot</p>;
+  if (!hs.length)
+    return <p className="pg-note">No upstream request recorded since boot</p>;
   const { step, top } = axis(Math.max(...hs.map((h) => h.ok + h.fail)));
   const [x0, x1, y0, y1] = [56, 620, 12, 180];
   const bw = (x1 - x0) / hs.length;
   const ticks: number[] = [];
   for (let v = 0; v <= top; v += step) ticks.push(v);
   return (
-    <svg className="cp-chart" viewBox="0 0 640 212" role="img" aria-label="Upstream requests since boot per host">
+    <svg
+      className="cp-chart"
+      viewBox="0 0 640 212"
+      role="img"
+      aria-label="Upstream requests since boot per host"
+    >
       {ticks.map((v) => {
         const y = y1 - ((y1 - y0) * v) / top;
         return (
@@ -50,8 +81,20 @@ function UsageChart({ src }: { src: Src[] }): JSX.Element {
         return (
           <g key={h.host}>
             <title>{`${nodash(h.host)}: ${h.ok} succeeded, ${h.fail} failed`}</title>
-            <rect x={bx + 1} y={y1 - hok} width={bw - 2} height={hok} fill="#1c78a4" />
-            <rect x={bx + 1} y={y1 - hok - hf} width={bw - 2} height={hf} fill="#c26a14" />
+            <rect
+              x={bx + 1}
+              y={y1 - hok}
+              width={bw - 2}
+              height={hok}
+              fill="#1c78a4"
+            />
+            <rect
+              x={bx + 1}
+              y={y1 - hok - hf}
+              width={bw - 2}
+              height={hf}
+              fill="#c26a14"
+            />
           </g>
         );
       })}
@@ -73,7 +116,10 @@ function UsageCard({ src }: { src: Src[] }): JSX.Element {
   return (
     <section className="pg-card">
       <h3>Upstream requests since boot, 16 busiest hosts</h3>
-      <div className="pg-pad cp-grid" style={{ gridTemplateColumns: "minmax(0,3fr) minmax(160px,1fr)" }}>
+      <div
+        className="pg-pad cp-grid"
+        style={{ gridTemplateColumns: "minmax(0,3fr) minmax(160px,1fr)" }}
+      >
         <UsageChart src={src} />
         <div className="pg-col" style={{ gap: 8 }}>
           <div className="pg-stat">
@@ -139,18 +185,36 @@ function AccessSummary({ g }: { g: GuardB | null }): JSX.Element {
         </table>
       ) : null}
       <p className="pg-mut pg-sm pg-pad" style={{ margin: 0 }}>
-        <Ico n="info-sign" size={12} /> Information displayed is dependent on your access level.
+        <Ico n="info-sign" size={12} /> Information displayed is dependent on
+        your access level.
       </p>
     </section>
   );
 }
 
-function Overview({ r, g, src, calls, hub }: { r: Row; g: GuardB | null; src: Src[]; calls: Res<Call[]> | null; hub: () => void }): JSX.Element {
+function Overview({
+  r,
+  g,
+  src,
+  calls,
+  hub,
+}: {
+  r: Row;
+  g: GuardB | null;
+  src: Src[];
+  calls: Res<Call[]> | null;
+  hub: () => void;
+}): JSX.Element {
   const creator = r.cat ? `${r.cat.repo_id.split("/")[0]} (GGUF)` : "Ollama";
   const comps = g?.compartments ?? [];
   const now = Date.now();
-  const mine = (calls?.data ?? []).filter((c) => c.model_id.toLowerCase().includes(r.name.toLowerCase().split(":")[0]!));
-  const inDays = (d: number): string => (calls?.ok ? String(mine.filter((c) => now - Date.parse(c.ts) <= d * 86400e3).length) : "n/a");
+  const mine = (calls?.data ?? []).filter((c) =>
+    c.model_id.toLowerCase().includes(r.name.toLowerCase().split(":")[0]!),
+  );
+  const inDays = (d: number): string =>
+    calls?.ok
+      ? String(mine.filter((c) => now - Date.parse(c.ts) <= d * 86400e3).length)
+      : "n/a";
   return (
     <div className="pg-col">
       <div className="cp-grid">
@@ -182,7 +246,12 @@ function Overview({ r, g, src, calls, hub }: { r: Row; g: GuardB | null; src: Sr
         <section className="pg-card pg-pad pg-col" style={{ gap: 8 }}>
           <div className="pg-row">
             <span className="pg-fill pg-mut">View model</span>
-            <button type="button" className="pg-btn" title="Open in the model manager (AI hub)" onClick={hub}>
+            <button
+              type="button"
+              className="pg-btn"
+              title="Open in the model manager (AI hub)"
+              onClick={hub}
+            >
               Open in Model manager
               <Ico n="arrow-top-right" />
             </button>
@@ -190,7 +259,9 @@ function Overview({ r, g, src, calls, hub }: { r: Row; g: GuardB | null; src: Sr
           <dl className="pg-kv">
             <dt>Status</dt>
             <dd>
-              <Chip tone={r.installed ? "ok" : undefined}>{r.installed ? "Installed" : "Not installed"}</Chip>
+              <Chip tone={r.installed ? "ok" : undefined}>
+                {r.installed ? "Installed" : "Not installed"}
+              </Chip>
             </dd>
             <dt>Calls (7 day)</dt>
             <dd>{inDays(7)}</dd>
@@ -213,7 +284,11 @@ function Usage({ src, g }: { src: Src[]; g: GuardB | null }): JSX.Element {
     [
       "Auto-approval threshold for actions",
       "Proposed actions scoring at or above this run without an operator.",
-      th === undefined ? "n/a" : th > 1 ? `${th} is above any possible score, so none run unattended.` : `Actions scoring ${th} or more run unattended.`,
+      th === undefined
+        ? "n/a"
+        : th > 1
+          ? `${th} is above any possible score, so none run unattended.`
+          : `Actions scoring ${th} or more run unattended.`,
       th === undefined ? "n/a" : String(th),
     ],
     [
@@ -231,14 +306,20 @@ function Usage({ src, g }: { src: Src[]; g: GuardB | null }): JSX.Element {
           <Ico n="lock" />
           Set action limits
         </h3>
-        <p className="pg-mut pg-pad" style={{ margin: 0 }}>Define when the assistant may act without an operator</p>
+        <p className="pg-mut pg-pad" style={{ margin: 0 }}>
+          Define when the assistant may act without an operator
+        </p>
         <dl className="pg-kv pg-pad" style={{ gap: 16 }}>
           {rows.map(([lab, h1, h2, val]) => (
             <div key={lab} style={{ display: "contents" }}>
               <dt style={{ color: "var(--ink)" }}>
                 <b>{lab}</b>
-                <span className="pg-mut" style={{ display: "block" }}>{h1}</span>
-                <span className="pg-mut" style={{ display: "block" }}>{h2}</span>
+                <span className="pg-mut" style={{ display: "block" }}>
+                  {h1}
+                </span>
+                <span className="pg-mut" style={{ display: "block" }}>
+                  {h2}
+                </span>
               </dt>
               <dd>
                 <b>{val}</b>
@@ -262,7 +343,9 @@ function Access({ g }: { g: GuardB | null }): JSX.Element {
       </section>
       <section className="pg-card">
         <h3>Markings</h3>
-        <p className="pg-mut pg-pad" style={{ margin: 0 }}>Manage which markings the language model will have access to</p>
+        <p className="pg-mut pg-pad" style={{ margin: 0 }}>
+          Manage which markings the language model will have access to
+        </p>
         <p className="pg-pad" style={{ margin: 0, paddingTop: 0 }}>
           <Chip>
             <Ico n="shield" size={12} />
@@ -272,11 +355,28 @@ function Access({ g }: { g: GuardB | null }): JSX.Element {
       </section>
       <section className="pg-card">
         <h3>Advanced settings</h3>
-        <p className="pg-mut pg-pad" style={{ margin: 0 }}>Further limit language model access. Mode in force: Allowlist.</p>
-        <ul className="pg-pad" style={{ margin: 0, paddingTop: 0, listStyle: "none", display: "grid", gap: 8 }}>
-          {g?.action_tools[0] ? <li>{`${g.action_tools[0]} (action tool)`}</li> : null}
-          {g?.operator_only_actions[0] ? <li>{`${g.operator_only_actions[0]} (operator only)`}</li> : null}
-          {!g?.action_tools[0] && !g?.operator_only_actions[0] ? <li className="pg-mut">No allowlisted resource</li> : null}
+        <p className="pg-mut pg-pad" style={{ margin: 0 }}>
+          Further limit language model access. Mode in force: Allowlist.
+        </p>
+        <ul
+          className="pg-pad"
+          style={{
+            margin: 0,
+            paddingTop: 0,
+            listStyle: "none",
+            display: "grid",
+            gap: 8,
+          }}
+        >
+          {g?.action_tools[0] ? (
+            <li>{`${g.action_tools[0]} (action tool)`}</li>
+          ) : null}
+          {g?.operator_only_actions[0] ? (
+            <li>{`${g.operator_only_actions[0]} (operator only)`}</li>
+          ) : null}
+          {!g?.action_tools[0] && !g?.operator_only_actions[0] ? (
+            <li className="pg-mut">No allowlisted resource</li>
+          ) : null}
         </ul>
       </section>
       <AccessSummary g={g} />
@@ -284,14 +384,51 @@ function Access({ g }: { g: GuardB | null }): JSX.Element {
   );
 }
 
-function Plugins({ m, g, ollamaUp, hub }: { m: Models | null; g: GuardB | null; ollamaUp: boolean | null; hub: () => void }): JSX.Element {
+function Plugins({
+  m,
+  g,
+  ollamaUp,
+  hub,
+}: {
+  m: Models | null;
+  g: GuardB | null;
+  ollamaUp: boolean | null;
+  hub: () => void;
+}): JSX.Element {
   const e = m?.engines;
-  const chipOf = (inst: boolean, run: boolean): ["ok" | "warn" | "bad", string] => (run ? ["ok", "Running"] : inst ? ["warn", "Installed, idle"] : ["bad", "Not installed"]);
+  const chipOf = (
+    inst: boolean,
+    run: boolean,
+  ): ["ok" | "warn" | "bad", string] =>
+    run
+      ? ["ok", "Running"]
+      : inst
+        ? ["warn", "Installed, idle"]
+        : ["bad", "Not installed"];
   const rows: [string, string, ["ok" | "warn" | "bad", string]][] = e
     ? [
-        ["llama.cpp", e.llamacpp.version ? e.llamacpp.version.split("(")[0]!.replace("version:", "Build").trim() : e.llamacpp.installed ? "Installed" : "Not installed", chipOf(e.llamacpp.installed, e.llamacpp.running)],
-        ["vLLM", e.vllm.version ?? (e.vllm.installed ? "Installed" : "Not installed"), chipOf(e.vllm.installed, e.vllm.running)],
-        ["Ollama", ollamaUp ? "Serving embeddings" : "Not answering", chipOf(e.ollama.installed, e.ollama.running)],
+        [
+          "llama.cpp",
+          e.llamacpp.version
+            ? e.llamacpp.version
+                .split("(")[0]!
+                .replace("version:", "Build")
+                .trim()
+            : e.llamacpp.installed
+              ? "Installed"
+              : "Not installed",
+          chipOf(e.llamacpp.installed, e.llamacpp.running),
+        ],
+        [
+          "vLLM",
+          e.vllm.version ?? (e.vllm.installed ? "Installed" : "Not installed"),
+          chipOf(e.vllm.installed, e.vllm.running),
+        ],
+        [
+          "Ollama",
+          ollamaUp ? "Serving embeddings" : "Not answering",
+          chipOf(e.ollama.installed, e.ollama.running),
+        ],
       ]
     : [];
   return (
@@ -300,12 +437,19 @@ function Plugins({ m, g, ollamaUp, hub }: { m: Models | null; g: GuardB | null; 
         <h3>
           Engines
           <span className="pg-fill" />
-          <button type="button" className="pg-btn" title="Add an engine in the model manager (AI hub)" onClick={hub}>
+          <button
+            type="button"
+            className="pg-btn"
+            title="Add an engine in the model manager (AI hub)"
+            onClick={hub}
+          >
             <Ico n="add" />
             Add
           </button>
         </h3>
-        <p className="pg-mut pg-pad" style={{ margin: 0 }}>Manage inference engines this language model can run on</p>
+        <p className="pg-mut pg-pad" style={{ margin: 0 }}>
+          Manage inference engines this language model can run on
+        </p>
         {e ? null : <p className="pg-note">{unavailable("Engines", null)}</p>}
         {rows.map(([nm, sub, [tone, lab]]) => (
           <div key={nm} className="cp-row">
@@ -317,11 +461,23 @@ function Plugins({ m, g, ollamaUp, hub }: { m: Models | null; g: GuardB | null; 
               <div className="pg-mut pg-sm">{sub}</div>
             </div>
             <Chip tone={tone}>{lab}</Chip>
-            <button type="button" className="pg-btn" title={`${nm} status in the AI hub`} aria-label={`${nm} status in the AI hub`} onClick={hub}>
+            <button
+              type="button"
+              className="pg-btn"
+              title={`${nm} status in the AI hub`}
+              aria-label={`${nm} status in the AI hub`}
+              onClick={hub}
+            >
               View status
               <Ico n="arrow-top-right" />
             </button>
-            <button type="button" className="pg-btn" title={`Manage ${nm} in the AI hub`} aria-label={`Manage ${nm} in the AI hub`} onClick={hub}>
+            <button
+              type="button"
+              className="pg-btn"
+              title={`Manage ${nm} in the AI hub`}
+              aria-label={`Manage ${nm} in the AI hub`}
+              onClick={hub}
+            >
               Manage
             </button>
           </div>
@@ -329,15 +485,21 @@ function Plugins({ m, g, ollamaUp, hub }: { m: Models | null; g: GuardB | null; 
       </section>
       <section className="pg-card">
         <h3>Tools</h3>
-        <p className="pg-mut pg-pad" style={{ margin: 0 }}>Configure the tools that this model can interact with in Velocity.</p>
+        <p className="pg-mut pg-pad" style={{ margin: 0 }}>
+          Configure the tools that this model can interact with in Velocity.
+        </p>
         <dl className="pg-kv pg-pad">
           <dt>Actions</dt>
           <dd>
-            <Chip tone="warn">{g?.action_approval ? "Approval required" : "No approval"}</Chip>
+            <Chip tone="warn">
+              {g?.action_approval ? "Approval required" : "No approval"}
+            </Chip>
           </dd>
           <dt>{`Read tools (${g?.tools.length ?? 0})`}</dt>
           <dd>
-            <Chip tone="bad">{g?.citations_required ? "Citations required" : "No citations"}</Chip>
+            <Chip tone="bad">
+              {g?.citations_required ? "Citations required" : "No citations"}
+            </Chip>
           </dd>
         </dl>
       </section>
@@ -349,7 +511,9 @@ function Users({ g }: { g: GuardB | null }): JSX.Element {
   return (
     <section className="pg-card">
       <h3>User access</h3>
-      <p className="pg-mut pg-pad" style={{ margin: 0 }}>Manage which principals will have access to this language model</p>
+      <p className="pg-mut pg-pad" style={{ margin: 0 }}>
+        Manage which principals will have access to this language model
+      </p>
       <p className="pg-pad" style={{ margin: 0, paddingTop: 0 }}>
         <Ico n="person" /> local{" "}
         <span className="pg-mut">{`(clearance ${g?.clearance ?? "n/a"}, compartments: ${g?.compartments.length ? g.compartments.join(", ") : "none"})`}</span>
@@ -358,9 +522,19 @@ function Users({ g }: { g: GuardB | null }): JSX.Element {
   );
 }
 
-export function ControlPanel({ onConsole, onHub, nav }: { onConsole: () => void; onHub: () => void; nav?: (v: FoundryNav) => void }): JSX.Element {
+export function ControlPanel({
+  onConsole,
+  onHub,
+  nav,
+}: {
+  onConsole: () => void;
+  onHub: () => void;
+  nav?: (v: FoundryNav) => void;
+}): JSX.Element {
   const models = useJson<Models>("/api/ai/models");
-  const local = useJson<{ models: string[]; ollama_up: boolean }>("/api/ai/local");
+  const local = useJson<{ models: string[]; ollama_up: boolean }>(
+    "/api/ai/local",
+  );
   const hw = useJson<Hardware>("/api/ai/hardware");
   const guard = useJson<GuardB>("/api/ai/guardrails");
   const src = useJson<{ sources: Src[] }>("/api/status/sources");
@@ -369,21 +543,49 @@ export function ControlPanel({ onConsole, onHub, nav }: { onConsole: () => void;
   const [tab, setTab] = useState<CpTab>("Overview");
   const [q, setQ] = useState("");
   const cat = models?.data?.catalog ?? [];
-  const rec = cat.find((c) => c.repo_id === hw?.data?.recommendation.repo_id) ?? null;
+  const rec =
+    cat.find((c) => c.repo_id === hw?.data?.recommendation.repo_id) ?? null;
   const speed = cat.find((c) => c.tier === "30b") ?? null;
-  const installed = new Set((models?.data?.installed ?? []).map((x) => JSON.stringify(x)));
+  const installed = new Set(
+    (models?.data?.installed ?? []).map((x) => JSON.stringify(x)),
+  );
   const rows: Row[] = [];
   const om = local?.data?.models[0];
-  if (om) rows.push({ name: om, by: "Ollama, size not reported by /api/ai/local", tile: "#d4f0d2", installed: true, embed: om.includes("embed"), cat: null });
-  for (const [c, tile] of [[rec, "#dcd8ee"], [speed, "#def0f8"]] as const)
+  if (om)
+    rows.push({
+      name: om,
+      by: "Ollama, size not reported by /api/ai/local",
+      tile: "#d4f0d2",
+      installed: true,
+      embed: om.includes("embed"),
+      cat: null,
+    });
+  for (const [c, tile] of [
+    [rec, "#dcd8ee"],
+    [speed, "#def0f8"],
+  ] as const)
     if (c && !rows.some((r) => r.cat === c))
-      rows.push({ name: catName(c), by: `Catalog entry, ${c.license}, ${c.quants[0]?.size_gb ?? "n/a"} GB (${c.recommended_quant})`, tile, installed: [...installed].some((x) => x.includes(c.repo_id)), embed: false, cat: c });
-  const err = !models?.ok || !local?.ok ? unavailable("Model list", !models?.ok ? models : local) : null;
+      rows.push({
+        name: catName(c),
+        by: `Catalog entry, ${c.license}, ${c.quants[0]?.size_gb ?? "n/a"} GB (${c.recommended_quant})`,
+        tile,
+        installed: [...installed].some((x) => x.includes(c.repo_id)),
+        embed: false,
+        cat: c,
+      });
+  const err =
+    !models?.ok || !local?.ok
+      ? unavailable("Model list", !models?.ok ? models : local)
+      : null;
   const g = guard?.data ?? null;
   const row = open === null ? null : (rows[open] ?? null);
   const sources = src?.data?.sources ?? [];
-  const go = nav ?? ((v: FoundryNav): void => (v === "terminal" ? onConsole() : undefined));
-  const shown = rows.map((r, i) => [r, i] as const).filter(([r]) => r.name.toLowerCase().includes(q.trim().toLowerCase()));
+  const go =
+    nav ??
+    ((v: FoundryNav): void => (v === "terminal" ? onConsole() : undefined));
+  const shown = rows
+    .map((r, i) => [r, i] as const)
+    .filter(([r]) => r.name.toLowerCase().includes(q.trim().toLowerCase()));
 
   return (
     <div className="aip-pg">
@@ -392,10 +594,23 @@ export function ControlPanel({ onConsole, onHub, nav }: { onConsole: () => void;
         <>
           <div className="pg-bar">
             <b style={{ fontSize: 16 }}>Language models</b>
-            <span className="pg-mut">Manage language models used in Velocity.</span>
+            <span className="pg-mut">
+              Manage language models used in Velocity.
+            </span>
             <span className="pg-fill" />
-            <input className="pg-in" placeholder="Filter models" aria-label="Filter models" value={q} onChange={(e) => setQ(e.target.value)} />
-            <button type="button" className="pg-btn" title="Add a model in the model manager (AI hub)" onClick={onHub}>
+            <input
+              className="pg-in"
+              placeholder="Filter models"
+              aria-label="Filter models"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <button
+              type="button"
+              className="pg-btn"
+              title="Add a model in the model manager (AI hub)"
+              onClick={onHub}
+            >
               Add new model
               <Ico n="arrow-top-right" />
             </button>
@@ -414,13 +629,32 @@ export function ControlPanel({ onConsole, onHub, nav }: { onConsole: () => void;
                       <div className="pg-mut pg-sm">{r.by}</div>
                     </div>
                     <Chip tone="ok">Self-hosted</Chip>
-                    <Chip tone={r.embed ? "info" : r.installed ? "info" : undefined}>{r.embed ? "Embeddings only" : r.installed ? "Installed" : "Not installed"}</Chip>
-                    <button type="button" className="pg-btn" title={`Manage ${r.name}`} aria-label={`Manage ${r.name}`} onClick={() => { setOpen(i); setTab("Overview"); }}>
+                    <Chip
+                      tone={r.embed ? "info" : r.installed ? "info" : undefined}
+                    >
+                      {r.embed
+                        ? "Embeddings only"
+                        : r.installed
+                          ? "Installed"
+                          : "Not installed"}
+                    </Chip>
+                    <button
+                      type="button"
+                      className="pg-btn"
+                      title={`Manage ${r.name}`}
+                      aria-label={`Manage ${r.name}`}
+                      onClick={() => {
+                        setOpen(i);
+                        setTab("Overview");
+                      }}
+                    >
                       Manage
                     </button>
                   </div>
                 ))}
-                {rows.length && !shown.length ? <p className="pg-note">No model matches this filter</p> : null}
+                {rows.length && !shown.length ? (
+                  <p className="pg-note">No model matches this filter</p>
+                ) : null}
               </section>
             </div>
           </div>
@@ -428,31 +662,70 @@ export function ControlPanel({ onConsole, onHub, nav }: { onConsole: () => void;
       ) : (
         <>
           <div className="pg-bar">
-            <button type="button" className="pg-btn sq" aria-label="Back to language models" title="Back to language models" onClick={() => setOpen(null)}>
+            <button
+              type="button"
+              className="pg-btn sq"
+              aria-label="Back to language models"
+              title="Back to language models"
+              onClick={() => setOpen(null)}
+            >
               <Ico n="arrow-left" />
             </button>
-            <div className="cp-tile" style={{ background: row.tile, width: 32, height: 32 }}>
+            <div
+              className="cp-tile"
+              style={{ background: row.tile, width: 32, height: 32 }}
+            >
               <Ico n="citation" size={18} />
             </div>
             <span>
-              <span className="pg-mut">Language models</span> › <b>{row.name}</b>
+              <span className="pg-mut">Language models</span> ›{" "}
+              <b>{row.name}</b>
             </span>
-            <span className="pg-mut pg-sm">Manage language model access and usage</span>
+            <span className="pg-mut pg-sm">
+              Manage language model access and usage
+            </span>
           </div>
           <div className="pg-nav" role="tablist" aria-label="Model sections">
             {TABS.map((t) => (
-              <button key={t} type="button" role="tab" className="pg-tab" aria-selected={t === tab} aria-current={t === tab ? "page" : undefined} onClick={t === tab ? undefined : () => setTab(t)}>
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                className="pg-tab"
+                aria-selected={t === tab}
+                aria-current={t === tab ? "page" : undefined}
+                onClick={t === tab ? undefined : () => setTab(t)}
+              >
                 {t}
               </button>
             ))}
           </div>
           <div className="pg-body">
             <div className="pg-scroll">
-              {!src?.ok && (tab === "Overview" || tab === "Usage and cost") ? <p className="pg-err" style={{ padding: "0 0 16px" }}>{unavailable("Upstream sources", src)}</p> : null}
-              {tab === "Overview" ? <Overview r={row} g={g} src={sources} calls={calls} hub={onHub} /> : null}
+              {!src?.ok && (tab === "Overview" || tab === "Usage and cost") ? (
+                <p className="pg-err" style={{ padding: "0 0 16px" }}>
+                  {unavailable("Upstream sources", src)}
+                </p>
+              ) : null}
+              {tab === "Overview" ? (
+                <Overview
+                  r={row}
+                  g={g}
+                  src={sources}
+                  calls={calls}
+                  hub={onHub}
+                />
+              ) : null}
               {tab === "Usage and cost" ? <Usage src={sources} g={g} /> : null}
               {tab === "Access permissions" ? <Access g={g} /> : null}
-              {tab === "Plugins and tools" ? <Plugins m={models?.data ?? null} g={g} ollamaUp={local?.data?.ollama_up ?? null} hub={onHub} /> : null}
+              {tab === "Plugins and tools" ? (
+                <Plugins
+                  m={models?.data ?? null}
+                  g={g}
+                  ollamaUp={local?.data?.ollama_up ?? null}
+                  hub={onHub}
+                />
+              ) : null}
               {tab === "Users" ? <Users g={g} /> : null}
             </div>
           </div>

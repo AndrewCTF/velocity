@@ -127,7 +127,9 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   "military.installations": "registry",
   // Crowd-mapped, but each row is a tagged OSM object with a stable id and
   // history, the same footing as the other OSM facility layers here.
-  ...Object.fromEntries(OSM_MILITARY_LAYER_IDS.map((id) => [id, "registry" as const])),
+  ...Object.fromEntries(
+    OSM_MILITARY_LAYER_IDS.map((id) => [id, "registry" as const]),
+  ),
   "maritime.chokepoints": "registry",
   "maritime.coverage": "registry",
   "infra.powerplants": "registry",

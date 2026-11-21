@@ -131,9 +131,8 @@ export function decodeHeatmapChunk(buf: ArrayBuffer): DecodedHeatmapChunk {
 
     const prev = lastByHex.get(prefixed);
     const track = prev ? bearingDeg(prev.lat, prev.lon, lat, lon) : null;
-    lastByHex.set(prefixed, { lat, lon });
 
-    positions.push({
+    const position: HeatmapPosition = {
       hex: prefixed,
       addrtype,
       lat,
@@ -142,7 +141,9 @@ export function decodeHeatmapChunk(buf: ArrayBuffer): DecodedHeatmapChunk {
       gs,
       t: sliceTs,
       track,
-    });
+    };
+    lastByHex.set(prefixed, position);
+    positions.push(position);
   }
 
   return { positions, callsigns };

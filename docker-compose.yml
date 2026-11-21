@@ -122,7 +122,7 @@ services:
   nginx:
     # Digest-pinned like the prod stack's nginx (docker-compose.prod.yml) —
     # Dependabot's docker ecosystem keeps this current (.github/dependabot.yml).
-    image: nginx:1.30.4-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c
+    image: nginx:1.30.6-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951
     runtime: runc
     ports:
       # Loopback only: this dev stack runs with ALLOW_UNAUTHENTICATED=1, so a

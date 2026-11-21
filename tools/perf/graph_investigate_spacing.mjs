@@ -91,7 +91,9 @@ for (const [w, h] of [[1920, 1080], [2560, 1440]]) {
   await tab('Lookup');
   await check('inv-lookup');
   const target = p.locator('.sl-form input[placeholder^="example.com"]').first();
-  await target.fill('example.com'); await target.press('Enter'); await p.waitForTimeout(20000);
+  await target.fill('example.com'); await target.press('Enter');
+  await p.waitForFunction(() => window.__useAppView.getState().app === 'graph', null, { timeout: 90000 });
+  await p.waitForTimeout(3000);
   // A lookup seeds the link graph and opens Graph, so that is what gets checked.
   await check('graph-after-lookup');
   await app('investigate');

@@ -81,7 +81,9 @@ export function ControlSection({
 
   const drawZone = (): void => {
     if (!draw) return;
-    setStatus("click vertices; right-click / Finish to close the area…");
+    setStatus(
+      "click vertices; right-click, long-press (1.5 s) or Finish to close the area…",
+    );
     draw.drawPolygon((ring) => {
       addZone({
         factionId: facId,
@@ -97,7 +99,9 @@ export function ControlSection({
 
   const drawLine = (): void => {
     if (!draw) return;
-    setStatus("click vertices; right-click / Finish to commit the front line…");
+    setStatus(
+      "click vertices; right-click, long-press (1.5 s) or Finish to commit the front line…",
+    );
     draw.drawPolyline((verts) => {
       addLine({
         status: lineStatus,

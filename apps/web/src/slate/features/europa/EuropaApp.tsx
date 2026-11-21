@@ -42,7 +42,13 @@ import { SimPage, type Mark } from "./Meta.js";
 
 const on = (p: Page, ...ps: Page[]): boolean => ps.includes(p);
 
-export function EuropaApp({ viewer, initial = "gaia" }: { viewer: Cesium.Viewer | null; initial?: Page }): JSX.Element {
+export function EuropaApp({
+  viewer,
+  initial = "gaia",
+}: {
+  viewer: Cesium.Viewer | null;
+  initial?: Page;
+}): JSX.Element {
   const [page, setPage] = useState<Page | "reports">(initial);
   const [nonce, setNonce] = useState(0);
   const [drawer, setDrawer] = useState(true);
@@ -54,42 +60,87 @@ export function EuropaApp({ viewer, initial = "gaia" }: { viewer: Cesium.Viewer 
   const chatWhy = `Broadcast needs a chat channel: ${unavailable("Chat", ch)}`;
   const ev = useJson<{ props: Evid }[]>("/api/evidence", nonce);
   const evid = useMemo(() => (ev?.data ?? []).map((x) => x.props), [ev]);
-  const chokeRes = useJson<FC<never>>(on(p, "gaia", "globe", "ring") ? "/api/maritime/chokepoints" : null);
+  const chokeRes = useJson<FC<never>>(
+    on(p, "gaia", "globe", "ring") ? "/api/maritime/chokepoints" : null,
+  );
   const chokes = useMemo(() => chokesOf(chokeRes?.data ?? null), [chokeRes]);
-  const warnRes = useJson<FC<{ msgYear: number }>>(p === "gaia" ? "/api/maritime/warnings" : null);
-  const adsb = useJson<FC<{ on_ground?: boolean }>>(p === "gaia" ? "/api/adsb/global" : null);
+  const warnRes = useJson<FC<{ msgYear: number }>>(
+    p === "gaia" ? "/api/maritime/warnings" : null,
+  );
+  const adsb = useJson<FC<{ on_ground?: boolean }>>(
+    p === "gaia" ? "/api/adsb/global" : null,
+  );
   const vRes = useJson<{ vessels: Vessel[] }>(
-    on(p, "map", "slides", "present2") ? `/api/maritime/vessels?bbox=${SAT_BBOX.join(",")}&limit=2000` : null,
+    on(p, "map", "slides", "present2")
+      ? `/api/maritime/vessels?bbox=${SAT_BBOX.join(",")}&limit=2000`
+      : null,
     nonce,
   );
   const vs = useMemo(() => withPx(vRes?.data?.vessels ?? []), [vRes]);
   const pv = useMemo(() => profileVessel(vs), [vs]);
-  const sanc = useJson<Sanctions>(p === "present2" && pv ? `/api/sanctions/lookup?mmsi=${pv.mmsi}&name=${encodeURIComponent(pv.name ?? "")}` : null);
-  const briefs = useJson<{ briefs?: unknown[] }>(on(p, "map", "slides") ? "/api/watch-officer/briefs" : null);
-  const linRes = useJson<Lineage>(p === "lineage" ? "/api/foundry/lineage" : null);
-  const fsRes = useJson<FSummary>(p === "lineage" ? "/api/foundry/summary" : null);
-  const sweepRes = useJson<{ aois: SweepAoi[] }>(on(p, "globe", "ring") ? "/api/intel/sar/sweep" : null);
-  const quakeRes = useJson<FC<{ place: string; mag: number }>>(on(p, "globe", "ring") ? "/api/seismic/emsc" : null);
+  const sanc = useJson<Sanctions>(
+    p === "present2" && pv
+      ? `/api/sanctions/lookup?mmsi=${pv.mmsi}&name=${encodeURIComponent(pv.name ?? "")}`
+      : null,
+  );
+  const briefs = useJson<{ briefs?: unknown[] }>(
+    on(p, "map", "slides") ? "/api/watch-officer/briefs" : null,
+  );
+  const linRes = useJson<Lineage>(
+    p === "lineage" ? "/api/foundry/lineage" : null,
+  );
+  const fsRes = useJson<FSummary>(
+    p === "lineage" ? "/api/foundry/summary" : null,
+  );
+  const sweepRes = useJson<{ aois: SweepAoi[] }>(
+    on(p, "globe", "ring") ? "/api/intel/sar/sweep" : null,
+  );
+  const quakeRes = useJson<FC<{ place: string; mag: number }>>(
+    on(p, "globe", "ring") ? "/api/seismic/emsc" : null,
+  );
 
   const warns = useMemo(
     () =>
       (warnRes?.data?.features ?? [])
         .filter((f) => f.geometry)
-        .map((f) => ({ y: f.properties.msgYear, lon: f.geometry!.coordinates[0]!, lat: f.geometry!.coordinates[1]! })),
+        .map((f) => ({
+          y: f.properties.msgYear,
+          lon: f.geometry!.coordinates[0]!,
+          lat: f.geometry!.coordinates[1]!,
+        })),
     [warnRes],
   );
   const aircraft = useMemo(() => {
     const fs = adsb?.data?.features ?? [];
     const step = Math.max(1, Math.floor(fs.length / 400));
-    return fs.filter((f, i) => i % step === 0 && f.geometry && !f.properties.on_ground).map((f) => [f.geometry!.coordinates[0]!, f.geometry!.coordinates[1]!] as [number, number]);
+    return fs
+      .filter((f, i) => i % step === 0 && f.geometry && !f.properties.on_ground)
+      .map(
+        (f) =>
+          [f.geometry!.coordinates[0]!, f.geometry!.coordinates[1]!] as [
+            number,
+            number,
+          ],
+      );
   }, [adsb]);
   const quakes: Mark[] = useMemo(
-    () => (quakeRes?.data?.features ?? []).filter((f) => f.geometry).map((f) => ({ lon: f.geometry!.coordinates[0]!, lat: f.geometry!.coordinates[1]!, name: `quake M${f.properties.mag} ${f.properties.place}` })),
+    () =>
+      (quakeRes?.data?.features ?? [])
+        .filter((f) => f.geometry)
+        .map((f) => ({
+          lon: f.geometry!.coordinates[0]!,
+          lat: f.geometry!.coordinates[1]!,
+          name: `quake M${f.properties.mag} ${f.properties.place}`,
+        })),
     [quakeRes],
   );
 
   // E10: the twelve ontology searches the copy's builder ran
-  const [inc, setInc] = useState<{ all: Incident[]; done: number; status: string | null }>({ all: [], done: 0, status: null });
+  const [inc, setInc] = useState<{
+    all: Incident[];
+    done: number;
+    status: string | null;
+  }>({ all: [], done: 0, status: null });
   useEffect(() => {
     if (p !== "graph") return;
     let live = true;
@@ -97,14 +148,26 @@ export function EuropaApp({ viewer, initial = "gaia" }: { viewer: Cesium.Viewer 
     let failed: Res<unknown> | null = null;
     void Promise.all(
       INC_QUERIES.map((q) =>
-        fetchJson<OntoObj[]>(`/api/ontology/search?q=${encodeURIComponent(q)}&limit=100`).then((r) => {
+        fetchJson<OntoObj[]>(
+          `/api/ontology/search?q=${encodeURIComponent(q)}&limit=100`,
+        ).then((r) => {
           lists.push(r.data);
           if (!r.ok) failed = r;
-          if (live) setInc({ all: incidentsOf(lists).inc, done: lists.length, status: null });
+          if (live)
+            setInc({
+              all: incidentsOf(lists).inc,
+              done: lists.length,
+              status: null,
+            });
         }),
       ),
     ).then(() => {
-      if (live) setInc({ all: incidentsOf(lists).inc, done: lists.length, status: failed ? unavailable("Ontology search", failed) : null });
+      if (live)
+        setInc({
+          all: incidentsOf(lists).inc,
+          done: lists.length,
+          status: failed ? unavailable("Ontology search", failed) : null,
+        });
     });
     return () => {
       live = false;
@@ -113,14 +176,24 @@ export function EuropaApp({ viewer, initial = "gaia" }: { viewer: Cesium.Viewer 
 
   // E12-E15: SGP4 over the active catalogue, off the first paint
   const [gpRun, setGpRun] = useState(0);
-  const [gp, setGp] = useState<{ res: Res<{ items?: Omm[]; count?: number }> | null; plan: Plan | null }>({ res: null, plan: null });
+  const [gp, setGp] = useState<{
+    res: Res<{ items?: Omm[]; count?: number }> | null;
+    plan: Plan | null;
+  }>({ res: null, plan: null });
   useEffect(() => {
     if (!on(p, "globe", "ring")) return;
     let live = true;
-    void fetchJson<{ items?: Omm[]; count?: number }>("/api/space/gp?group=active&limit=20000", gpRun > 0).then((res) => {
+    void fetchJson<{ items?: Omm[]; count?: number }>(
+      "/api/space/gp?group=active&limit=20000",
+      gpRun > 0,
+    ).then((res) => {
       if (!live) return;
       if (!res.ok) return setGp({ res, plan: null });
-      setTimeout(() => live && setGp({ res, plan: planPasses(res.data?.items ?? [], now) }), 0);
+      setTimeout(
+        () =>
+          live && setGp({ res, plan: planPasses(res.data?.items ?? [], now) }),
+        0,
+      );
     });
     return () => {
       live = false;
@@ -146,25 +219,67 @@ export function EuropaApp({ viewer, initial = "gaia" }: { viewer: Cesium.Viewer 
       body = <ChatPage ch={ch} toGaia={() => go("gaia")} />;
       break;
     case "gaia":
-      body = <GaiaFrame ev={ev} chokes={chokes} chokeRes={chokeRes} warns={warns} aircraft={aircraft} toMap={() => go("map")} toChat={() => go("chat")} toReports={() => setPage("reports")} reload={reload} />;
+      body = (
+        <GaiaFrame
+          ev={ev}
+          chokes={chokes}
+          chokeRes={chokeRes}
+          warns={warns}
+          aircraft={aircraft}
+          toMap={() => go("map")}
+          toChat={() => go("chat")}
+          toReports={() => setPage("reports")}
+          reload={reload}
+        />
+      );
       break;
     case "map":
-      body = <MapPage vs={vs} vRes={vRes} ev={evid} briefsN={briefsN} drawer={drawer} setDrawer={setDrawer} reload={reload} go={go} />;
+      body = (
+        <MapPage
+          vs={vs}
+          vRes={vRes}
+          ev={evid}
+          briefsN={briefsN}
+          drawer={drawer}
+          setDrawer={setDrawer}
+          reload={reload}
+          go={go}
+        />
+      );
       break;
     case "slides":
       body = <SlidesPage vs={vs} pv={pv} ev={evid} briefsN={briefsN} go={go} />;
       break;
     case "present1":
-      body = <Present1 ev={evid} evRes={ev} now={now} go={go} chatWhy={chatWhy} />;
+      body = (
+        <Present1 ev={evid} evRes={ev} now={now} go={go} chatWhy={chatWhy} />
+      );
       break;
     case "present2":
-      body = <Present2 pv={pv} vRes={vRes} sanc={sanc} go={go} chatWhy={chatWhy} />;
+      body = (
+        <Present2 pv={pv} vRes={vRes} sanc={sanc} go={go} chatWhy={chatWhy} />
+      );
       break;
     case "graph":
-      body = <GraphPage all={inc.all} done={inc.done} total={INC_QUERIES.length} status={inc.status} go={go} />;
+      body = (
+        <GraphPage
+          all={inc.all}
+          done={inc.done}
+          total={INC_QUERIES.length}
+          status={inc.status}
+          go={go}
+        />
+      );
       break;
     case "lineage":
-      body = <LineagePage lin={linRes?.data ?? null} linRes={linRes} fs={fsRes?.data ?? null} go={go} />;
+      body = (
+        <LineagePage
+          lin={linRes?.data ?? null}
+          linRes={linRes}
+          fs={fsRes?.data ?? null}
+          go={go}
+        />
+      );
       break;
     default:
       body = (

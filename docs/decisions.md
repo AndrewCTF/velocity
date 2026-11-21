@@ -1255,7 +1255,8 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
-- 2026-10-17: 3159 passed + 21 skipped in ~273 s (branch frontend-speed-2026-10); displaced 2026-11-20 by 3214 + 21 (same branch, uncommitted shared tree: the OSM military features layer adds 9, the rest is earlier uncommitted work on the tree).
+- 2026-10-17: 3276 passed + 21 skipped in ~317 s (branch reach-wave-2026-10); displaced 2026-11-21 by 3331 + 21 (branch slate-native-surfaces-2026-11: master merged with the OSM military features layer, military vessel tiers, HTTP connections and local target board).
+- 2026-10-17: 3159 passed + 21 skipped in ~273 s (branch frontend-speed-2026-10); displaced the same day by 3276 + 21 (branch reach-wave-2026-10: ntfy area alerts, rewind links, public-archive replay on SQLite, /api/overhead, polygon focus_area, history buffering off when recording is off).
 - 2026-10-04: 3102 passed + 21 skipped in ~262 s (branch palantir-stack-2026-09, AIS pipeline wave, measured on the uncommitted shared tree); displaced 2026-10-17 by 3159 + 21 (branch frontend-speed-2026-10: the AIS, keyless Google 3D and clearance work committed and master's #95/#96 merged).
 - 2026-09-17: 2996 passed + 21 skipped in ~236 s (branch palantir-stack-2026-09); displaced 2026-10-04 by 3102 + 21 (AIS pipeline wave, measured on the shared working tree, which also carries the keyless Google 3D and clearance tests).
 - 2026-09-17: 2996 passed + 21 skipped in ~236 s (branch palantir-stack-2026-09, palantir-stack waves); displaced 2026-10-05 by 3007 + 21 (keyless Google 3D adds 11; the four MQTT tests that had been failing on master since late September pass again and were always in the count).

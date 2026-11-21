@@ -87,7 +87,8 @@ function loadModules(): WorkshopModule[] {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed as WorkshopModule[];
+      if (Array.isArray(parsed) && parsed.length > 0)
+        return parsed as WorkshopModule[];
     }
   } catch {
     /* corrupt or blocked storage: start from one default module */
@@ -105,12 +106,21 @@ function saveModules(ms: WorkshopModule[]): void {
 
 function MetricBody({ w }: { w: Widget }): JSX.Element {
   const { data, err } = useJson<PlatformStatus>("/api/status");
-  if (err) return <div className="k-empty">Platform status unavailable ({err}).</div>;
+  if (err)
+    return <div className="k-empty">Platform status unavailable ({err}).</div>;
   if (!data) return <div className="k-empty">loading…</div>;
   const v = data[w.metric];
   if (v == null)
-    return <div className="k-empty">Status did not report {METRIC_LABEL[w.metric].toLowerCase()} (HTTP 200).</div>;
-  return <div className="mono px-3 pb-3 text-[32px] font-semibold text-txt-0">{v}</div>;
+    return (
+      <div className="k-empty">
+        Status did not report {METRIC_LABEL[w.metric].toLowerCase()} (HTTP 200).
+      </div>
+    );
+  return (
+    <div className="mono px-3 pb-3 text-[32px] font-semibold text-txt-0">
+      {v}
+    </div>
+  );
 }
 
 function SeriesBody({ w }: { w: Widget }): JSX.Element {
@@ -143,11 +153,18 @@ function SeriesBody({ w }: { w: Widget }): JSX.Element {
 
 function TableBody({ w }: { w: Widget }): JSX.Element {
   const { data, err } = useJson<SourceCatalog>("/api/sources/catalog");
-  if (err) return <div className="k-empty">Source catalog unavailable ({err}).</div>;
+  if (err)
+    return <div className="k-empty">Source catalog unavailable ({err}).</div>;
   if (!data) return <div className="k-empty">loading…</div>;
-  const rows = data.sources.filter((s) => !w.category || s.category === w.category);
+  const rows = data.sources.filter(
+    (s) => !w.category || s.category === w.category,
+  );
   if (rows.length === 0)
-    return <div className="k-empty">No catalog sources in this category (HTTP 200, 0 rows).</div>;
+    return (
+      <div className="k-empty">
+        No catalog sources in this category (HTTP 200, 0 rows).
+      </div>
+    );
   return (
     <table className="w-full text-[13.5px]">
       <thead>
@@ -174,15 +191,19 @@ function TableBody({ w }: { w: Widget }): JSX.Element {
 
 function MapsBody(): JSX.Element {
   const { data, err } = useJson<SavedMap[]>("/api/maps");
-  if (err) return <div className="k-empty">Saved maps unavailable ({err}).</div>;
+  if (err)
+    return <div className="k-empty">Saved maps unavailable ({err}).</div>;
   if (!data) return <div className="k-empty">loading…</div>;
-  if (data.length === 0) return <div className="k-empty">No saved maps yet (HTTP 200, 0 maps).</div>;
+  if (data.length === 0)
+    return <div className="k-empty">No saved maps yet (HTTP 200, 0 maps).</div>;
   return (
     <div className="k-kv">
       {data.map((m) => (
         <div key={m.id} className="contents">
           <span className="k">{m.name}</span>
-          <span className="v mono">{m.updated_at.slice(0, 16).replace("T", " ")}</span>
+          <span className="v mono">
+            {m.updated_at.slice(0, 16).replace("T", " ")}
+          </span>
         </div>
       ))}
     </div>
@@ -207,12 +228,21 @@ interface ChokepointResponse {
 // property [Velocity] Chokepoint / Vessels, legend header Vessels. Counts
 // are live from GET /api/maritime/chokepoints (GeoJSON Points, 60 s TTL).
 function ChokepointsBody(): JSX.Element {
-  const { data, err } = useJson<ChokepointResponse>("/api/maritime/chokepoints");
-  if (err) return <div className="k-empty">Chokepoint counts unavailable ({err}).</div>;
+  const { data, err } = useJson<ChokepointResponse>(
+    "/api/maritime/chokepoints",
+  );
+  if (err)
+    return (
+      <div className="k-empty">Chokepoint counts unavailable ({err}).</div>
+    );
   if (!data) return <div className="k-empty">loading…</div>;
   const rows = (data.features ?? []).filter((f) => f.properties?.name != null);
   if (rows.length === 0)
-    return <div className="k-empty">No chokepoints reported (HTTP 200, 0 features).</div>;
+    return (
+      <div className="k-empty">
+        No chokepoints reported (HTTP 200, 0 features).
+      </div>
+    );
   return (
     <table className="w-full text-[13.5px]">
       <thead>
@@ -225,10 +255,15 @@ function ChokepointsBody(): JSX.Element {
       </thead>
       <tbody>
         {rows.map((f, i) => (
-          <tr key={f.id ?? `${f.properties!.name}-${i}`} className="border-t border-line">
+          <tr
+            key={f.id ?? `${f.properties!.name}-${i}`}
+            className="border-t border-line"
+          >
             <td className="px-3 py-1">{f.properties!.name!}</td>
             <td className="px-3 py-1 mono">{f.properties!.vessels ?? "—"}</td>
-            <td className="px-3 py-1 mono">{f.properties!.stationary ?? "—"}</td>
+            <td className="px-3 py-1 mono">
+              {f.properties!.stationary ?? "—"}
+            </td>
             <td className="px-3 py-1">{f.properties!.congestion ?? "—"}</td>
           </tr>
         ))}
@@ -245,13 +280,22 @@ function WidgetConfig({
   onChange: (w: Widget) => void;
 }): JSX.Element {
   const [tab, setTab] = useState<"setup" | "display">("setup");
-  const catalog = useJson<SourceCatalog>(w.type === "table" ? "/api/sources/catalog" : null);
+  const catalog = useJson<SourceCatalog>(
+    w.type === "table" ? "/api/sources/catalog" : null,
+  );
   const sel = "w-full border border-line bg-bg-2 px-2 py-1 text-txt-0";
   return (
     <>
       <div className="k-ptabs" role="tablist">
         {(["setup", "display"] as const).map((t) => (
-          <button key={t} type="button" role="tab" aria-selected={tab === t} className="k-ptab" onClick={() => setTab(t)}>
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            className="k-ptab"
+            onClick={() => setTab(t)}
+          >
             {t === "setup" ? "Widget setup" : "Display"}
           </button>
         ))}
@@ -262,9 +306,17 @@ function WidgetConfig({
           {w.type === "metric" && (
             <label className="block">
               <span className="text-txt-3">Count</span>
-              <select className={sel} value={w.metric} onChange={(e) => onChange({ ...w, metric: e.target.value as MetricKey })}>
+              <select
+                className={sel}
+                value={w.metric}
+                onChange={(e) =>
+                  onChange({ ...w, metric: e.target.value as MetricKey })
+                }
+              >
                 {(Object.keys(METRIC_LABEL) as MetricKey[]).map((k) => (
-                  <option key={k} value={k}>{METRIC_LABEL[k]}</option>
+                  <option key={k} value={k}>
+                    {METRIC_LABEL[k]}
+                  </option>
                 ))}
               </select>
             </label>
@@ -273,17 +325,33 @@ function WidgetConfig({
             <>
               <label className="block">
                 <span className="text-txt-3">Metric</span>
-                <select className={sel} value={w.series} onChange={(e) => onChange({ ...w, series: e.target.value as SeriesKey })}>
+                <select
+                  className={sel}
+                  value={w.series}
+                  onChange={(e) =>
+                    onChange({ ...w, series: e.target.value as SeriesKey })
+                  }
+                >
                   {(["aircraft", "vessel", "total"] as const).map((k) => (
-                    <option key={k} value={k}>{k}</option>
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
                   ))}
                 </select>
               </label>
               <label className="block">
                 <span className="text-txt-3">Window</span>
-                <select className={sel} value={w.windowSec} onChange={(e) => onChange({ ...w, windowSec: Number(e.target.value) })}>
+                <select
+                  className={sel}
+                  value={w.windowSec}
+                  onChange={(e) =>
+                    onChange({ ...w, windowSec: Number(e.target.value) })
+                  }
+                >
                   {WINDOWS.map((x) => (
-                    <option key={x.sec} value={x.sec}>{x.label}</option>
+                    <option key={x.sec} value={x.sec}>
+                      {x.label}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -292,27 +360,54 @@ function WidgetConfig({
           {w.type === "table" && (
             <label className="block">
               <span className="text-txt-3">Category</span>
-              <select className={sel} value={w.category} onChange={(e) => onChange({ ...w, category: e.target.value })}>
+              <select
+                className={sel}
+                value={w.category}
+                onChange={(e) => onChange({ ...w, category: e.target.value })}
+              >
                 <option value="">All categories</option>
                 {(catalog.data?.categories ?? []).map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
               </select>
-              {catalog.err && <span className="text-txt-3">Categories unavailable ({catalog.err}).</span>}
+              {catalog.err && (
+                <span className="text-txt-3">
+                  Categories unavailable ({catalog.err}).
+                </span>
+              )}
             </label>
           )}
-          {w.type === "maps" && <div className="text-txt-3">Lists GET /api/maps and takes no parameters.</div>}
-          {w.type === "chokepoints" && <div className="text-txt-3">Static property — Chokepoint vessels, GET /api/maritime/chokepoints.</div>}
+          {w.type === "maps" && (
+            <div className="text-txt-3">
+              Lists GET /api/maps and takes no parameters.
+            </div>
+          )}
+          {w.type === "chokepoints" && (
+            <div className="text-txt-3">
+              Static property — Chokepoint vessels, GET
+              /api/maritime/chokepoints.
+            </div>
+          )}
         </div>
       )}
       {tab === "display" && (
         <div className="space-y-3 px-4 py-3 text-[14px]">
           <label className="block">
             <span className="text-txt-3">Title</span>
-            <input className={sel} value={w.title} onChange={(e) => onChange({ ...w, title: e.target.value })} />
+            <input
+              className={sel}
+              value={w.title}
+              onChange={(e) => onChange({ ...w, title: e.target.value })}
+            />
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={w.wide} onChange={(e) => onChange({ ...w, wide: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={w.wide}
+              onChange={(e) => onChange({ ...w, wide: e.target.checked })}
+            />
             Span two columns
           </label>
         </div>
@@ -329,7 +424,9 @@ export function WorkshopApp(): JSX.Element {
   useEffect(() => saveModules(modules), [modules]);
 
   const mod = modules.find((m) => m.id === modId) ?? modules[0]!;
-  const selected = editing ? (mod.widgets.find((w) => w.id === selId) ?? null) : null;
+  const selected = editing
+    ? (mod.widgets.find((w) => w.id === selId) ?? null)
+    : null;
   const patch = (fn: (m: WorkshopModule) => WorkshopModule): void =>
     setModules((ms) => ms.map((m) => (m.id === mod.id ? fn(m) : m)));
   const setWidgets = (fn: (ws: Widget[]) => Widget[]): void =>
@@ -370,11 +467,26 @@ export function WorkshopApp(): JSX.Element {
           Saved <span className="k-n">{modules.length}</span>
         </div>
         {modules.map((m) => (
-          <div key={m.id} className={`flex items-center justify-between px-4 py-1.5 text-[14px] ${m.id === mod.id ? "bg-bg-3" : ""}`}>
-            <button type="button" className="min-w-0 flex-1 truncate text-left" onClick={() => { setModId(m.id); setSelId(null); }}>
+          <div
+            key={m.id}
+            className={`flex items-center justify-between px-4 py-1.5 text-[14px] ${m.id === mod.id ? "bg-bg-3" : ""}`}
+          >
+            <button
+              type="button"
+              className="min-w-0 flex-1 truncate text-left"
+              onClick={() => {
+                setModId(m.id);
+                setSelId(null);
+              }}
+            >
               {m.name}
             </button>
-            <button type="button" className={iconBtn} aria-label={`Delete ${m.name}`} onClick={() => removeModule(m.id)}>
+            <button
+              type="button"
+              className={iconBtn}
+              aria-label={`Delete ${m.name}`}
+              onClick={() => removeModule(m.id)}
+            >
               ×
             </button>
           </div>
@@ -396,9 +508,16 @@ export function WorkshopApp(): JSX.Element {
               onChange={(e) => patch((m) => ({ ...m, name: e.target.value }))}
             />
           ) : (
-            <div className="k-title min-w-0 flex-1 truncate p-0!">{mod.name}</div>
+            <div className="k-title min-w-0 flex-1 truncate p-0!">
+              {mod.name}
+            </div>
           )}
-          <button type="button" className="k-chip" aria-pressed={editing} onClick={() => setEditing((e) => !e)}>
+          <button
+            type="button"
+            className="k-chip"
+            aria-pressed={editing}
+            onClick={() => setEditing((e) => !e)}
+          >
             {editing ? "View" : "Edit"}
           </button>
         </div>
@@ -406,7 +525,12 @@ export function WorkshopApp(): JSX.Element {
           <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 text-[14px]">
             <span className="text-txt-3">Add widget</span>
             {(Object.keys(TYPE_LABEL) as WidgetType[]).map((t) => (
-              <button key={t} type="button" className="k-chip" onClick={() => addWidget(t)}>
+              <button
+                key={t}
+                type="button"
+                className="k-chip"
+                onClick={() => addWidget(t)}
+              >
                 {TYPE_LABEL[t]}
               </button>
             ))}
@@ -414,7 +538,10 @@ export function WorkshopApp(): JSX.Element {
         )}
         <div className="min-h-0 flex-1 overflow-y-auto">
           {mod.widgets.length === 0 && (
-            <div className="k-empty">This module has no widgets. {editing ? "Add one above." : "Switch to Edit to add one."}</div>
+            <div className="k-empty">
+              This module has no widgets.{" "}
+              {editing ? "Add one above." : "Switch to Edit to add one."}
+            </div>
           )}
           <div className="grid grid-cols-2">
             {mod.widgets.map((w, i) => (
@@ -427,11 +554,26 @@ export function WorkshopApp(): JSX.Element {
                 <div className="k-card-hd">
                   <span className="truncate">{w.title}</span>
                   {editing && (
-                    <span className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" className={iconBtn} aria-label={`Move ${w.title} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                    <span
+                      className="flex shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        className={iconBtn}
+                        aria-label={`Move ${w.title} up`}
+                        disabled={i === 0}
+                        onClick={() => move(i, -1)}
+                      >
                         ↑
                       </button>
-                      <button type="button" className={iconBtn} aria-label={`Move ${w.title} down`} disabled={i === mod.widgets.length - 1} onClick={() => move(i, 1)}>
+                      <button
+                        type="button"
+                        className={iconBtn}
+                        aria-label={`Move ${w.title} down`}
+                        disabled={i === mod.widgets.length - 1}
+                        onClick={() => move(i, 1)}
+                      >
                         ↓
                       </button>
                       <button
@@ -449,9 +591,12 @@ export function WorkshopApp(): JSX.Element {
                   )}
                 </div>
                 <div className="k-card-by">
-                  {w.type === "metric" && `${METRIC_LABEL[w.metric]} · live status`}
-                  {w.type === "series" && `${w.series} · last ${WINDOWS.find((x) => x.sec === w.windowSec)?.label ?? `${w.windowSec}s`}`}
-                  {w.type === "table" && `catalog · ${w.category || "all categories"}`}
+                  {w.type === "metric" &&
+                    `${METRIC_LABEL[w.metric]} · live status`}
+                  {w.type === "series" &&
+                    `${w.series} · last ${WINDOWS.find((x) => x.sec === w.windowSec)?.label ?? `${w.windowSec}s`}`}
+                  {w.type === "table" &&
+                    `catalog · ${w.category || "all categories"}`}
                   {w.type === "maps" && "saved maps"}
                   {w.type === "chokepoints" && "chokepoint · Vessels"}
                 </div>
@@ -472,7 +617,9 @@ export function WorkshopApp(): JSX.Element {
             <WidgetConfig
               key={selected.id}
               w={selected}
-              onChange={(next) => setWidgets((ws) => ws.map((x) => (x.id === next.id ? next : x)))}
+              onChange={(next) =>
+                setWidgets((ws) => ws.map((x) => (x.id === next.id ? next : x)))
+              }
             />
           ) : (
             <div className="k-empty">Select a widget to set it up.</div>

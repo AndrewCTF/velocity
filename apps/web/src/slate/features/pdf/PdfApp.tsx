@@ -26,18 +26,30 @@ import "./pages.css";
 
 function Body({ page, c }: { page: Page; c: Ctx }): JSX.Element {
   switch (page) {
-    case "explorer": return <Explorer c={c} />;
-    case "browser": return <Browser c={c} />;
-    case "cov": return <Cov c={c} />;
-    case "chat": return <Chat c={c} />;
-    case "inbox": return <Inbox c={c} />;
-    case "slides": return <Slides c={c} />;
-    case "dossier": return <Dossier c={c} />;
-    case "menubar": return <Graph c={c} />;
-    case "graph2": return <Graph2 c={c} />;
-    case "timeline": return <Timeline c={c} />;
-    case "gaia": return <Gaia c={c} />;
-    case "video": return <Video c={c} />;
+    case "explorer":
+      return <Explorer c={c} />;
+    case "browser":
+      return <Browser c={c} />;
+    case "cov":
+      return <Cov c={c} />;
+    case "chat":
+      return <Chat c={c} />;
+    case "inbox":
+      return <Inbox c={c} />;
+    case "slides":
+      return <Slides c={c} />;
+    case "dossier":
+      return <Dossier c={c} />;
+    case "menubar":
+      return <Graph c={c} />;
+    case "graph2":
+      return <Graph2 c={c} />;
+    case "timeline":
+      return <Timeline c={c} />;
+    case "gaia":
+      return <Gaia c={c} />;
+    case "video":
+      return <Video c={c} />;
   }
 }
 
@@ -70,17 +82,32 @@ export function PdfApp({
   }, [onExit]);
   const info = PAGES[page];
   return (
-    <div className="px" data-page={page} data-tone={info.tone} aria-label={info.label}>
+    <div
+      className="px"
+      data-page={page}
+      data-tone={info.tone}
+      aria-label={info.label}
+    >
       <nav className="px-bar" aria-label="Workspace pages">
         {ORDER.map((p) => (
-          <button key={p} type="button" className="px-btn" aria-label={PAGES[p].label} title={PAGES[p].label} aria-current={p === page ? "page" : undefined} onClick={() => setPage(p)}>
+          <button
+            key={p}
+            type="button"
+            className="px-btn"
+            aria-label={PAGES[p].label}
+            title={PAGES[p].label}
+            aria-current={p === page ? "page" : undefined}
+            onClick={() => setPage(p)}
+          >
             <Ic n={PAGES[p].icon} />
             <span className="px-lab">{PAGES[p].label}</span>
           </button>
         ))}
       </nav>
       <div className="px-body">
-        <ErrorBoundary label={info.label}>{ready ? <Body page={page} c={c} /> : null}</ErrorBoundary>
+        <ErrorBoundary label={info.label}>
+          {ready ? <Body page={page} c={c} /> : null}
+        </ErrorBoundary>
       </div>
     </div>
   );

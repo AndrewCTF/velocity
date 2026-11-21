@@ -41,7 +41,13 @@ const FRAMES: Record<Page, (p: { nav: Nav }) => JSX.Element> = {
   d201: D201,
 };
 
-export function SlateFoundry({ viewer, initial = "d187" }: { viewer: Cesium.Viewer | null; initial?: Page }): JSX.Element {
+export function SlateFoundry({
+  viewer,
+  initial = "d187",
+}: {
+  viewer: Cesium.Viewer | null;
+  initial?: Page;
+}): JSX.Element {
   const [page, setPage] = useState<Page | "workbench">(initial);
   const [menu, setMenu] = useState(false);
   // every open refetches every route: the copy's numbers are never stale here
@@ -88,23 +94,41 @@ export function SlateFoundry({ viewer, initial = "d187" }: { viewer: Cesium.View
   const Frame = FRAMES[page];
   return (
     <div className="sl-fx" data-page={page}>
-      <ErrorBoundary label="Foundry">{ready ? <Frame nav={nav} /> : null}</ErrorBoundary>
+      <ErrorBoundary label="Foundry">
+        {ready ? <Frame nav={nav} /> : null}
+      </ErrorBoundary>
       {menu ? (
         <>
-          <button type="button" aria-label="Close menu" className="sl-hit" style={{ position: "absolute", inset: 0, zIndex: 5 }} onClick={() => setMenu(false)} />
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="sl-hit"
+            style={{ position: "absolute", inset: 0, zIndex: 5 }}
+            onClick={() => setMenu(false)}
+          />
           <div className="fx-menu" role="menu" style={{ left: 8, top: 44 }}>
             {MENU.map(([group, items]) => (
               <div key={group}>
                 <h6>{group}</h6>
                 {items.map(([id, label]) => (
-                  <button key={id} type="button" role="menuitem" aria-current={id === page ? "page" : undefined} onClick={() => nav.go(id)}>
+                  <button
+                    key={id}
+                    type="button"
+                    role="menuitem"
+                    aria-current={id === page ? "page" : undefined}
+                    onClick={() => nav.go(id)}
+                  >
                     {label}
                   </button>
                 ))}
               </div>
             ))}
             <h6>Workbench</h6>
-            <button type="button" role="menuitem" onClick={() => nav.workbench("home")}>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => nav.workbench("home")}
+            >
               Datasets, pipelines and builds
             </button>
           </div>

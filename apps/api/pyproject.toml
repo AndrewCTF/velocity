@@ -27,7 +27,7 @@ dependencies = [
   # Timescale and the sqlite backend is the legacy fallback.
   "asyncpg>=0.30",
   "websockets>=13.0",
-  "pillow>=12.3",
+  "pillow>=13.0",
   "python-pptx>=0.6.23",
   "numpy>=1.26",
   "pyyaml>=6.0",

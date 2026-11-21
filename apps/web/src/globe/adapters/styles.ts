@@ -824,15 +824,17 @@ export function facilityStyle(props: Record<string, unknown>): {
   const branch = String(props["branch"] ?? "");
   if ((category === "base" || category === "airfield") && BRANCH_SVG[branch]) {
     return {
-      imageUri: cachedIcon(`facility:branch:${branch}:${inactive ? "off" : "on"}`, () =>
-        placeDataUri(BRANCH_SVG[branch]!(inactive)),
+      imageUri: cachedIcon(
+        `facility:branch:${branch}:${inactive ? "off" : "on"}`,
+        () => placeDataUri(BRANCH_SVG[branch]!(inactive)),
       ),
       scale: 0.95,
     };
   }
   return {
-    imageUri: cachedIcon(`facility:${category}:${inactive ? "off" : "on"}`, () =>
-      placeDataUri(facilitySvg(category, inactive)),
+    imageUri: cachedIcon(
+      `facility:${category}:${inactive ? "off" : "on"}`,
+      () => placeDataUri(facilitySvg(category, inactive)),
     ),
     scale: 0.95,
   };

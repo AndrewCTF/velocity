@@ -1,97 +1,78 @@
 # Velocity
 
-**A live map you can rewind, that tells you where every contact came from.**
-
-There is no shortage of dashboards that draw aircraft and ships on a globe.
-Nearly all of them are stateless viewers of somebody else's API: they show you
-this instant, they cannot show you last Tuesday, and they render whatever the
-upstream asserts without saying who saw it or how long ago. Velocity is
-self-hosted and keyless like those, and then does the two things they don't.
-
-**It keeps history you own.** Flightradar24 gates replay at 7 days free,
-MarineTraffic cut its free window to 24 hours, ADS-B Exchange killed its free
-API tier outright, and a self-hosted tool just doesn't have that problem. The
-archive is a Postgres + TimescaleDB hypertable (`positions`, 6 hour chunks,
-columnar compression segmented by id, plus an hourly `positions_hourly`
-rollup); migrating the old SQLite file copied 55,352,047 rows at ~120k rows/s
-and the compressed hypertable measured 13.46x smaller, 11,300,810,752 bytes
-down to 839,786,496. Velocity records position history to your own disk for as
-long as you give it room, with a scrubber to rewind to any past moment, and
-SQLite remains the keyless fallback when no `HISTORY_PG_DSN` is set. No
-account, no API key, nobody who can paywall, filter or cut off your archive.
-
-**It scores what it shows you.** Anyone can upload whatever they like to a
-crowd-sourced ADS-B aggregator; a contact appearing on a map is not evidence it
-was ever broadcast. So every contact carries which independent sources reported
-it, how many agreed, and how old the fix actually is — with the confidence rule
-written out rather than implied. Cached sources report the age of the _data_,
-not the age of the response, so nothing sits on the map looking live because it
-was fresh when we fetched it this morning. `/api/status/provenance` gives you
-the same picture per source, including how many contacts each one is alone in
-seeing.
-
-On top of that: live aircraft, ships, satellites, GPS jamming, dark vessels,
-TFR airspace, military bases, naval warnings, earthquakes, outages and conflict
-events, correlated on the server instead of leaving you to eyeball six tabs.
-
-Honest scope, since this is a tool for people who check things: coverage is
-whatever the public feeds give you, it is not uniform, and the console tells
-you where it is thin rather than drawing a confident empty ocean.
-
-And once you've found something worth keeping, it stays evidence: a
-chain-of-custody **evidence locker** hashes every capture (a URL snapshot, an
-upload, a feed freeze) with SHA-256 and an append-only custody log, then rolls a
-case up into a self-contained **HTML / PPTX report** where every claim carries
-its provenance. All of it keyless, all of it on your disk.
-
-It also runs as an MCP server, so an AI agent can query the same live feeds
-instead of guessing from its training cut-off — everything it returns is
-labelled as automated output, not sold as "AI insight."
-
-[Quick start](#quick-start) · [The apps](#the-apps) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
+A self-hosted live map of aircraft, ships and satellites that records what it
+sees, so you can rewind to any past moment. No API keys, no account.
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/AndrewCTF/velocity/releases/latest)
-[![Tests](https://img.shields.io/badge/tests-3214%20passing-brightgreen.svg)](#tests)
+[![Version](https://img.shields.io/github/v/release/AndrewCTF/velocity?label=release&color=blue)](https://github.com/AndrewCTF/velocity/releases/latest)
+[![Tests](https://img.shields.io/badge/tests-3331%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
-[![ISO/IEC 27001:2022 controls mapped, self-assessed](<https://img.shields.io/badge/ISO%2FIEC%2027001%3A2022-controls%20mapped%20(self--assessed)-informational.svg>)](docs/security/isms/statement-of-applicability.md)
-[![OWASP ASVS 5.0 L2 self-assessed](https://img.shields.io/badge/OWASP%20ASVS%205.0-L2%20self--assessed-informational.svg)](docs/security/asvs-l2-assessment.md)
 
 <p align="center">
   <img src="docs/media/hero-replay.gif" alt="Live world view, fly-in to Europe, an aircraft selected with its owned track, then the last hour rewound on the replay scrubber" width="900">
 </p>
-<p align="center"><i>One take, real data: the live world → Europe → click an aircraft → its dossier and owned track → rewind the last hour.</i></p>
+<p align="center"><i>One take, real data: the live world, zoom to Europe, click an aircraft, see its track, rewind the last hour.</i></p>
 
-The short version, against the trackers you already use (free tiers, as of
-July 2026):
+```bash
+git clone https://github.com/AndrewCTF/velocity.git && cd velocity
+docker compose up          # then open http://localhost:8080
+```
 
-|                | History you can replay                                          | Self-hosted | Account / API key | Who owns the archive |
-| -------------- | --------------------------------------------------------------- | ----------- | ----------------- | -------------------- |
-| **Velocity**   | Unlimited — bounded by your disk, scrubbable to any past moment | Yes         | None              | You                  |
-| Flightradar24  | 7 days on the free tier                                         | No          | Account           | Them                 |
-| MarineTraffic  | 24 hours free (down from 72)                                    | No          | Account           | Them                 |
-| ADS-B Exchange | Free API tier discontinued                                      | No          | Paid API          | Them                 |
+## Why it exists
 
-Live coverage is the same community feeder data everywhere; the columns above
-are the paywall. Each cell is checkable on the vendors' own pricing pages.
+Free trackers only let you look back a little: Flightradar24 gives 7 days of
+replay on the free tier, MarineTraffic 24 hours, and ADS-B Exchange dropped its
+free API. Velocity pulls the same public feeds and writes every position to
+your own disk, so the history is yours.
 
-> **Before you get excited:** it's a single-analyst tool. Live _derived_ state —
-> the current incident list, AOI selections, watch-officer briefs — lives in
-> memory and clears on restart; what you deliberately keep is durable (see
-> [Scope and limits](#scope-and-limits)): the position-history archive, the
-> local ontology store (objects, case files, situations) and the evidence
-> locker's custody chain all persist to disk. AIS is densest over Northern
-> Europe (global coverage is sparser and terrestrial-biased), and the 3D
-> satellite mode is a VRAM hog.
+|                | History you can replay       | Self-hosted | Account / API key | Who owns the archive |
+| -------------- | ---------------------------- | ----------- | ----------------- | -------------------- |
+| **Velocity**   | As much as your disk holds   | Yes         | None              | You                  |
+| Flightradar24  | 7 days on the free tier      | No          | Account           | Them                 |
+| MarineTraffic  | 24 hours free (down from 72) | No          | Account           | Them                 |
+| ADS-B Exchange | Free API tier discontinued   | No          | Paid API          | Them                 |
 
-> **Use at your own risk.** No warranty; the authors take no responsibility for
-> your use of this tool or the data it pulls. Velocity scrapes third-party
-> sources that have not authorised it — **their** terms bind **you**, the
-> requests come from **your** IP, and rate limits, bans, and legal exposure are
-> yours to absorb. Feeds are often incomplete, delayed, or spoofed, and the AI
-> summaries can be confidently wrong. Not for safety-of-life, navigation, or any
-> use where being wrong hurts someone. Read [`DISCLAIMER.md`](./DISCLAIMER.md)
-> before you run it.
+Free tiers as of July 2026; each cell is checkable on the vendor's pricing page.
+
+## What it does
+
+- **Records history.** Every position goes into SQLite by default, or
+  Postgres/TimescaleDB if you set `HISTORY_PG_DSN`. The default keeps a rolling
+  window; set `ARCHIVE_MODE=1` to keep everything. A scrubber at the bottom
+  rewinds the map to any moment you recorded.
+- **Says where each contact came from.** Every aircraft and ship shows which
+  feeds reported it, how many agreed, and how old the position is, so a stale
+  fix doesn't look live. `/api/status/provenance` gives the same per feed.
+- **Puts more on the same map.** GPS jamming, ships with AIS switched off,
+  flight restrictions, military bases, naval warnings, earthquakes, internet
+  outages and conflict events.
+- **Keeps evidence.** Captures get a SHA-256 hash and an append-only custody
+  log, and a case exports to an HTML or PPTX report that cites its sources.
+- **Talks to AI agents.** It runs as an MCP server, so an agent can ask about
+  live traffic instead of guessing. Anything automated is labelled as such.
+
+[Quick start](#quick-start) · [The apps](#the-apps) · [Take the tour](#take-the-tour) · [Query it from an AI agent](#mcp-server-query-the-live-console-from-an-ai-agent)
+
+## Limits
+
+- It's built for one person, not a team.
+- Coverage is whatever the public feeds see. It's good over Europe and North
+  America and thin elsewhere; ship data is densest around Northern Europe. The
+  map tells you where coverage is thin.
+- Some live state (current incidents, area selections, briefs) clears on
+  restart. History, saved objects, cases and the evidence log stay on disk. See
+  [Scope and limits](#scope-and-limits).
+- The 3D satellite view needs a lot of GPU memory.
+
+**Use at your own risk.** No warranty; the authors take no responsibility for
+how you use this tool or the data it pulls. Velocity pulls from third-party
+sources that have not authorised it: their terms apply to you, the requests
+come from your IP, and rate limits, bans and legal exposure are yours. Feeds can
+be incomplete, delayed or spoofed, and AI summaries can be wrong. Don't use it
+for navigation, safety-of-life, or anything where being wrong hurts someone.
+Read [`DISCLAIMER.md`](./DISCLAIMER.md) before you run it. Security
+self-assessments: [ISO/IEC 27001:2022 controls](docs/security/isms/statement-of-applicability.md),
+[OWASP ASVS 5.0 L2](docs/security/asvs-l2-assessment.md).
 
 ## Prerequisites
 
@@ -161,6 +142,28 @@ only as far back as your own archive goes.
 > `docker-compose.prod.yml`, which leaves the flag unset. The globe, replay,
 > evidence capture, and all keyless feeds never needed the flag.
 
+### Open it on your phone
+
+The stack listens on `127.0.0.1` only, on purpose: the dev stack runs in open
+mode, so anything that can reach it can use it. To reach your own instance from
+your phone, put it on your tailnet instead of your LAN:
+
+```bash
+tailscale serve --bg 8080   # https://<this-machine>.<your-tailnet>.ts.net
+```
+
+Then add that origin to `.env` and restart, or the API refuses the new `Host`
+header (the DNS-rebinding guard in `app/origin_guard.py`):
+
+```bash
+CORS_ORIGINS=http://localhost:8080,https://<this-machine>.<your-tailnet>.ts.net
+```
+
+Only devices signed in to your tailnet can open it. Don't use `tailscale funnel`,
+which publishes it to the whole internet. For anything wider than your own
+devices, run `docker-compose.prod.yml` with Supabase sign-in configured
+(`docs/security/auth-and-sessions.md`); it fails closed without a credential.
+
 <details>
 <summary><b>Local dev without Docker</b></summary>
 
@@ -185,14 +188,14 @@ Velocity isn't one mega-dashboard; it's a workspace of eighteen apps that all
 share the same selection and time context, so switching never loses the object
 you had selected. The launcher in the top bar groups them:
 
-| Group       | Apps                                                                   | What they're for                                                                                                                                                                                                                              |
-| ----------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Live**    | Map · Sim                                                              | The Cesium globe (always mounted behind everything else) and a browser war-game overlay.                                                                                                                                                      |
-| **AI**      | AI · Models                                                            | The analyst agent, automated watch and alerts, and a registry of local models (installed, catalog, presets, engine).                                                                                                                                                      |
+| Group       | Apps                                                                                     | What they're for                                                                                                                                                                                                                                                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Live**    | Map · Sim                                                                                | The Cesium globe (always mounted behind everything else) and a browser war-game overlay.                                                                                                                                                                                                                                                |
+| **AI**      | AI · Models                                                                              | The analyst agent, automated watch and alerts, and a registry of local models (installed, catalog, presets, engine).                                                                                                                                                                                                                    |
 | **Analyze** | Explorer · Graph · Investigate · Targeting · Video · Country · Markets · Quiver · Vertex | Filter the live object store, grow a link-analysis graph, run digital OSINT (domains/people/wallets), a notional kill-chain board, FMV/ground recon, per-country World-Bank/UN stat dossiers, indices/commodities/FX with a stress index, time-series cards over the recorded archive, and a system graph of sources, feeds and layers. |
-| **Data**    | Foundry · Workflows · Workshop                                         | Bring your own data through governed pipelines; automate the live feeds with a node-graph editor; compose modules from live widgets.                                                                                                                                             |
-| **Product** | Reports                                                                | Case files, watch-officer briefs, dossiers, and case→report export.                                                                                                                                                                           |
-| **3D**      | City 3D                                                                | Gaussian-splat city scenes built from a keyless satellite AOI.                                                                                                                                                                                |
+| **Data**    | Foundry · Workflows · Workshop                                                           | Bring your own data through governed pipelines; automate the live feeds with a node-graph editor; compose modules from live widgets.                                                                                                                                                                                                    |
+| **Product** | Reports                                                                                  | Case files, watch-officer briefs, dossiers, and case→report export.                                                                                                                                                                                                                                                                     |
+| **3D**      | City 3D                                                                                  | Gaussian-splat city scenes built from a keyless satellite AOI.                                                                                                                                                                                                                                                                          |
 
 The rest of this README tours the ones you'll live in. Everything below is a
 real screenshot of the current build (v1.0.1), taken against live feeds on
@@ -447,6 +450,25 @@ login for a bigger ADS-B budget, `FIRMS_MAP_KEY` for fires, an ACLED key for
 conflict events, `CLOUDFLARE_TOKEN` for outages. `GET /api/intel/sources`
 reports what's actually live versus what's still waiting on a key.
 
+### Use your own receiver
+
+If you run an ADS-B receiver (readsb, ultrafeeder, tar1090), Velocity folds its
+aircraft into the same picture as the public feeds and records them to your
+archive like everything else. Point `ADSB_FEED_URLS` in `.env` at your
+tar1090's `aircraft.json`. The variable replaces the default list, so keep the
+defaults in it if you still want them:
+
+```bash
+ADSB_FEED_URLS=http://192.168.1.20:8080/data/aircraft.json,https://globe.theairtraffic.com/data/aircraft.json,https://skylink.hpradar.com/data/aircraft.json,https://api.adsb.lol/v2/point/0/0/20000
+```
+
+Contacts are merged by ICAO address, freshest fix wins. Inside Docker,
+`localhost` is the API container, so use the receiver's LAN address.
+
+For a small desk display of what is overhead (ESP32, e-ink), `GET /api/overhead`
+returns the nearest aircraft as compact JSON from the same snapshot, with no
+upstream call of its own: see [docs/desk-display.md](docs/desk-display.md).
+
 ## MCP server: query the live console from an AI agent
 
 The part I think is genuinely new: the backend doubles as a **Model Context
@@ -569,6 +591,14 @@ shareable artifact: a self-describing **JSON** bundle, a self-contained **HTML**
 report with a provenance footnote on each claim, or a **PPTX** brief. Any AI-written
 narrative is confined to one labelled block — the rest is your cited evidence.
 
+## Density maps
+
+[`tools/density-map`](tools/density-map) draws "every aircraft position over a
+region in one day" maps from adsb.lol's open daily data, and `near.py` tells
+you which aircraft made a bright spot. Standalone Python, no running app needed.
+
+<img src="docs/media/density-germany-2026-11-17.jpg" alt="24 hours of air traffic over Germany" width="420">
+
 ## System requirements
 
 The heavy component is the **client**, a CesiumJS WebGL2 globe. It is GPU- and
@@ -656,7 +686,7 @@ osint/
 
 ```bash
 # from the repo ROOT (running from apps/api makes .env auth resolve → a wall of 401s)
-OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 3214 passed + 21 skipped
+OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 3331 passed + 21 skipped
 pnpm -r test                          # vitest (web, shared)
 pnpm -r typecheck
 bash scripts/verify.sh                # typecheck + lint + web unit + api tests in one shot

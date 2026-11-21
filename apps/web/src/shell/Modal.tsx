@@ -14,6 +14,13 @@ import { createPortal } from "react-dom";
 import { Btn } from "./instruments.js";
 import { useReducedMotion } from "./useReducedMotion.js";
 import { Icon } from "../normal/Icon.js";
+import { useIsMobile } from "./useIsMobile.js";
+
+// On a phone a dialog is the screen: a 520px card centred 12vh down was a
+// narrower card with strips of dimmed map around it, and its 12px close glyph
+// was not a touch target.
+const PHONE_PANEL =
+  "absolute inset-0 flex flex-col bg-bg-1 outline-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]";
 
 // Shared portal chrome: backdrop (click closes), Escape closes, dialog a11y
 // contract, focus moves into the panel on open and back to the opener on close.
@@ -78,18 +85,31 @@ function DialogHeader({
   title: ReactNode;
   onClose: () => void;
 }): JSX.Element {
+  const phone = useIsMobile();
   return (
-    <div className="flex items-center justify-between gap-2 px-3.5 h-9 shrink-0 border-b border-line-2 bg-bg-1">
-      <span className="font-label uppercase tracking-[0.9px] text-[11px] text-txt-0 truncate">
+    <div
+      className={`flex items-center justify-between gap-2 shrink-0 border-b border-line-2 bg-bg-1 ${phone ? "h-[52px] pl-4 pr-1" : "px-3.5 h-9"}`}
+    >
+      <span
+        className={
+          phone
+            ? "text-[17px] font-semibold text-txt-0 truncate"
+            : "font-label uppercase tracking-[0.9px] text-[11px] text-txt-0 truncate"
+        }
+      >
         {title}
       </span>
       <button
         type="button"
         onClick={onClose}
         aria-label="Close"
-        className="mono text-[13px] text-txt-2 hover:text-txt-0 px-1.5 py-0.5"
+        className={
+          phone
+            ? "flex h-[44px] w-[44px] items-center justify-center rounded-full text-txt-2"
+            : "mono text-[13px] text-txt-2 hover:text-txt-0 px-1.5 py-0.5"
+        }
       >
-        <Icon name="x" className="w-3 h-3" />
+        <Icon name="x" className={phone ? "h-[18px] w-[18px]" : "w-3 h-3"} />
       </button>
     </div>
   );
@@ -110,13 +130,18 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
 }): JSX.Element | null {
+  const phone = useIsMobile();
   if (!open) return null;
   return (
     <DialogShell
       onClose={onClose}
       label={typeof title === "string" ? title : "Dialog"}
-      panelClass="absolute left-1/2 top-[12vh] -translate-x-1/2 max-w-[calc(100vw-32px)] max-h-[76vh] flex flex-col rounded-md border border-line-2 bg-bg-1 shadow-2xl outline-hidden"
-      panelStyle={{ width }}
+      panelClass={
+        phone
+          ? PHONE_PANEL
+          : "absolute left-1/2 top-[12vh] -translate-x-1/2 max-w-[calc(100vw-32px)] max-h-[76vh] flex flex-col rounded-md border border-line-2 bg-bg-1 shadow-2xl outline-hidden"
+      }
+      {...(phone ? {} : { panelStyle: { width } })}
     >
       <DialogHeader title={title} onClose={onClose} />
       <div className="flex-1 min-h-0 overflow-y-auto p-3.5">{children}</div>

@@ -736,7 +736,10 @@ export function SlateSituations({
               </div>
             );
           return (
-            <div key={`${c.id}:collapsed:${idx}`} style={{ display: "contents" }}>
+            <div
+              key={`${c.id}:collapsed:${idx}`}
+              style={{ display: "contents" }}
+            >
               {coaCards([c])}
             </div>
           );
@@ -1040,7 +1043,11 @@ export function SlateSituations({
                     title="Select on the map"
                     onClick={() => useSelection.getState().select(o.id)}
                   >
-                    {String(o.props?.name ?? o.props?.label ?? entityName(viewer, o.id))}
+                    {String(
+                      o.props?.name ??
+                        o.props?.label ??
+                        entityName(viewer, o.id),
+                    )}
                   </button>
                 ))}
               </div>

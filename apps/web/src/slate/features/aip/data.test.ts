@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  css,
-} from "./ui.js";
+import { css } from "./ui.js";
 import {
   inHormuz,
   inWatchRegion,
@@ -74,7 +72,12 @@ describe("AIP copy derivations (ported from _build_features_a.py)", () => {
         },
       ],
     });
-    expect(r).toMatchObject({ status: "Stationary", cls: "Tanker", np: 2, xy: [56, 26] });
+    expect(r).toMatchObject({
+      status: "Stationary",
+      cls: "Tanker",
+      np: 2,
+      xy: [56, 26],
+    });
   });
 
   it("formats dates the way the builder's strftime does (UTC)", () => {
@@ -105,8 +108,14 @@ describe("AIP copy derivations (ported from _build_features_a.py)", () => {
   });
 
   it("routes a prompt to the tool query that answers it, or to the model", () => {
-    expect(routeOf("How many vessels sit inside each chokepoint, and how many are stationary?")).toBe("a6");
-    expect(routeOf("To what extent is the Strait of Hormuz congested right now?")).toBe("a3");
+    expect(
+      routeOf(
+        "How many vessels sit inside each chokepoint, and how many are stationary?",
+      ),
+    ).toBe("a6");
+    expect(
+      routeOf("To what extent is the Strait of Hormuz congested right now?"),
+    ).toBe("a3");
     expect(routeOf("Summarise the last day")).toBe("none");
     expect(wrap("a ".repeat(60), 74).every((l) => l.length <= 74)).toBe(true);
   });

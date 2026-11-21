@@ -2,11 +2,43 @@
 // the repo's own plugin marketplace and product. The manifests are repo files
 // with no endpoint, so they are imported at build time, and the content rows
 // count files in plugin/osint-geoint exactly as the builder's globs do.
-import pj from "../../../../../../plugin/osint-geoint/.claude-plugin/plugin.json";
-import mk from "../../../../../../.claude-plugin/marketplace.json";
 import { Ii } from "./kit.js";
 import { Bar, Btn, Card, Page } from "./native.js";
 import type { Nav } from "./nav.js";
+
+// Eager globs, not imports: the web image builds from apps/web alone, so a
+// manifest outside it is absent there and the page shows "—" instead of failing
+// the build.
+interface PluginJson {
+  name?: string;
+  displayName?: string;
+  version?: string;
+  description?: string;
+}
+interface MarketJson {
+  name?: string;
+  plugins?: { description?: string; category?: string }[];
+}
+const firstJson = <T,>(m: Record<string, unknown>): T =>
+  ((Object.values(m)[0] as { default?: T } | undefined)?.default ?? {}) as T;
+const pj: Required<PluginJson> = {
+  name: "—",
+  displayName: "—",
+  version: "—",
+  description: "",
+  ...firstJson<PluginJson>(
+    import.meta.glob(
+      "../../../../../../plugin/osint-geoint/.claude-plugin/plugin.json",
+      { eager: true },
+    ),
+  ),
+};
+const mk = firstJson<MarketJson>(
+  import.meta.glob("../../../../../../.claude-plugin/marketplace.json", {
+    eager: true,
+  }),
+);
+const mkName = mk.name ?? "—";
 
 const COUNTS = {
   Skills: Object.keys(
@@ -33,9 +65,9 @@ export const subOf = (d: string): string =>
 const ST = "#e8553b";
 
 export function D191({ nav }: { nav: Nav }): JSX.Element {
-  const pl = mk.plugins[0]!;
+  const pl = mk.plugins?.[0] ?? {};
   const desc = descOf(pj.description);
-  const sub = subOf(pl.description);
+  const sub = subOf(pl.description ?? "");
   const content: Array<[string, number]> = [
     ["Skills", COUNTS.Skills],
     ["Commands", COUNTS.Commands],
@@ -47,7 +79,7 @@ export function D191({ nav }: { nav: Nav }): JSX.Element {
         nav={nav}
         crumb={
           <>
-            Marketplace · {mk.name} · <b>{pj.name}</b>
+            Marketplace · {mkName} · <b>{pj.name}</b>
           </>
         }
       >
@@ -127,7 +159,7 @@ export function D191({ nav }: { nav: Nav }): JSX.Element {
                 <div className="fxn-kv">
                   <span>Store</span>
                   <span>
-                    {Ii("shop", 16, ST)} {mk.name}
+                    {Ii("shop", 16, ST)} {mkName}
                   </span>
                 </div>
               </Card>

@@ -8,18 +8,21 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  X,
-  PanelRightClose,
-  PanelLeftClose,
-  PanelRightOpen,
-} from "lucide-react";
+import { PanelRightClose, PanelLeftClose, PanelRightOpen } from "lucide-react";
 import type { TabDef } from "./TabbedPanel.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
+import { BottomSheet } from "./BottomSheet.js";
+import { Icon, type IconName } from "../normal/Icon.js";
 import { useIsMobile } from "./useIsMobile.js";
 import { StatusDot, MicroLabel } from "./instruments.js";
 import { FloatingPanel } from "./FloatingPanel.js";
-import { useConnection, useFeeds, useTime, useSim } from "../state/stores.js";
+import {
+  useConnection,
+  useFeeds,
+  useTime,
+  useSim,
+  useSelection,
+} from "../state/stores.js";
 import {
   useRailWidth,
   RIGHT_MIN,
@@ -65,6 +68,9 @@ interface Props {
   // whole band. Both stay MOUNTED (Timeline drives the clock; ObjectInspector
   // holds selection effects) — only layout/a11y visibility changes. Desktop only.
   fullBleed?: boolean;
+  /** Phone only: the control at the start of the floating top row (the 2D map
+   *  puts its way back to the 3D globe there). */
+  phoneLead?: ReactNode;
 }
 
 const ICON_RAIL_W = 44;
@@ -213,6 +219,7 @@ export function ConsoleShell({
   iconRail = false,
   mainOverlay,
   fullBleed = false,
+  phoneLead,
 }: Props): JSX.Element {
   const isMobile = useIsMobile();
   const bleed = fullBleed && !isMobile;
@@ -221,8 +228,8 @@ export function ConsoleShell({
   // does, the column and --rail-left-w grow so map overlays keep docking past it.
   const leftRailExpanded = useSettings((s) => s.leftRailExpanded);
   const iconRailW = leftRailExpanded ? 176 : ICON_RAIL_W;
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // Phone only: which bottom sheet is up. One at a time.
+  const [sheet, setSheet] = useState<string | null>(null);
   const [leftW, setLeftW] = useState(() =>
     clampN(readW(LS_LEFT, 296), LEFT_MIN, LEFT_MAX),
   );
@@ -247,20 +254,43 @@ export function ConsoleShell({
     }
   }, [leftW]);
 
-  const timelinePanel: TabDef = {
-    id: "timeline",
-    label: "Timeline",
-    content: bottom,
-  };
-  const mobilePanels: TabDef[] =
-    leftTabs || rightTabs
-      ? [...(leftTabs ?? []), ...(rightTabs ?? []), timelinePanel]
+  // The phone's sheets, in tab order. The command bar (search, area, basemap)
+  // is a sheet too: as a 412px strip it ran 94 elements past the right edge.
+  const phoneSheets: (TabDef & { glyph: IconName })[] = [
+    ...(leftTabs || rightTabs
+      ? [...(leftTabs ?? []), ...(rightTabs ?? [])].map((t) => ({
+          ...t,
+          glyph: "layers" as const,
+        }))
       : [
-          { id: "left", label: "Layers", content: left },
-          { id: "right", label: "Selection", content: right },
-          timelinePanel,
-        ];
-  const active = mobilePanels.find((p) => p.id === activeId) ?? null;
+          {
+            id: "left",
+            label: "Layers",
+            content: left,
+            glyph: "layers" as const,
+          },
+          ...(right
+            ? [
+                {
+                  id: "right",
+                  label: "Selection",
+                  content: right,
+                  glyph: "crosshair" as const,
+                },
+              ]
+            : []),
+        ]),
+    { id: "timeline", label: "Timeline", content: bottom, glyph: "clock" },
+    { id: "search", label: "Search", content: top, glyph: "search" },
+  ];
+  // Picking a contact on a phone raises its Selection sheet to a peek strip,
+  // and clearing it drops the sheet, as on the 3D console.
+  const selected = useSelection((s) => (isMobile ? s.selectedEntityId : null));
+  useEffect(() => {
+    if (!isMobile || !right || leftTabs || rightTabs) return;
+    if (selected) setSheet("right");
+    else setSheet((cur) => (cur === "right" ? null : cur));
+  }, [selected, isMobile, right, leftTabs, rightTabs]);
 
   return (
     <div
@@ -268,7 +298,7 @@ export function ConsoleShell({
       style={
         {
           gridTemplateRows: isMobile
-            ? "26px 42px 1fr"
+            ? "minmax(0, 1fr) auto"
             : bleed
               ? "26px 42px 1fr 0px"
               : "26px 42px 1fr 158px",
@@ -284,26 +314,32 @@ export function ConsoleShell({
     >
       {/* Persistent classification banner — top chrome (Gotham COP convention).
           UNCLASSIFIED (open sources); amber EXERCISE strip while the war-sim runs. */}
-      <div
-        className="row-start-1 flex items-center justify-center text-[10px] font-semibold tracking-[1.6px] uppercase select-none"
-        style={{
-          background: sim ? "var(--cls-exercise-bg)" : "var(--cls-unclas-bg)",
-          color: sim ? "var(--cls-exercise-fg)" : "var(--cls-unclas-fg)",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
-        }}
-      >
-        {sim
-          ? "Unclassified // Exercise · Simulated data · not real-world"
-          : "Unclassified // Open-source intelligence"}
-      </div>
-      <header
-        className="row-start-2 border-b border-line-2 bg-bg-1 relative z-30 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
-        style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
-      >
-        {top}
-      </header>
+      {!isMobile && (
+        <div
+          className="row-start-1 flex items-center justify-center text-[10px] font-semibold tracking-[1.6px] uppercase select-none"
+          style={{
+            background: sim ? "var(--cls-exercise-bg)" : "var(--cls-unclas-bg)",
+            color: sim ? "var(--cls-exercise-fg)" : "var(--cls-unclas-fg)",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          {sim
+            ? "Unclassified // Exercise · Simulated data · not real-world"
+            : "Unclassified // Open-source intelligence"}
+        </div>
+      )}
+      {!isMobile && (
+        <header
+          className="row-start-2 border-b border-line-2 bg-bg-1 relative z-30 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden"
+          style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
+        >
+          {top}
+        </header>
+      )}
 
-      <main className="row-start-3 relative overflow-hidden">
+      <main
+        className={`${isMobile ? "row-start-1" : "row-start-3"} relative overflow-hidden`}
+      >
         {/* globe fills the row (always mounted) */}
         <div className="absolute inset-0 z-0">{globe}</div>
 
@@ -318,19 +354,17 @@ export function ConsoleShell({
             height (the 42/1fr/158 zones are untouched); pointer-events-none
             wrapper + pointer-events-auto pill so it never blocks globe drag.
             On desktop it floats between the rails (left 296 / right 336). */}
-        <div
-          className={`absolute top-1.5 z-15 flex justify-center pointer-events-none ${isMobile ? "inset-x-2" : ""}`}
-          style={
-            isMobile
-              ? undefined
-              : {
-                  left: (iconRail ? iconRailW : leftW) + 10,
-                  right: rightW + 10,
-                }
-          }
-        >
-          <MapHealthStrip />
-        </div>
+        {!isMobile && (
+          <div
+            className="absolute top-1.5 z-15 flex justify-center pointer-events-none"
+            style={{
+              left: (iconRail ? iconRailW : leftW) + 10,
+              right: rightW + 10,
+            }}
+          >
+            <MapHealthStrip />
+          </div>
+        )}
 
         {/* contextual overlay (selection action ribbon) — docked left of the
             globe band, below the health strip, rail-aware so it tracks resize. */}
@@ -445,92 +479,71 @@ export function ConsoleShell({
           </>
         )}
 
-        {/* ───────────────── mobile chrome ───────────────── */}
+        {/* ───────────────── phone chrome ─────────────────
+            The 3D console's phone grammar (Console.tsx): the map is the screen,
+            a row floats on its top edge, every panel is a bottom sheet. */}
         {isMobile && (
           <>
-            {/* active panel — full-screen over the globe */}
-            {active && (
-              <div
-                className="absolute inset-0 z-30 flex flex-col"
-                style={{ background: RAIL_BG }}
-              >
-                <div
-                  className="flex items-center justify-between border-b border-line-2 px-3 flex-none"
-                  style={{ height: 40 }}
-                >
-                  <span className="mono text-[12px] text-txt-0">
-                    {active.label}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveId(null)}
-                    className="mono text-[12px] text-txt-2 px-2 py-1 flex items-center gap-1"
-                    aria-label="Close panel"
-                  >
-                    <X size={13} strokeWidth={1.75} aria-hidden /> Close
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                  <ErrorBoundary label={active.label}>
-                    {active.content}
-                  </ErrorBoundary>
-                </div>
-              </div>
-            )}
-
-            {/* panel chooser sheet */}
-            {menuOpen && !active && (
-              <div className="absolute inset-0 z-30">
+            <div className="pfloat">
+              <div className="pfloat-row">
+                {phoneLead}
                 <button
                   type="button"
-                  aria-label="Close menu"
-                  onClick={() => setMenuOpen(false)}
-                  className="absolute inset-0 bg-black/60"
-                />
-                <div
-                  className="absolute left-0 right-0 bottom-0 max-h-[80%] overflow-y-auto border-t border-line-2 rounded-t-2xl p-2"
-                  style={{ background: RAIL_BG }}
+                  className="psearch"
+                  onClick={() => setSheet("search")}
                 >
-                  <div className="mono text-[11px] text-txt-2 px-2 pt-2 pb-1">
-                    PANELS
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 p-1">
-                    {mobilePanels.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveId(p.id);
-                          setMenuOpen(false);
-                        }}
-                        className="flex items-center gap-2 border border-line-2 rounded-md px-3 py-3 mono text-[12px] text-txt-0 text-left hover:border-accent-line"
-                      >
-                        {p.icon}
-                        <span>{p.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  <Icon name="search" className="h-[18px] w-[18px] shrink-0" />
+                  <span>Search places, planes</span>
+                </button>
+                <span
+                  className="csl2-clas"
+                  data-kind={sim ? "exercise" : "unclas"}
+                >
+                  {sim ? "EXERCISE" : "UNCLAS"}
+                </span>
               </div>
-            )}
-
-            {/* hamburger — opens the chooser (hidden while a panel is open) */}
-            {!active && (
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                className="absolute bottom-3 left-3 z-40 mono text-[13px] px-4 py-2.5 rounded-md border border-line-2 text-txt-0 flex items-center gap-2"
-                style={{ background: RAIL_BG }}
-                aria-label="Open panels menu"
+              <div className="pfloat-chips">
+                <MapHealthStrip />
+              </div>
+            </div>
+            {phoneSheets.map((p) => (
+              <BottomSheet
+                key={p.id}
+                label={p.label}
+                open={sheet === p.id}
+                onClose={() => setSheet(null)}
+                detents={
+                  p.id === "right" ? ["peek", "half", "full"] : ["half", "full"]
+                }
+                // The timeline drives the clock; it stays mounted, as the
+                // desktop footer keeps it.
+                keepMounted={p.id === "timeline"}
+                focusInput={p.id === "search"}
               >
-                ☰ <span>Panels</span>
-              </button>
-            )}
+                {p.content}
+              </BottomSheet>
+            ))}
           </>
         )}
       </main>
 
-      {/* timeline footer — desktop only (mobile reaches it via the chooser).
+      {isMobile && (
+        <nav className="ptabs row-start-2" data-primary-nav aria-label="Map">
+          {phoneSheets.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              aria-pressed={sheet === p.id}
+              onClick={() => setSheet((cur) => (cur === p.id ? null : p.id))}
+            >
+              <Icon name={p.glyph} className="h-[20px] w-[20px]" />
+              <span>{p.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {/* timeline footer — desktop only (a phone reaches it from the tab bar).
           Full-bleed collapses the row (grid track is 0px) but keeps Timeline
           mounted so the clock/replay side effects never restart. */}
       {!isMobile && (

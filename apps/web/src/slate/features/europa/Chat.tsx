@@ -15,24 +15,46 @@ export interface ChatRow {
   private?: boolean;
 }
 
-const HEADER_TOOLS = ["search", "person", "folder-close", "pin", "cog"] as const;
+const HEADER_TOOLS = [
+  "search",
+  "person",
+  "folder-close",
+  "pin",
+  "cog",
+] as const;
 
-export function ChatPage({ ch, toGaia }: { ch: Res<unknown> | null; toGaia: () => void }): JSX.Element {
+export function ChatPage({
+  ch,
+  toGaia,
+}: {
+  ch: Res<unknown> | null;
+  toGaia: () => void;
+}): JSX.Element {
   const [sel, setSel] = useState(0);
   const [q, setQ] = useState("");
   const [drag, setDrag] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const all: ChatRow[] =
-    ch?.ok && Array.isArray(ch.data) ? (ch.data as ChatRow[]).filter((r) => typeof r?.name === "string") : [];
+    ch?.ok && Array.isArray(ch.data)
+      ? (ch.data as ChatRow[]).filter((r) => typeof r?.name === "string")
+      : [];
   const needle = q.trim().toLowerCase();
-  const rows = all.map((r, i) => ({ r, i })).filter(({ r }) => r.name.toLowerCase().includes(needle));
+  const rows = all
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => r.name.toLowerCase().includes(needle));
   const name = all[sel]?.name ?? null;
   const why = unavailable("Chat", ch);
   const title = dragTitle();
   return (
     <div className="euc">
       <div className="eu-bar">
-        <button type="button" className="eu-btn" aria-label="Home" title="Gaia home" onClick={toGaia}>
+        <button
+          type="button"
+          className="eu-btn"
+          aria-label="Home"
+          title="Gaia home"
+          onClick={toGaia}
+        >
           <BpIcon name="chevron-left" size={14} />
           Gaia home
         </button>
@@ -46,18 +68,33 @@ export function ChatPage({ ch, toGaia }: { ch: Res<unknown> | null; toGaia: () =
         <nav className="euc-side" aria-label="Channels">
           <label className="eu-search">
             <BpIcon name="search" size={14} />
-            <input aria-label="Search channels" placeholder="Search channels" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input
+              aria-label="Search channels"
+              placeholder="Search channels"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
           </label>
           <div className="euc-sec">
             <span>Channels</span>
-            <button type="button" className="eu-ico" aria-label="New channel" title={why} disabled>
+            <button
+              type="button"
+              className="eu-ico"
+              aria-label="New channel"
+              title={why}
+              disabled
+            >
               <BpIcon name="plus" size={14} />
             </button>
           </div>
           {rows.length === 0 && (
             <p className="eu-note">
               <BpIcon name="info-sign" size={12} />
-              {ch?.ok ? (all.length ? `No channel matches "${q}"` : "No channels") : why}
+              {ch?.ok
+                ? all.length
+                  ? `No channel matches "${q}"`
+                  : "No channels"
+                : why}
             </p>
           )}
           {rows.slice(0, 40).map(({ r, i }) => (
@@ -70,28 +107,48 @@ export function ChatPage({ ch, toGaia }: { ch: Res<unknown> | null; toGaia: () =
               title={`Open ${r.name}`}
               onClick={() => setSel(i)}
             >
-              <BpIcon name={r.private === false ? "globe-network" : "lock"} size={12} />
+              <BpIcon
+                name={r.private === false ? "globe-network" : "lock"}
+                size={12}
+              />
               <span>{r.name}</span>
             </button>
           ))}
           <div className="euc-sec">
             <span>Direct messages</span>
-            <button type="button" className="eu-ico" aria-label="New direct message" title={why} disabled>
+            <button
+              type="button"
+              className="eu-ico"
+              aria-label="New direct message"
+              title={why}
+              disabled
+            >
               <BpIcon name="plus" size={14} />
             </button>
           </div>
-          <p className="eu-note">{ch?.ok ? "No direct messages" : unavailable("Messages", ch)}</p>
+          <p className="eu-note">
+            {ch?.ok ? "No direct messages" : unavailable("Messages", ch)}
+          </p>
         </nav>
         <section className="euc-main">
           <header className="euc-head">
             <div className="euc-title">
               <BpIcon name="lock" size={14} />
               <b>{name ?? "No channel open"}</b>
-              <span className="eu-dim">{ch?.ok ? "Members not reported" : unavailable("Members", ch)}</span>
+              <span className="eu-dim">
+                {ch?.ok ? "Members not reported" : unavailable("Members", ch)}
+              </span>
             </div>
             <div className="eu-tools">
               {HEADER_TOOLS.map((ic) => (
-                <button key={ic} type="button" className="eu-ico" aria-label={ic} title={why} disabled>
+                <button
+                  key={ic}
+                  type="button"
+                  className="eu-ico"
+                  aria-label={ic}
+                  title={why}
+                  disabled
+                >
                   <BpIcon name={ic} size={14} />
                 </button>
               ))}
@@ -126,15 +183,31 @@ export function ChatPage({ ch, toGaia }: { ch: Res<unknown> | null; toGaia: () =
             ) : (
               <div className="euc-empty">
                 <BpIcon name="chat" size={32} />
-                <span>{ch?.ok ? "No messages in this channel" : unavailable("Messages", ch)}</span>
+                <span>
+                  {ch?.ok
+                    ? "No messages in this channel"
+                    : unavailable("Messages", ch)}
+                </span>
                 {note && <span className="euc-warn">{note}</span>}
               </div>
             )}
           </div>
           <div className="euc-comp">
-            <input aria-label="Send a message" placeholder="Send a message..." title={why} disabled />
+            <input
+              aria-label="Send a message"
+              placeholder="Send a message..."
+              title={why}
+              disabled
+            />
             {(["paperclip", "emoji", "key-enter"] as const).map((ic) => (
-              <button key={ic} type="button" className="eu-ico" aria-label={ic} title={why} disabled>
+              <button
+                key={ic}
+                type="button"
+                className="eu-ico"
+                aria-label={ic}
+                title={why}
+                disabled
+              >
                 <BpIcon name={ic} size={14} />
               </button>
             ))}

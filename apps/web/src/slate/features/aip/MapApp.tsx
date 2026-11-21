@@ -31,7 +31,8 @@ import {
   type SarFC,
 } from "./data.js";
 import { age, ell, km, mgrs, type WItem } from "./dataB.js";
-import sceneHormuz from "./sceneHormuz.jpg";
+// shortcut: reference-derived image kept out of the repo; the page draws without it. Ship a licensed asset to restore it.
+const sceneHormuz: string = "";
 
 const SCENE_W = 1882;
 const SCENE_H = 1242;
@@ -81,7 +82,7 @@ export class MapView {
     const [x, y] = this.px(0, 0);
     return (
       <image
-        href={sceneHormuz}
+        href={sceneHormuz || undefined}
         x={x}
         y={y}
         width={SCENE_W * this.k}
@@ -737,7 +738,7 @@ function EntityPanel({
         >
           <rect x={px - 40} y={py - 40} width={80} height={80} fill="#0c1a26" />
           <image
-            href={sceneHormuz}
+            href={sceneHormuz || undefined}
             x={0}
             y={0}
             width={SCENE_W}

@@ -5,8 +5,9 @@
 // severity + a delivery channel, optionally pinned to one aircraft/vessel
 // identity (icao24/mmsi/callsign) so the watch keeps following it once it
 // leaves the drawn area (app/intel/watch.py).
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../transport/http.js";
+import { useAlertDraft } from "./alertDraft.js";
 
 // Mirrors app/routes/alert_rules.py::KINDS exactly — the route 400s on any
 // kind not in this set, so keep the two lists in sync.
@@ -23,7 +24,12 @@ const KINDS = [
   "loiter",
 ] as const;
 
-const CHANNELS = ["inapp", "discord", "webhook"] as const;
+const CHANNELS = ["inapp", "discord", "webhook", "ntfy"] as const;
+const SINK_PLACEHOLDER: Record<Exclude<Channel, "inapp">, string> = {
+  discord: "Discord webhook URL",
+  webhook: "Webhook URL",
+  ntfy: "ntfy topic URL, e.g. https://ntfy.sh/my-topic",
+};
 type Channel = (typeof CHANNELS)[number];
 
 // The list card used to always render `${rule.radius_nm} nm`, even for an
@@ -91,6 +97,21 @@ export function AlertRulesSection(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Prefill from the map's "Alert me about this area" action (one-shot).
+  useEffect(() => {
+    const d = useAlertDraft.getState().take();
+    if (!d) return;
+    setForm({
+      ...EMPTY_FORM,
+      label: d.label,
+      lat: d.lat.toFixed(4),
+      lon: d.lon.toFixed(4),
+      radius_nm: String(d.radius_nm),
+    });
+    rootRef.current?.scrollIntoView?.({ block: "start" });
+  }, []);
 
   const loadRules = useCallback(async () => {
     try {
@@ -230,7 +251,7 @@ export function AlertRulesSection(): JSX.Element {
   };
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div ref={rootRef} className="flex flex-col gap-2.5">
       {rules.length > 0 && (
         <div className="flex flex-col gap-1.5">
           {rules.map((rule) => (
@@ -372,9 +393,7 @@ export function AlertRulesSection(): JSX.Element {
             type="text"
             value={form.sink_url}
             onChange={(e) => set("sink_url", e.target.value)}
-            placeholder={
-              form.channel === "discord" ? "Discord webhook URL" : "Webhook URL"
-            }
+            placeholder={SINK_PLACEHOLDER[form.channel]}
             className="w-full mono text-[10px] bg-bg-2 border border-line rounded-sm px-2 py-1 text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
           />
         )}
