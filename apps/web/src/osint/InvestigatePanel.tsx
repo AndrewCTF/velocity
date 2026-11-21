@@ -179,7 +179,7 @@ export function InvestigatePanel(): JSX.Element {
         file hash · btc/eth wallet · ASN. Toggle Company or Person for a
         free-text org or name search, Phone for pivot links.
       </div>
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 8 }}>
         <input
           placeholder="example.com · 8.8.8.8 · jane@example.com · torvalds · AS15169 · 618-462-0000"
           value={target}
@@ -197,7 +197,7 @@ export function InvestigatePanel(): JSX.Element {
           {busy ? "…" : "Run"}
         </button>
       </div>
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 8 }}>
         {MODES.map((m) => (
           <button
             key={m.id}
@@ -236,7 +236,7 @@ export function InvestigatePanel(): JSX.Element {
           below by hand.
         </div>
       )}
-      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <span style={{ fontSize: 11, color: "var(--txt-3)" }}>
           Deep recon (GPL sidecar):
         </span>
@@ -401,7 +401,7 @@ const inputStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.15)",
   borderRadius: 4,
   color: "inherit",
-  padding: "4px 6px",
+  padding: "4px 8px",
 };
 
 const btnStyle: CSSProperties = {

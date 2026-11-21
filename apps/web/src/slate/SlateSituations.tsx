@@ -23,6 +23,11 @@ import {
 import { useSitFlow } from "./features/situation/flow.js";
 import { useOrders } from "./features/tasking/orders.js";
 import {
+  ProposeCoas,
+  SavedSitBar,
+  viewArea,
+} from "./features/situation/SavedSitTools.js";
+import {
   useSituationFocus,
   type SituationRow,
 } from "../state/situationFocus.js";
@@ -85,6 +90,16 @@ export function useOpenSituation(): { name: string } | undefined {
   if (det && (id === null || id === "detected"))
     return { name: detTitle(det, port) };
   return (id ? list.find((s) => s.id === id) : undefined) ?? newest(list);
+}
+
+/** A linked contact's map label (vessel name, callsign), else its id. */
+function entityName(viewer: Cesium.Viewer | null, id: string): string {
+  if (!viewer || viewer.isDestroyed()) return id;
+  for (let i = 0; i < viewer.dataSources.length; i++) {
+    const n = viewer.dataSources.get(i).entities.getById(id)?.name;
+    if (n?.trim()) return `${n.trim()} · ${id}`;
+  }
+  return id;
 }
 
 export function detTitle(det: Detection, port: string | null): string {
@@ -389,6 +404,8 @@ export function SlateSituations({
   const list = useSituations((s) => s.situations);
   const load = useSituations((s) => s.load);
   const createSit = useSituations((s) => s.create);
+  const updateSit = useSituations((s) => s.update);
+  const saveErr = useSituations((s) => s.error);
   const id = useSlateSituation((s) => s.id);
   const setId = useSlateSituation((s) => s.set);
   const listed = useSlateSituation((s) => s.listed);
@@ -455,6 +472,7 @@ export function SlateSituations({
 
   // Saved situation detail.
   const [objects, setObjects] = useState<LinkedObject[]>([]);
+  const [rev, setRev] = useState(0); // bumped after a link, to refetch
   useEffect(() => {
     setObjects([]);
     if (!sit) return;
@@ -466,7 +484,7 @@ export function SlateSituations({
     return () => {
       live = false;
     };
-  }, [sit?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sit?.id, rev]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -598,9 +616,9 @@ export function SlateSituations({
   const coaCards = (items: Coa[]): JSX.Element => (
     <div className="sl-cards">
       {items.length === 0 && <p className="sl-empty">None yet.</p>}
-      {items.map((c) => (
+      {items.map((c, i) => (
         <button
-          key={c.id}
+          key={`${c.id}:${i}`}
           type="button"
           className={`coa sl-flow${pick === rowId(c) || (c.select && selected === c.select) ? " sel" : ""}`}
           onClick={() => {
@@ -641,7 +659,7 @@ export function SlateSituations({
     };
     return (
       <div className="sl-cards">
-        {ordered.map((c0) => {
+        {ordered.map((c0, idx) => {
           const d =
             c0.detail &&
             c0.id === "track" &&
@@ -665,7 +683,7 @@ export function SlateSituations({
           if (d && flow.selected === c.id)
             return (
               <SelectedAction
-                key={c.id}
+                key={`${c.id}:selected:${idx}`}
                 c={c}
                 d={d}
                 status={
@@ -698,7 +716,10 @@ export function SlateSituations({
             );
           if (d && (pick === rowId(c) || flow.compare))
             return (
-              <div key={c.id} onClick={() => setPick(rowId(c))}>
+              <div
+                key={`${c.id}:expanded:${idx}`}
+                onClick={() => setPick(rowId(c))}
+              >
                 <ExpandedAction
                   c={c}
                   d={d}
@@ -714,7 +735,11 @@ export function SlateSituations({
                 />
               </div>
             );
-          return coaCards([c]);
+          return (
+            <div key={`${c.id}:collapsed:${idx}`} style={{ display: "contents" }}>
+              {coaCards([c])}
+            </div>
+          );
         })}
       </div>
     );
@@ -742,7 +767,27 @@ export function SlateSituations({
           >
             {detTitle(det, port)}
           </button>
-          {flow.resolved && <span className="sl-sittag">Archived</span>}
+          {flow.resolved ? (
+            <span className="sl-sittag">Archived</span>
+          ) : (
+            <button
+              type="button"
+              className="sl-xbtn sl-savebtn"
+              title="Keep this detection as a saved situation you can edit and add to"
+              onClick={async () => {
+                const nid = await createSit({
+                  name: detTitle(det, port),
+                  severity: det.sanctioned > 0 ? "high" : "med",
+                  centroid: { lat: det.lat, lon: det.lon },
+                  radius_km: det.r_km,
+                  summary: `${det.n} vessels at anchor within ${det.r_km} km, detected live from AIS.`,
+                });
+                setId(nid);
+              }}
+            >
+              Save
+            </button>
+          )}
         </div>
         <div className="kv sl-flow sl-kv1">
           <span className="k">Detected</span>
@@ -786,9 +831,9 @@ export function SlateSituations({
           {band("hyp", "Possible explanations", model.hyps.length)}
           {open === "hyp" && (
             <div className="sl-cards">
-              {model.hyps.map((h) => (
+              {model.hyps.map((h, i) => (
                 <ExplanationCard
-                  key={h.text}
+                  key={`${i}:${h.text}`}
                   title={h.text}
                   risk={h.risk}
                   by={`Hypothetical • ${h.n} hulls, anchorage detector`}
@@ -815,6 +860,11 @@ export function SlateSituations({
         <div className="ttl sl-flow">
           Situations <span className="n">{list.length + (det ? 1 : 0)}</span>
         </div>
+        <p className="sl-intro">
+          A situation is one area you are watching: its contacts, the possible
+          explanations and the actions to take. The first is detected live from
+          AIS; Save keeps it. New situation starts one on the current map view.
+        </p>
         {det && (
           <button
             type="button"
@@ -838,14 +888,11 @@ export function SlateSituations({
           </button>
         )}
         {list.length === 0 && !det && (
-          <p className="sl-empty">
-            No situations yet. A situation gathers the contacts, events and
-            courses of action around one area.
-          </p>
+          <p className="sl-empty">No situations yet.</p>
         )}
-        {list.map((s) => (
+        {list.map((s, i) => (
           <button
-            key={s.id}
+            key={`${s.id}:${i}`}
             type="button"
             className="coa sl-flow"
             onClick={() => {
@@ -883,7 +930,13 @@ export function SlateSituations({
           type="button"
           className="band sl-flow sl-new"
           onClick={async () => {
-            const nid = await createSit({ name: "New situation" });
+            const area = viewArea(viewer);
+            const nid = await createSit({
+              name: area
+                ? `Situation at ${area.centroid.lat.toFixed(2)}, ${area.centroid.lon.toFixed(2)}`
+                : "New situation",
+              ...(area ?? {}),
+            });
             setId(nid);
             setListed(false);
           }}
@@ -908,7 +961,18 @@ export function SlateSituations({
         >
           <BpIcon name="arrow-left" size={16} />
         </button>
-        <span className="truncate">{sit.name}</span>
+        <input
+          key={sit.id}
+          className="sl-ttlin"
+          aria-label="Situation name"
+          title="Rename: type, then Enter"
+          defaultValue={sit.name}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          onBlur={(e) => {
+            const v = e.currentTarget.value.trim();
+            if (v && v !== sit.name) void updateSit(sit.id, { name: v });
+          }}
+        />
       </div>
       <div className="kv sl-flow sl-kv1">
         <span className="k">Created</span>
@@ -916,36 +980,84 @@ export function SlateSituations({
       </div>
       <div className="kv sl-flow sl-kv2">
         <span className="k">Severity</span>
-        {sev === "high" || sev === "critical" ? (
-          <span className="sev">{sev.toUpperCase()}</span>
-        ) : (
-          <span className="chip">{sev.toUpperCase()}</span>
-        )}
+        <select
+          className={`sl-sevsel${sev === "high" || sev === "critical" ? " r" : ""}`}
+          aria-label="Severity"
+          value={sev}
+          onChange={(e) =>
+            void updateSit(sit.id, {
+              severity: e.currentTarget.value as Situation["severity"],
+            })
+          }
+        >
+          {(["critical", "high", "med", "low"] as const).map((v) => (
+            <option key={v} value={v}>
+              {v.toUpperCase()}
+            </option>
+          ))}
+        </select>
       </div>
+      <SavedSitBar
+        sit={sit}
+        viewer={viewer}
+        selected={selected}
+        linked={objects.map((o) => o.id)}
+        onLinked={() => setRev((n) => n + 1)}
+        onDeleted={() => {
+          setId(null);
+          setListed(true);
+        }}
+      />
+      {saveErr && <p className="sl-intro sl-note">{saveErr}</p>}
       <div className="sl-bands">
-        {band("details", "Details")}
+        {band("details", "Details", savedModel.linked.length)}
         {open === "details" && (
           <div className="sl-details">
-            <p>{sit.summary || "No summary written."}</p>
+            <textarea
+              key={sit.id}
+              className="sl-sumin"
+              aria-label="Summary"
+              placeholder="What is happening here? Notes save when you click away."
+              defaultValue={sit.summary}
+              onBlur={(e) => {
+                const v = e.currentTarget.value;
+                if (v !== sit.summary) void updateSit(sit.id, { summary: v });
+              }}
+            />
             {sit.report && <p>{sit.report}</p>}
             <p className="sl-mute">
-              {sit.status} · radius {sit.radius_km} km
+              {sit.status} ·{" "}
               {sit.centroid
-                ? ` · ${sit.centroid.lat.toFixed(3)}, ${sit.centroid.lon.toFixed(3)}`
-                : ""}
-              {savedModel.linked.length
-                ? ` · ${savedModel.linked.length} linked: ${savedModel.linked
-                    .slice(0, 5)
-                    .map((o) => o.id)
-                    .join(", ")}`
-                : ""}
+                ? `${sit.centroid.lat.toFixed(3)}, ${sit.centroid.lon.toFixed(3)} · radius ${sit.radius_km} km`
+                : "No area set. Use map view gives it one."}
             </p>
+            {savedModel.linked.length > 0 ? (
+              <div className="sl-linked">
+                {savedModel.linked.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    title="Select on the map"
+                    onClick={() => useSelection.getState().select(o.id)}
+                  >
+                    {String(o.props?.name ?? o.props?.label ?? entityName(viewer, o.id))}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="sl-mute">
+                No contacts yet. Click one on the map, then Add selected.
+              </p>
+            )}
           </div>
         )}
         {band("hyp", "Possible explanations", savedModel.explanations.length)}
         {open === "hyp" && coaCards(savedModel.explanations)}
         {band("act", "Recommended actions", savedModel.actions.length)}
         {open === "act" && coaCards(savedModel.actions)}
+        {(open === "act" || open === "hyp") && (
+          <ProposeCoas sitId={sit.id} onKept={() => setRev((n) => n + 1)} />
+        )}
       </div>
     </div>
   );

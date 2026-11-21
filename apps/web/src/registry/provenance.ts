@@ -10,6 +10,8 @@
 // The tier answers one question: WHO SAID SO, and were they in a position to
 // be wrong about it?
 
+import { OSM_MILITARY_LAYER_IDS } from "./defaults.js";
+
 export type Tier = "sensor" | "registry" | "filing" | "claim";
 
 export const TIER_ORDER: readonly Tier[] = [
@@ -66,6 +68,9 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   "maritime.digitraffic": "sensor",
   "maritime.keyless": "sensor",
   "maritime.parked": "sensor",
+  // AIS positions are machine-reported; the military classification fuses
+  // sensor fixes with the Wikidata registry tiers. Derivation does not demote.
+  "maritime.military": "sensor",
   "maritime.aisstream": "sensor",
   "maritime.satellite": "sensor",
   "maritime.sar.hormuz": "sensor",
@@ -120,6 +125,9 @@ export const LAYER_TIERS: Readonly<Record<string, Tier>> = {
   "places.ports": "registry",
   "places.bases": "registry",
   "military.installations": "registry",
+  // Crowd-mapped, but each row is a tagged OSM object with a stable id and
+  // history, the same footing as the other OSM facility layers here.
+  ...Object.fromEntries(OSM_MILITARY_LAYER_IDS.map((id) => [id, "registry" as const])),
   "maritime.chokepoints": "registry",
   "maritime.coverage": "registry",
   "infra.powerplants": "registry",

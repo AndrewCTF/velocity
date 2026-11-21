@@ -1,0 +1,33 @@
+/* D82 FilterPicker. */
+.mv-filter-picker {
+  position: fixed;
+  left: 50%; top: 64px;
+  transform: translateX(-50%);
+  width: 560px;
+  max-height: calc(100vh - 80px);
+  background: #fff;
+  border: 1px solid #c9ced4;
+  border-radius: 4px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  z-index: 400;
+  font-size: 12.5px;
+  color: #1c2430;
+}
+.mv-fp-head { display: flex; align-items: baseline; gap: 10px; padding: 10px; border-bottom: 1px solid #e5e8ec; }
+.mv-fp-title { font-weight: 700; font-size: 13px; }
+.mv-fp-sub { color: #5f6b7c; font-size: 11.5px; flex: 1; }
+.mv-fp-close { display: grid; place-items: center; width: 28px; height: 28px; background: none; border: 0; cursor: pointer; color: #5f6b7c; }
+.mv-fp-list { overflow-y: auto; }
+.mv-fp-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 7px 10px; border: 0; background: none; cursor: pointer; text-align: left;
+  font-size: 12.5px; color: #1c2430;
+}
+.mv-fp-row:hover { background: #eef0f2; }
+.mv-fp-icon { display: inline-flex; flex: none; width: 16px; justify-content: center; color: #5f6b7c; }
+.mv-fp-key { font-weight: 600; min-width: 160px; }
+.mv-fp-val { color: #5f6b7c; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-fp-glyph { font-size: 10px; color: #8a94a3; text-transform: uppercase; letter-spacing: 0.04em; }
+.mv-fp-empty { padding: 16px; color: #5f6b7c; text-align: center; }

@@ -1,162 +1,273 @@
-// Legacy map frames D200 (selection card, radius circle, route-count bins) and
-// D201+D202 (icon legend card, page tabs) (sec_d200 / sec_d201,
-// _build_foundry_apps.py:1265-1342), on live OpenFlights and AIS data.
+// Legacy map pages, native: D200 (selection card, radius circle, departure
+// colours) and D201 (icon legend, page tabs) on live OpenFlights and AIS data.
+// `VesselMap` is also the plate behind the Workshop layer-style page.
 import { useMemo } from "react";
 import { APP_GROUPS, useAppView } from "../../../state/appView.js";
-import { BLU, DARK, E, Fr, Hit, I, frag, hairline, kit, type N } from "./kit.js";
-import { attribution, mini_bar, plane } from "./mapkit.js";
-import { ATTR } from "./mapkit.js";
-import { Plate } from "./Plate.js";
-import { aisType, airportsOf, d200, densCenter, depsOf, ofvOf, proj, scaleBar, useJson, vesselsOf, why, type Route } from "./data.js";
+import { Glyph, Ii } from "./kit.js";
+import {
+  Bar,
+  Btn,
+  Float,
+  MapNote,
+  MapStage,
+  Page,
+  useMap,
+  useScale,
+} from "./native.js";
+import {
+  aisType,
+  airportsOf,
+  d200,
+  densCenter,
+  depsOf,
+  ofvOf,
+  proj,
+  useJson,
+  vesselsOf,
+  why,
+  type Route,
+} from "./data.js";
 import type { Nav } from "./nav.js";
 
-const { txt, bx } = kit(1);
-const errBox = (e: string | null, x: number, y: number): N => (e ? frag([mini_bar(x, y, e.length * 6.2 + 20, 26), txt(x + 10, y + 13, e, 11, "#ac2f33")]) : null);
-
 export function D200({ nav }: { nav: Nav }): JSX.Element {
-  const W = 897;
-  const H = 375;
-  const zf = 5.7;
+  const m = useMap(5.7, 897);
   const lon0 = 10;
   const lat0 = 49;
-  const fn = useMemo(() => proj(10, 49, zf, W, H), []);
-  const kmpx = scaleBar(lat0, zf);
+  const fn = useMemo(() => proj(lon0, lat0, m.zf, m.w, m.h), [m.zf, m.w, m.h]);
+  const kmpx = useScale(lat0, m.zf);
   const rr = useJson<{ routes: Route[] }>("/api/aviation/routes");
-  const ar = useJson<Parameters<typeof airportsOf>[0]>("/api/aviation/airports/openflights");
+  const ar = useJson<Parameters<typeof airportsOf>[0]>(
+    "/api/aviation/airports/openflights",
+  );
   const r = useMemo(() => {
-    if (!rr?.data || !ar?.data) return null;
+    if (!rr?.data || !ar?.data || m.w <= 0) return null;
     const deps = depsOf(rr.data.routes);
-    const x = d200(ofvOf(airportsOf(ar.data), deps), deps, fn, W, H);
+    const x = d200(ofvOf(airportsOf(ar.data), deps), deps, fn, m.w, m.h);
     return x ? { ...x, deps } : null;
-  }, [rr, ar, fn]);
-  const o: N[] = [<Plate key="p" lon={lon0} lat={lat0} zf={zf} W={W} H={H} />];
+  }, [rr, ar, fn, m.w, m.h]);
+  let svg: JSX.Element | null = null;
   if (r) {
     const [sx, sy] = fn(r.sel.lon, r.sel.lat);
     const [nx, ny] = fn(r.nb.lon, r.nb.lat);
-    o.push(
-      <svg key="c" style={{ left: 0, top: 0, width: W, height: H }} width={W} height={H}>
-        <circle cx={sx} cy={sy} r={r.rkm / kmpx} fill="#f5a460" fillOpacity=".45" stroke="#f0a060" strokeWidth="1.4" />
-        <line x1={sx} y1={sy} x2={nx} y2={ny} stroke="#e8923a" strokeWidth="1.4" strokeDasharray="4 3" />
-        <circle cx={sx} cy={sy} r="14" fill="none" stroke="#e8923a" strokeWidth="1.6" />
-      </svg>,
+    svg = (
+      <>
+        <circle
+          cx={sx}
+          cy={sy}
+          r={r.rkm / kmpx}
+          fill="#f5a460"
+          fillOpacity=".45"
+          stroke="#f0a060"
+          strokeWidth="1.4"
+        />
+        <line
+          x1={sx}
+          y1={sy}
+          x2={nx}
+          y2={ny}
+          stroke="#e8923a"
+          strokeWidth="1.4"
+          strokeDasharray="4 3"
+        />
+        <circle
+          cx={sx}
+          cy={sy}
+          r="14"
+          fill="none"
+          stroke="#e8923a"
+          strokeWidth="1.6"
+        />
+        <g className="fxn-halo">
+          {[...r.inview]
+            .sort((p, q) => fn(p.lon, p.lat)[1] - fn(q.lon, q.lat)[1])
+            .map((a) => {
+              const [x, y] = fn(a.lon, a.lat);
+              return (
+                <Glyph
+                  key={a.iata}
+                  name="airplane"
+                  x={x}
+                  y={y}
+                  s={20}
+                  col={r.col(r.deps.get(a.iata)!)}
+                />
+              );
+            })}
+        </g>
+        <text
+          x={(sx + nx) / 2 + 4}
+          y={(sy + ny) / 2 - 8}
+        >{`${Math.round(r.rkm)} km`}</text>
+      </>
     );
-    for (const a of [...r.inview].sort((p, q) => fn(p.lon, p.lat)[1] - fn(q.lon, q.lat)[1])) {
-      const [x, y] = fn(a.lon, a.lat);
-      o.push(plane(x, y, r.col(r.deps.get(a.iata)!), 20));
-    }
-    o.push(txt((sx + nx) / 2 + 4, (sy + ny) / 2 - 8, `${Math.round(r.rkm)} km`, 10.5, "#8a5a2a", 600));
   }
-  o.push(
-    bx(5, 5, 28, 85, "#fff", "#d3d8de", 3, "box-shadow:0 1px 3px rgba(17,20,24,.2)"),
-    E(11, 11, 15, 15, "background:#394048;border-radius:50%"),
-    I("polygon-filter", 19, 46, 16, "#394048"),
-    I("cross", 19, 76, 14, "#394048"),
-    I("cog", 546, 19, 16, "#5f6b7c"),
-    mini_bar(567, 5, 324, 72, "#fff", "#e1e5ea", 3),
-    E(582, 22, 30, 30, "background:#12a89d;border-radius:4px"),
-    I("map-marker", 597, 37, 18, "#fff"),
-    txt(622, 28, r ? `[${r.sel.iata}] ${r.sel.name.slice(0, 20)} + ...` : "", 12, "#215db0", 700, 160),
-    txt(622, 45, "Airport (OpenFlights)", 10.5, "#5f6b7c"),
-    bx(786, 21, 29, 31, "#fff", "#c5cbd3", 3),
-    I("zoom-to-fit", 800, 36, 16, "#394048"),
-    E(822, 21, 50, 31, "background:#2d72d2;border-radius:3px"),
-    txt(847, 37, "Open", 12, "#fff", 400, 50, "c"),
-    bx(5, 285, 28, 80, "#fff", "#d3d8de", 3, "box-shadow:0 1px 3px rgba(17,20,24,.2)"),
-    I("zoom-in", 19, 297, 16, "#394048"),
-    I("zoom-out", 19, 325, 16, "#394048"),
-    bx(5, 345, 28, 22, "#fff", "#d3d8de", 3),
-    I("zoom-to-fit", 19, 356, 14, "#394048"),
-    attribution(40, 364, ATTR),
-    errBox(why("OpenFlights routes", rr) ?? why("OpenFlights airports", ar), 300, 330),
-    Hit(822, 21, 50, 31, "Open", r ? () => nav.go("d192") : undefined, "Airports not loaded"),
-    Hit(536, 9, 22, 22, "Foundry apps", nav.menu),
-  );
   return (
-    <Fr W={W} H={H}>
-      {frag(o)}
-    </Fr>
+    <Page>
+      <Bar
+        nav={nav}
+        crumb={
+          <>
+            Map (legacy) · <b>Selection card</b>
+          </>
+        }
+      />
+      <div className="fxn-body">
+        <MapStage m={m} lon={lon0} lat={lat0} svg={svg} kmPx={kmpx}>
+          {r ? (
+            <Float pos="tr" title="Selection">
+              <div className="fxn-leg">
+                <span className="fxn-pin" style={{ background: "#0e7f77" }}>
+                  {Ii("map-marker", 16, "#fff")}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <b>
+                    [{r.sel.iata}] {r.sel.name}
+                  </b>
+                  <div className="fxn-by">Airport (OpenFlights)</div>
+                </div>
+                <Btn primary onClick={() => nav.go("d192")}>
+                  Open
+                </Btn>
+              </div>
+            </Float>
+          ) : null}
+          <MapNote
+            text={
+              why("OpenFlights routes", rr) ?? why("OpenFlights airports", ar)
+            }
+          />
+        </MapStage>
+      </div>
+    </Page>
   );
 }
 
 // the app's AIS palette (apps/web/src/globe/adapters/styles.ts:47-56, not exported)
-const PALV: Record<string, string> = { Cargo: "#14b8a6", Tanker: "#d97706", Fishing: "#5eead4", Passenger: "#38bdf8", Tug: "#c084fc", "Pleasure craft": "#4ade80", Sailing: "#a5f3fc", SAR: "#ef4444", Military: "#f59e0b" };
+const PALV: Record<string, string> = {
+  Cargo: "#14b8a6",
+  Tanker: "#d97706",
+  Fishing: "#5eead4",
+  Passenger: "#38bdf8",
+  Tug: "#c084fc",
+  "Pleasure craft": "#4ade80",
+  Sailing: "#a5f3fc",
+  SAR: "#ef4444",
+  Military: "#f59e0b",
+};
 
-export function D201({ nav }: { nav: Nav }): JSX.Element {
-  const W = 1661;
-  const H = 866;
-  const TOPH = 53;
-  const MH = H - TOPH;
-  const zf = 10;
-  const setApp = useAppView((s) => s.setApp);
+/** Every vessel of the live AIS snapshot in view, at its densest cell, coloured by ship type. */
+export function VesselMap({ legend }: { legend: boolean }): JSX.Element {
+  const m = useMap(10, 1661);
   const vr = useJson<Parameters<typeof vesselsOf>[0]>("/api/maritime/snapshot");
   const ves = useMemo(() => (vr?.data ? vesselsOf(vr.data) : null), [vr]);
-  const [lo, la] = useMemo(() => (ves ? densCenter(zf, W, MH, ves) : [0, 0, 0]), [ves, MH]);
-  const fn = useMemo(() => proj(lo, la, zf, W, MH), [lo, la, MH]);
+  const [lo, la] = useMemo(
+    () => (ves && m.w > 0 ? densCenter(m.zf, m.w, m.h, ves) : [0, 0, 0]),
+    [ves, m.zf, m.w, m.h],
+  );
+  const fn = useMemo(
+    () => proj(lo, la, m.zf, m.w, m.h),
+    [lo, la, m.zf, m.w, m.h],
+  );
   const vin = useMemo(
     () =>
       (ves ?? []).filter((v) => {
         const [x, y] = fn(v.lon, v.lat);
-        return x > 0 && x < W && y > 0 && y < MH;
+        return x > 0 && x < m.w && y > 0 && y < m.h;
       }),
-    [ves, fn, MH],
+    [ves, fn, m.w, m.h],
   );
-  const tc = new Map<string, number>();
-  for (const v of vin) tc.set(aisType(v.shipType), (tc.get(aisType(v.shipType)) ?? 0) + 1);
-  const top3 = [...tc.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([t]) => t)
-    .filter((t) => t !== "No value")
-    .slice(0, 3);
-  const cmap = new Map(top3.map((t) => [t, PALV[t] ?? "#8f99a8"]));
-  const rows: Array<[string, string]> = [...top3.map((t) => [t, cmap.get(t)!] as [string, string]), ...([["Other", "#2d72d2"], ["No value", "#8f99a8"]] as Array<[string, string]>).slice(0, 4 - top3.length)];
-  const o: N[] = [E(0, 0, W, H, "background:#fff"), E(0, TOPH, W, MH, "background:#e6e8ea")];
-  if (ves) o.push(<Plate key={`p${lo},${la}`} lon={lo} lat={la} zf={zf} W={W} H={MH} top={TOPH} />);
-  for (const v of [...vin].sort((a, b) => fn(a.lon, a.lat)[1] - fn(b.lon, b.lat)[1])) {
-    const [x, y] = fn(v.lon, v.lat);
-    const t = aisType(v.shipType);
-    o.push(I("ship", x, y + TOPH, 18, cmap.get(t) ?? (t !== "No value" ? "#2d72d2" : "#8f99a8"), "filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1.5px #fff);"));
-  }
-  // page tabs = the app's real top-level tab groups (apps/web/src/state/appView.ts APP_GROUPS)
-  o.push(E(0, 0, W, TOPH, "background:#fff"), hairline(0, TOPH - 1, W, "#d3d8de"), E(0, 0, 53, TOPH - 1, "background:#f0f2f5"), I("application", 27, 28, 18, "#5f6b7c"));
-  let xx = 70;
-  const hits: N[] = [];
-  APP_GROUPS.forEach((gr, i) => {
-    const w = gr.label.length * 6.9;
-    o.push(txt(xx, 28, gr.label, 12.8, i === 0 ? "#215db0" : DARK, i === 0 ? 600 : 400));
-    if (i === 0) o.push(E(xx, 50, w + 2, 2, `background:${BLU}`));
-    const first = gr.apps[0];
-    hits.push(Hit(xx - 6, 8, w + 14, 40, `Open ${gr.label}`, first ? () => setApp(first) : undefined, "No app in this group"));
-    xx += w + 22;
-  });
-  o.push(
-    bx(5, 60, 28, 85, "#fff", "#d3d8de", 3, "box-shadow:0 1px 3px rgba(17,20,24,.2)"),
-    E(11, 66, 15, 15, "background:#394048;border-radius:50%"),
-    I("polygon-filter", 19, 102, 16, "#394048"),
-    I("cross", 19, 132, 14, "#394048"),
-    bx(5, 777, 28, 56, "#fff", "#d3d8de", 3),
-    I("zoom-in", 19, 791, 16, "#394048"),
-    I("zoom-out", 19, 819, 16, "#394048"),
-    bx(5, 842, 28, 22, "#fff", "#d3d8de", 3),
-    I("zoom-to-fit", 19, 853, 14, "#394048"),
-    I("cog", 1643, 73, 18, "#5f6b7c"),
-    attribution(36, 857, ATTR),
-    mini_bar(1433, 724, 214, 142, "#fbfbfc", "#e1e5ea", 3),
-    txt(1449, 748, "VESSELS BY SHIP TYPE", 13, "#1c2127", 700),
-  );
-  rows.forEach(([lab, c], i) => {
-    const yy = 775 + 18 * i;
-    o.push(I("ship", 1457, yy, 16, c), txt(1470, yy + 0.5, lab, 12.5, DARK));
-  });
-  o.push(
-    I("eye-open", 1621, 789, 16, "#394048"),
-    I("minimize", 1640, 847, 15, "#394048"),
-    errBox(why("AIS snapshot", vr), 300, 800),
-    frag(hits),
-    Hit(0, 0, 53, TOPH - 1, "Foundry apps", nav.menu),
-  );
+  const { cmap, rows } = useMemo(() => {
+    const tc = new Map<string, number>();
+    for (const v of vin)
+      tc.set(aisType(v.shipType), (tc.get(aisType(v.shipType)) ?? 0) + 1);
+    const top3 = [...tc.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([t]) => t)
+      .filter((t) => t !== "No value")
+      .slice(0, 3);
+    const cm = new Map(top3.map((t) => [t, PALV[t] ?? "#8f99a8"]));
+    const extra: Array<[string, string]> = [
+      ["Other", "#2d72d2"],
+      ["No value", "#8f99a8"],
+    ];
+    return {
+      cmap: cm,
+      rows: [
+        ...top3.map((t) => [t, cm.get(t)!] as [string, string]),
+        ...extra.slice(0, 4 - top3.length),
+      ],
+    };
+  }, [vin]);
+  const svg = ves ? (
+    <g className="fxn-halo">
+      {[...vin]
+        .sort((a, b) => fn(a.lon, a.lat)[1] - fn(b.lon, b.lat)[1])
+        .map((v, i) => {
+          const [x, y] = fn(v.lon, v.lat);
+          const t = aisType(v.shipType);
+          return (
+            <Glyph
+              key={i}
+              name="ship"
+              x={x}
+              y={y}
+              s={18}
+              col={cmap.get(t) ?? (t !== "No value" ? "#2d72d2" : "#8f99a8")}
+            />
+          );
+        })}
+    </g>
+  ) : null;
   return (
-    <Fr W={W} H={H}>
-      {frag(o)}
-    </Fr>
+    <MapStage m={m} lon={ves ? lo : null} lat={ves ? la : null} svg={svg}>
+      {legend ? (
+        <Float pos="br" title="Vessels by ship type" className="fxn-lift">
+          {rows.map(([lab, c]) => (
+            <div key={lab} className="fxn-leg">
+              {Ii("ship", 16, c)}
+              <span>{lab}</span>
+            </div>
+          ))}
+        </Float>
+      ) : null}
+      <MapNote text={why("AIS snapshot", vr)} />
+    </MapStage>
+  );
+}
+
+export function D201({ nav }: { nav: Nav }): JSX.Element {
+  const setApp = useAppView((s) => s.setApp);
+  return (
+    <Page>
+      <Bar
+        nav={nav}
+        crumb={
+          <>
+            Map (legacy) · <b>Legend and page tabs</b>
+          </>
+        }
+      >
+        <nav className="fxn-pages" aria-label="Velocity apps">
+          {APP_GROUPS.map((gr) => {
+            const first = gr.apps[0];
+            return (
+              <button
+                key={gr.label}
+                type="button"
+                className="fxn-btn"
+                onClick={first ? () => setApp(first) : undefined}
+                disabled={!first}
+                title={first ? `Open ${gr.label}` : "No app in this group"}
+              >
+                {gr.label}
+              </button>
+            );
+          })}
+        </nav>
+      </Bar>
+      <div className="fxn-body">
+        <VesselMap legend />
+      </div>
+    </Page>
   );
 }

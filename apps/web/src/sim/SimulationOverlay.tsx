@@ -485,7 +485,8 @@ export function SimulationOverlay({
 
   return (
     <div
-      className="absolute z-(--z-overlay) w-[300px] overflow-y-auto pointer-events-auto border-r border-line-2 bg-(--panel-bg)"
+      className="sim-panel absolute z-(--z-overlay) w-[300px] overflow-y-auto pointer-events-auto border-r border-line-2 bg-(--panel-bg)"
+      data-docked={pos ? undefined : ""}
       // Docked left by default, filling the map area (below the 68px top bars,
       // above the 158px timeline) like the other left flyouts. Drag → floats.
       style={

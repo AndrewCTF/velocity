@@ -34,7 +34,7 @@ import { Icon } from "../normal/Icon.js";
 interface Connection {
   id: string;
   name: string;
-  kind: "mqtt" | "kafka" | "sql";
+  kind: "mqtt" | "kafka" | "sql" | "http";
   dataset_id: string;
   config: Record<string, unknown>;
   enabled: boolean;
@@ -52,6 +52,50 @@ interface ConnectorEntry {
   needs: string;
   available: boolean;
   docs: string;
+}
+
+interface SourcePreset {
+  id: string;
+  title: string;
+  category: string;
+  url: string;
+  format: string;
+  license: string;
+  installed: boolean;
+}
+
+export const HTTP_FORMATS = ["json", "csv", "geojson", "rss", "ndjson"] as const;
+
+export function httpConfigFor(input: {
+  url: string;
+  format: string;
+  rowsPath: string;
+  authHeaderEnv: string;
+  intervalS: number;
+}): Record<string, unknown> {
+  const config: Record<string, unknown> = {
+    url: input.url,
+    format: input.format,
+    interval_s: input.intervalS || 300,
+  };
+  if (input.rowsPath.trim()) config.rows_path = input.rowsPath.trim();
+  if (input.authHeaderEnv.trim()) config.auth_header_env = input.authHeaderEnv.trim();
+  return config;
+}
+
+export function validateHttpConfig(config: {
+  url: string;
+  format: string;
+  rowsPath: string;
+}): string | null {
+  if (!/^https?:\/\//i.test(config.url)) return "Feed URL must use http or https";
+  if (!HTTP_FORMATS.includes(config.format as (typeof HTTP_FORMATS)[number])) {
+    return "Format must be json, csv, geojson, rss or ndjson";
+  }
+  if (config.rowsPath && !/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(config.rowsPath)) {
+    return "Rows path must be a dotted path of bare keys";
+  }
+  return null;
 }
 
 // GET /api/foundry/connectors — every way a dataset can be filled, not just
@@ -103,6 +147,7 @@ const KIND_HINT: Record<Connection["kind"], string> = {
   mqtt: "Subscribe to a topic on your broker",
   kafka: "Consume a topic from your cluster",
   sql: "Poll a read-only query, or cursor pull one named table",
+  http: "Poll a public feed; each poll replaces the dataset",
 };
 
 // The two sql sub-modes the backend accepts under one kind (foundry/connections.py):
@@ -180,12 +225,25 @@ function ConnectionEditor({
   const [cursorColumn, setCursorColumn] = useState("");
   const [batch, setBatch] = useState("5000");
   const [intervalS, setIntervalS] = useState("300");
+  const [srcUrl, setSrcUrl] = useState("");
+  const [format, setFormat] = useState("json");
+  const [rowsPath, setRowsPath] = useState("");
+  const [authHeaderEnv, setAuthHeaderEnv] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const config = (): Record<string, unknown> => {
     if (kind === "mqtt") return { url, topic };
     if (kind === "kafka") return { bootstrap_servers: servers, topic };
+    if (kind === "http") {
+      return httpConfigFor({
+        url: srcUrl,
+        format,
+        rowsPath,
+        authHeaderEnv,
+        intervalS: Number(intervalS) || 300,
+      });
+    }
     if (sqlMode === "table") {
       return {
         dsn_env: dsnEnv,
@@ -204,8 +262,10 @@ function ConnectionEditor({
         ? (identifierError("table", table) ??
           identifierError("cursor_column", cursorColumn))
         : null;
-    if (badIdentifier) {
-      setError(badIdentifier);
+    const badHttp = kind === "http" ? validateHttpConfig({ url: srcUrl, format, rowsPath }) : null;
+    const bad = badIdentifier ?? badHttp;
+    if (bad) {
+      setError(bad);
       return;
     }
     setSaving(true);
@@ -240,6 +300,9 @@ function ConnectionEditor({
     setQuery("");
     setTable("");
     setCursorColumn("");
+    setSrcUrl("");
+    setRowsPath("");
+    setAuthHeaderEnv("");
     onSaved();
     onClose();
   };
@@ -255,7 +318,9 @@ function ConnectionEditor({
       ? !!(url && topic)
       : kind === "kafka"
         ? !!(servers && topic)
-        : sqlReady);
+        : kind === "http"
+          ? !!srcUrl
+          : sqlReady);
 
   return (
     <Modal
@@ -297,7 +362,7 @@ function ConnectionEditor({
             <Select
               value={kind}
               onChange={(v) => setKind(v as Connection["kind"])}
-              options={(["mqtt", "kafka", "sql"] as const).map((k) => ({
+              options={(["mqtt", "kafka", "sql", "http"] as const).map((k) => ({
                 value: k,
                 // A kind whose client is not installed still lists, saying why.
                 // Hiding it would read as "this platform cannot do Kafka".
@@ -309,7 +374,10 @@ function ConnectionEditor({
             />
           </Field>
         </div>
-        <Field label="Target dataset" hint="rows are appended as a new version">
+        <Field
+          label="Target dataset"
+          hint={kind === "http" ? "rows are replaced as a new version each poll" : "rows are appended as a new version"}
+        >
           <Select
             value={datasetId}
             onChange={setDatasetId}
@@ -357,6 +425,54 @@ function ConnectionEditor({
               />
             </Field>
           </div>
+        )}
+        {kind === "http" && (
+          <>
+            <Field label="Feed URL" hint="public http(s) feed; SSRF-checked on every poll">
+              <input
+                value={srcUrl}
+                onChange={(e) => setSrcUrl(e.target.value)}
+                placeholder="https://example.com/feed.json"
+                className={controlCls}
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Format">
+                <Select
+                  value={format}
+                  onChange={setFormat}
+                  options={HTTP_FORMATS.map((f) => ({ value: f, label: f }))}
+                />
+              </Field>
+              <Field label="Rows path" hint="optional dotted bare keys, e.g. data.items">
+                <input
+                  value={rowsPath}
+                  onChange={(e) => setRowsPath(e.target.value)}
+                  placeholder="data"
+                  className={controlCls}
+                />
+              </Field>
+            </div>
+            <Field
+              label="Auth header environment variable"
+              hint="name of a backend environment variable holding 'Header: value'; never the credential itself"
+            >
+              <input
+                value={authHeaderEnv}
+                onChange={(e) => setAuthHeaderEnv(e.target.value.toUpperCase())}
+                placeholder="OSINT_FEED_AUTH"
+                className={controlCls}
+              />
+            </Field>
+            <Field label="Interval (seconds)" hint="minimum 30">
+              <input
+                value={intervalS}
+                onChange={(e) => setIntervalS(e.target.value)}
+                inputMode="numeric"
+                className={controlCls}
+              />
+            </Field>
+          </>
         )}
         {kind === "sql" && (
           <>
@@ -442,6 +558,9 @@ function summarise(c: Connection): string {
     return `${String(cfg["url"] ?? "")} · ${String(cfg["topic"] ?? "")}`;
   if (c.kind === "kafka")
     return `${String(cfg["bootstrap_servers"] ?? "")} · ${String(cfg["topic"] ?? "")}`;
+  if (c.kind === "http") {
+    return `${String(cfg["url"] ?? "")} · ${String(cfg["format"] ?? "json")} · every ${String(cfg["interval_s"] ?? 300)}s`;
+  }
   if (cfg["table"]) {
     // The cursor value is written by the runner every cycle, so a connection
     // that has not pulled yet reports no value — the lone dash, not a zero.
@@ -546,6 +665,95 @@ function ConnectionCard({
         {conn.last_error && <Badge tone="alert">{conn.last_error}</Badge>}
       </div>
     </div>
+  );
+}
+
+// ── shipped feed presets ────────────────────────────────────────────────────
+// The fastest way to fill a dataset: install one of the 121 curated public
+// feeds. Installation creates a dataset and an http connection with the same
+// config, which then polls on its interval until disabled or deleted.
+
+function SourcePresets({ onInstalled }: { onInstalled: () => void }): JSX.Element {
+  const [presets, setPresets] = useState<SourcePreset[]>([]);
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async (): Promise<void> => {
+    const r = await apiFetch("/api/foundry/source-presets").catch(() => null);
+    if (r && r.ok) {
+      const body = await r.json() as unknown;
+      setPresets(Array.isArray(body) ? body : []);
+    }
+  }, []);
+
+  useFoundryPoll(load);
+
+  const install = async (id: string): Promise<void> => {
+    setBusy(id);
+    setError(null);
+    const r = await apiFetch(`/api/foundry/source-presets/${id}/install`, {
+      method: "POST",
+    }).catch(() => null);
+    setBusy(null);
+    if (!r || !r.ok) {
+      const detail = r ? ((await r.json().catch(() => null))?.detail ?? null) : null;
+      setError(typeof detail === "string" ? detail : "Could not install preset");
+      return;
+    }
+    await load();
+    onInstalled();
+  };
+
+  const shown = presets.filter((p) => {
+    const q = query.trim().toLowerCase();
+    return !q || `${p.title} ${p.category} ${p.id}`.toLowerCase().includes(q);
+  }).slice(0, 40);
+
+  return (
+    <section className="space-y-2">
+      <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-txt-1">
+        Feed presets
+      </h3>
+      <p className="text-[11px] text-txt-3">
+        Curated public feeds. Installing creates a dataset and polls it on the preset interval.
+      </p>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search 121 presets…"
+        aria-label="Search feed presets"
+        className={controlCls}
+      />
+      {error && (
+        <p className="rounded-sm border border-alert-line bg-alert-dim px-2.5 py-1.5 text-[11px] text-alert">
+          {error}
+        </p>
+      )}
+      <div className="rounded-md border border-line-2 bg-bg-1 divide-y divide-line max-h-72 overflow-auto">
+        {shown.length === 0 && <p className="px-3 py-2 text-[11px] text-txt-3">No presets match.</p>}
+        {shown.map((p) => (
+          <div key={p.id} className="flex items-center justify-between gap-3 px-3 py-2">
+            <div className="min-w-0">
+              <div className="text-[11px] text-txt-1 truncate">{p.title}</div>
+              <div className="mono text-[10px] text-txt-3">
+                {p.category} · {p.format} · {p.license}
+              </div>
+            </div>
+            <Btn
+              size="sm"
+              disabled={p.installed || busy === p.id}
+              onClick={() => void install(p.id)}
+            >
+              {busy === p.id ? "installing…" : p.installed ? "installed" : "Install"}
+            </Btn>
+          </div>
+        ))}
+      </div>
+      {query && presets.length > shown.length && (
+        <p className="text-[10px] text-txt-3">Showing {shown.length} of {presets.length}. Refine the search.</p>
+      )}
+    </section>
   );
 }
 
@@ -714,6 +922,8 @@ export function ConnectionsView(): JSX.Element {
       />
 
       <ConnectorCatalog rows={connectors} />
+
+      <SourcePresets onInstalled={() => void load()} />
 
       {status === "error" && (
         <p className="rounded-sm border border-alert-line bg-alert-dim px-2.5 py-1.5 text-[11px] text-alert">

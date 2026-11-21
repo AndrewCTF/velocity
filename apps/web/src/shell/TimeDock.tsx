@@ -46,6 +46,12 @@ const WINDOWS = [
 
 const SPEEDS = [1, 10, 60, 600, 3600] as const;
 const FALLBACK_MIN_DAY = "2024-01-01";
+// Backend upstream coverage caps at 366 days; requesting a wider span cannot
+// succeed so clamp the from date to the last 365 days before today.
+const COVERAGE_FROM = (() => {
+  const d = new Date(Date.now() - 365 * 86_400_000);
+  return d.toISOString().slice(0, 10);
+})();
 // Fallback retention until /api/history/stats answers — matches the config
 // default (history_retention_hours = 168 -> 7 days). Only used to bound
 // CoverageStrip's window; the day-picker's own min bound comes from the
@@ -216,7 +222,7 @@ export function TimeDock({
     void (async () => {
       try {
         const r = await apiFetch(
-          `/api/history/upstream/coverage?from=${FALLBACK_MIN_DAY}&to=${maxDay}`,
+          `/api/history/upstream/coverage?from=${COVERAGE_FROM}&to=${maxDay}`,
         );
         if (!r.ok) return;
         const j = (await r.json()) as {

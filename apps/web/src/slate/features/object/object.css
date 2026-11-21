@@ -270,3 +270,38 @@
   font-size: 13.5px;
   white-space: normal;
 }
+
+/* D59: Back to list above the object header, series rows + series menu. */
+.slate-shell .sl-back-to-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0 16px;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  color: #7d868c;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.slate-shell .sl-back-to-list:hover { color: #c6cdd0; }
+.slate-shell .sl-series-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 16px 0;
+  font-size: 12.5px;
+  color: #c6cdd0;
+}
+.slate-shell .sl-series-more {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: 6px 0 0 16px;
+  background: #f4f6f8;
+  border: 1px solid #c5cbd3;
+  border-radius: 2px;
+  color: #404854;
+  cursor: pointer;
+}

@@ -1,0 +1,424 @@
+/* Reports chat (.euc) and map (.eum) pages, native layout. Blueprint dark like
+   .gaia: 14px body, 12px secondary, 30px controls, 4/8/16px steps, 3px radius. */
+.euc,
+.eum {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow: hidden;
+  background: #10161a;
+  color: #e5e8eb;
+  font:
+    400 14px/1.3 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+}
+.euc *,
+.eum * {
+  box-sizing: border-box;
+}
+.euc .eu-dim,
+.eum .eu-dim,
+.euc small,
+.eum small {
+  color: #9aa5a8;
+  font-size: 12px;
+}
+.euc .eu-gap,
+.eum .eu-gap {
+  flex: 1;
+}
+.euc .eu-bar,
+.eum .eu-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.euc .eu-crumb,
+.eum .eu-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #c4cad0;
+}
+.euc .eu-btn,
+.eum .eu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #1c2228;
+  color: #e5e8eb;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.euc .eu-btn:hover:not(:disabled),
+.eum .eu-btn:hover:not(:disabled) {
+  background: #252d34;
+}
+.eum .eu-btn[aria-pressed="true"] {
+  border-color: #6a9ae0;
+}
+.euc :disabled,
+.eum :disabled {
+  color: #9aa5a8;
+  cursor: default;
+}
+.euc .eu-ico,
+.eum .eu-ico {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #c4cad0;
+  cursor: pointer;
+}
+.euc .eu-ico:hover:not(:disabled),
+.eum .eu-ico:hover:not(:disabled) {
+  background: #252d34;
+}
+.euc button:focus-visible,
+.eum button:focus-visible,
+.euc input:focus-visible {
+  outline: 2px solid #4c90f0;
+  outline-offset: 1px;
+}
+.euc .eu-note,
+.eum .eu-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 8px;
+  color: #a4adb4;
+  font-size: 12px;
+}
+
+/* chat */
+.euc .eu-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+}
+.euc .euc-side {
+  flex: 0 0 clamp(220px, 18vw, 320px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #1c2228;
+}
+.euc .eu-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #10161a;
+  color: #9aa5a8;
+}
+.euc .eu-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #e5e8eb;
+  font: inherit;
+}
+.euc .euc-sec {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-weight: 600;
+}
+.euc .euc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #c4cad0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.euc .euc-row:hover {
+  background: #252d34;
+}
+.euc .euc-row.eu-on {
+  background: #2b333b;
+  color: #f2f4f6;
+  box-shadow: inset 3px 0 0 #4c7ae0;
+}
+.euc .euc-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.euc .euc-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #1c2228;
+  overflow: hidden;
+}
+.euc .euc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid #2b3338;
+}
+.euc .euc-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.euc .eu-tools {
+  display: flex;
+  gap: 4px;
+}
+.euc .euc-pane {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  background: #10161a;
+}
+.euc .euc-pane.eu-drag {
+  outline: 2px dashed #f4f6f8;
+  outline-offset: -8px;
+}
+.euc .euc-empty,
+.euc .euc-drop {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: #9aa5a8;
+  text-align: center;
+}
+.euc .euc-drop {
+  color: #e8ecee;
+  font-size: 20px;
+}
+.euc .euc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  background: #e6e9f2;
+  color: #242a38;
+  font-size: 12px;
+  font-weight: 600;
+}
+.euc .euc-warn {
+  color: #e8923a;
+  font-size: 12px;
+  font-weight: 600;
+}
+.euc .euc-comp {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-top: 1px solid #2b3338;
+}
+.euc .euc-comp input {
+  flex: 1;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #10161a;
+  color: #e5e8eb;
+  font: inherit;
+}
+.euc .euc-comp input::placeholder {
+  color: #9aa5a8;
+}
+
+/* map */
+.eum .eum-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+}
+.eum .eum-side {
+  flex: 0 0 clamp(200px, 15vw, 280px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #1c2228;
+}
+.eum .eum-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  font-weight: 600;
+}
+.eum .eum-lyr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 8px;
+  color: #c4cad0;
+}
+.eum .eum-lyr span {
+  display: grid;
+}
+.eum .eum-stat {
+  margin-top: auto;
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid #2b3338;
+  font-size: 12px;
+  color: #c4cad0;
+}
+.eum .eum-on {
+  color: #5fcf7f;
+}
+.eum .eum-off {
+  color: #f0a050;
+}
+.eum .eum-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.eum .eum-plate {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #05070a;
+}
+.eum .eum-plate img {
+  max-width: none;
+}
+.eum .eum-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+.eum .eum-tag {
+  position: absolute;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+.eum .eum-red {
+  background: #b01428;
+  border: 1px solid #e25a68;
+}
+.eum .eum-blue {
+  background: #2457b5;
+}
+.eum .eum-ship {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 1px solid #9ab8d8;
+  border-radius: 3px;
+  background: #f4f8fc;
+  color: #1f6fb0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.eum .eum-3d {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+.eum .eum-attr {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 0 8px;
+  border-radius: 3px;
+  background: rgba(16, 22, 26, 0.88);
+  color: #c4cad0;
+  font-size: 12px;
+}
+.eum .eum-clips {
+  flex: none;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #1c2228;
+}
+.eum .eum-ch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #2b3338;
+}
+.eum .eum-cl {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  overflow-x: auto;
+}
+.eum .eum-clip {
+  flex: 0 0 168px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #3b5a96;
+  border-radius: 3px;
+  background: #242b32;
+}
+.eum .eum-clip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

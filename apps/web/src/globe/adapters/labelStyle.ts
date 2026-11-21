@@ -153,6 +153,9 @@ export function facilityLabelText(
   const name =
     (props["name"] as string | null | undefined)?.toString().trim() ?? null;
   if (name) return name;
+  // OSM military rows are ~70% unnamed; a "Bunker" caption on each one only
+  // repeats what the category glyph already says and buries the named sites.
+  if (props["osm_url"]) return null;
   const sub =
     (props["subcategory"] as string | null | undefined)?.toString().trim() ??
     null;

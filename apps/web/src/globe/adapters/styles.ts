@@ -577,17 +577,17 @@ const HEX_BASE_AIR = "#60a5fa"; // blue-400
 const HEX_BASE_NAVAL = "#2dd4bf"; // teal-400 (echoes the vessel/port palette)
 const HEX_BASE_ARMY = "#a3a380"; // olive-drab
 
-function baseAirSvg(): string {
+function baseAirSvg(tile: string = HEX_BASE_AIR): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${HEX_BASE_AIR}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
+    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
     <path d="M12 4.6 L12.9 11 L18 13 L18 14.3 L12.9 13.1 L12.9 16.7 L14.3 17.6 L14.3 18.7 L12 18 L9.7 18.7 L9.7 17.6 L11.1 16.7 L11.1 13.1 L6 14.3 L6 13 L11.1 11 Z"
       fill="#0b1a3a" stroke="${PLACE_OUT}" stroke-width="0.5" stroke-linejoin="round"/>
   </svg>`;
 }
 
-function baseNavalSvg(): string {
+function baseNavalSvg(tile: string = HEX_BASE_NAVAL): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${HEX_BASE_NAVAL}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
+    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
     <circle cx="12" cy="5.9" r="1.8" fill="none" stroke="#04241f" stroke-width="1.5"/>
     <line x1="12" y1="7.6" x2="12" y2="18.4" stroke="#04241f" stroke-width="1.6" stroke-linecap="round"/>
     <line x1="8.4" y1="10" x2="15.6" y2="10" stroke="#04241f" stroke-width="1.5" stroke-linecap="round"/>
@@ -595,9 +595,9 @@ function baseNavalSvg(): string {
   </svg>`;
 }
 
-function baseArmySvg(): string {
+function baseArmySvg(tile: string = HEX_BASE_ARMY): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${HEX_BASE_ARMY}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
+    <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
     <path d="M12 4.5 13.8 9 18.5 9.6 15 12.8 16 17.5 12 15.1 8 17.5 9 12.8 5.5 9.6 10.2 9 Z"
       fill="#1c1c12" stroke="${PLACE_OUT}" stroke-width="0.5" stroke-linejoin="round"/>
   </svg>`;
@@ -696,6 +696,23 @@ const FACILITY_COLORS: Record<string, string> = {
   military_installation: "#f87171", // light red — DoD MIRTA
   garrison: "#f87171",
   training: "#fbbf24",
+  // OpenStreetMap military features: reds for sites, ambers for areas and
+  // hazards, the nuclear red for test sites.
+  bunker: "#b91c1c",
+  trench: "#92400e",
+  barracks: "#f87171",
+  office: "#fca5a5",
+  checkpoint: "#fb7185",
+  base: "#f87171",
+  airfield: "#f87171",
+  unspecified: "#f87171",
+  other: "#d1a3a3",
+  military_landuse: "#fbbf24",
+  training_area: "#fbbf24",
+  range: "#f59e0b",
+  danger_area: "#f97316",
+  obstacle_course: "#fcd34d",
+  nuclear_test_site: "#ef4444",
 };
 
 function facilityGlyph(category: string): string {
@@ -731,17 +748,61 @@ function facilityGlyph(category: string): string {
       return '<rect x="5" y="8.6" width="12.5" height="3.4" rx="1.5" transform="rotate(-25 11 10.5)" fill="#26103a"/><path d="M11 13.5 8.5 19.5M12.5 13.5 15 19.5" stroke="#26103a" stroke-width="1.6" stroke-linecap="round"/>';
     case "launch": // rocket
       return '<path d="M12 3.5c2.6 2 3.4 5.4 2.4 9.1l1.9 2.6-2.9-.4c-.4.7-.9 1.4-1.4 2-.5-.6-1-1.3-1.4-2l-2.9.4 1.9-2.6c-1-3.7-.2-7.1 2.4-9.1z" fill="#331303"/><path d="M10.4 17.5 12 21l1.6-3.5" stroke="#331303" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
+    // OSM military categories: one shape per category so a dense view reads
+    // without clicking. Ink colour per tile family.
+    case "bunker": // casemate dome with firing slit
+      return '<path d="M5 17.5h14v-2.6a7 7 0 0 0-14 0z" fill="#2b0808"/><rect x="8.6" y="12.6" width="6.8" height="1.6" rx=".6" fill="#b91c1c"/>';
+    case "trench": // zig-zag earthwork
+      return '<path d="M4.5 15.5l3-5 3 5 3-5 3 5 3-5" stroke="#1f0d02" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>';
+    case "barracks": // long hut with pitched roof
+      return '<path d="M4.5 11 12 6l7.5 5v7.5h-15z" fill="#2b0808"/><rect x="10.6" y="13.5" width="2.8" height="5" fill="#f87171"/>';
+    case "office": // building with flag
+      return '<rect x="6.5" y="10" width="9" height="9" fill="#2b0808"/><path d="M15.5 4.5v8" stroke="#2b0808" stroke-width="1.4"/><path d="M15.5 4.8h3.6l-1 1.4 1 1.4h-3.6z" fill="#2b0808"/><path d="M8.5 12.5h1.6M11.5 12.5h1.6M8.5 15.5h1.6M11.5 15.5h1.6" stroke="#fca5a5" stroke-width="1.3"/>';
+    case "checkpoint": // boom barrier
+      return '<rect x="5" y="9" width="2.4" height="10" rx=".6" fill="#2b0510"/><path d="M7.4 10.2h11.6v2.6H7.4z" fill="#2b0510"/><path d="M10 10.2l-1.3 2.6M13.5 10.2l-1.3 2.6M17 10.2l-1.3 2.6" stroke="#fb7185" stroke-width="1.1"/>';
+    case "range": // target
+      return '<circle cx="12" cy="12" r="6.6" fill="none" stroke="#2a1600" stroke-width="1.7"/><circle cx="12" cy="12" r="3.4" fill="none" stroke="#2a1600" stroke-width="1.7"/><circle cx="12" cy="12" r="1.1" fill="#2a1600"/>';
+    case "base": // shield (branch-less base; branched bases use the base glyphs)
+      return '<path d="M12 4.5 18 7v4.6c0 3.8-2.6 6.4-6 7.9-3.4-1.5-6-4.1-6-7.9V7z" fill="#2b0808"/>';
+    case "airfield": // aircraft top view
+      return '<path d="M12 4.6 12.9 11 18 13 18 14.3 12.9 13.1 12.9 16.7 14.3 17.6 14.3 18.7 12 18 9.7 18.7 9.7 17.6 11.1 16.7 11.1 13.1 6 14.3 6 13 11.1 11Z" fill="#2b0808"/>';
+    case "training_area": // tent
+      return '<path d="M12 5.5 19 18.5H5z" fill="#2a1d00"/><path d="M12 11.5 14.4 18.5H9.6z" fill="#fbbf24"/>';
+    case "danger_area": // warning triangle
+      return '<path d="M12 4.8 19.5 18.5h-15z" fill="#2a1000"/><rect x="11.1" y="9.6" width="1.8" height="4.8" rx=".8" fill="#f97316"/><circle cx="12" cy="16.3" r="1" fill="#f97316"/>';
+    case "obstacle_course": // hurdle
+      return '<path d="M6.5 7v12M17.5 7v12" stroke="#2a2000" stroke-width="2" stroke-linecap="round"/><path d="M6.5 10.5h11M6.5 14h11" stroke="#2a2000" stroke-width="1.8"/>';
+    case "military_landuse": // hatched parcel
+      return '<rect x="5.5" y="5.5" width="13" height="13" rx="1" fill="none" stroke="#2a1d00" stroke-width="1.6"/><path d="M5.5 12 12 5.5M5.5 18.5 18.5 5.5M12 18.5 18.5 12" stroke="#2a1d00" stroke-width="1.4"/>';
+    case "other": // diamond
+      return '<path d="M12 5 19 12 12 19 5 12z" fill="#2b1414"/>';
+    case "nuclear_test_site":
+      return facilityGlyph("nuclear");
     case "military_installation":
     case "garrison":
-    case "training": // five-point star
+    case "training":
+    case "unspecified": // five-point star
       return '<path d="M12 4.6l2 4.6 5 .5-3.8 3.3 1.1 4.9L12 15.3l-4.3 2.6 1.1-4.9L5 9.7l5-.5z" fill="#2b0808"/>';
     default:
       return '<circle cx="12" cy="12" r="4.5" fill="#101418"/>';
   }
 }
 
-function facilitySvg(category: string): string {
-  const tile = FACILITY_COLORS[category] ?? "#9ca3af";
+// OSM lifecycle tags: an out-of-use site keeps its glyph on a slate tile, so
+// "disused" reads at a glance next to the live palette.
+const INACTIVE_TILE = "#64748b";
+const INACTIVE_STATUSES = new Set(["disused", "abandoned", "ruins"]);
+
+const BRANCH_SVG: Record<string, (inactive: boolean) => string> = {
+  air: (off) => (off ? baseAirSvg(INACTIVE_TILE) : baseAirSvg()),
+  naval: (off) => (off ? baseNavalSvg(INACTIVE_TILE) : baseNavalSvg()),
+  army: (off) => (off ? baseArmySvg(INACTIVE_TILE) : baseArmySvg()),
+};
+
+function facilitySvg(category: string, inactive = false): string {
+  const tile = inactive
+    ? INACTIVE_TILE
+    : (FACILITY_COLORS[category] ?? "#9ca3af");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
     <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="${tile}" stroke="${PLACE_OUT}" stroke-width="1.4"/>
     ${facilityGlyph(category)}
@@ -757,9 +818,21 @@ export function facilityStyle(props: Record<string, unknown>): {
   // trefoil regardless of which toggle fetched them.
   if (category === "power" && String(props["fuel"] ?? "") === "Nuclear")
     category = "nuclear";
+  const inactive = INACTIVE_STATUSES.has(String(props["status"] ?? ""));
+  // A base or airfield with a data-backed service branch draws as the same
+  // air/naval/army glyph as the Military bases layer, greyed when out of use.
+  const branch = String(props["branch"] ?? "");
+  if ((category === "base" || category === "airfield") && BRANCH_SVG[branch]) {
+    return {
+      imageUri: cachedIcon(`facility:branch:${branch}:${inactive ? "off" : "on"}`, () =>
+        placeDataUri(BRANCH_SVG[branch]!(inactive)),
+      ),
+      scale: 0.95,
+    };
+  }
   return {
-    imageUri: cachedIcon(`facility:${category}`, () =>
-      placeDataUri(facilitySvg(category)),
+    imageUri: cachedIcon(`facility:${category}:${inactive ? "off" : "on"}`, () =>
+      placeDataUri(facilitySvg(category, inactive)),
     ),
     scale: 0.95,
   };

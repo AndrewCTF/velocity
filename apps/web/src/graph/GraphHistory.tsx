@@ -13,8 +13,8 @@ export function GraphHistory(): JSX.Element | null {
   if (revisions.length === 0) return null;
   const at = viewRev ?? revisions.length - 1;
   return (
-    <div className="border-t border-line px-2 py-1.5 mono text-[10px]">
-      <div className="flex items-center gap-2">
+    <section className="rounded-md border border-line bg-bg-1/70 p-[12px] mono text-[10px]">
+      <div className="flex items-center gap-[8px]">
         <MicroLabel className="text-txt-3">History</MicroLabel>
         <input
           type="range"
@@ -38,7 +38,7 @@ export function GraphHistory(): JSX.Element | null {
           </button>
         )}
       </div>
-      <ol className="mt-1 max-h-24 overflow-y-auto">
+      <ol className="mt-[4px] max-h-24 overflow-y-auto">
         {revisions.map((r, i) => (
           <li
             key={r.ts + ":" + i}
@@ -54,6 +54,6 @@ export function GraphHistory(): JSX.Element | null {
           </li>
         ))}
       </ol>
-    </div>
+    </section>
   );
 }

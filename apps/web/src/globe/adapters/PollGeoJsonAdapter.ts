@@ -866,6 +866,9 @@ export class PollGeoJsonAdapter implements LayerAdapter {
         layerId: this.props.ctx.descriptor.id,
         styleFn: (props) => cfg.style(props),
         labelFn: cfg.label,
+        // OSM military layers run to thousands of named sites; caption only the
+        // hovered/selected one (under Slate) so names do not pile up.
+        quietLabels: this.props.ctx.descriptor.id.startsWith("military.osm."),
         billboardBase: () => ({
           verticalOrigin: cfg.vertical ?? Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,

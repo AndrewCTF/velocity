@@ -54,6 +54,26 @@ describe("WorkshopApp", () => {
     expect(screen.queryByRole("button", { name: /^Remove / })).toBeNull();
   });
 
+  it("renders chokepoint vessel counts from the live feed", async () => {
+    mockedFetch.mockImplementation(async (path: string) =>
+      path === "/api/maritime/chokepoints"
+        ? json({
+            type: "FeatureCollection",
+            features: [
+              { id: "chokepoint:strait-of-hormuz", properties: { name: "Strait of Hormuz", vessels: 42, stationary: 3, congestion: "elevated" } },
+            ],
+          })
+        : path === "/api/status"
+          ? json({ aircraft_count: 1 })
+          : json([]),
+    );
+    render(<WorkshopApp />);
+    fireEvent.click(screen.getByRole("button", { name: "Chokepoint vessels" }));
+    expect(await screen.findByText("Strait of Hormuz")).toBeTruthy();
+    expect(screen.getByText("42")).toBeTruthy();
+    expect(screen.getByText("elevated")).toBeTruthy();
+  });
+
   it("keeps the HTTP code when status fails", async () => {
     mockedFetch.mockImplementation(async (path: string) =>
       path === "/api/status" ? json({}, 503) : json([]),

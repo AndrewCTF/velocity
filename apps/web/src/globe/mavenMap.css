@@ -55,15 +55,58 @@
   position: absolute;
   inset: 0;
   background: var(--top);
+  /* one flex row: items keep their spacing whatever the title's length */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 6px;
+  white-space: nowrap;
+}
+/* One button box for the whole row (Blueprint's 30px minimal button, at the
+   28px the Save split button already uses): icon and text buttons alike. */
+.mv.mv-top > button:not(.mv-pill, .mv-tog, .mv-search),
+.mv-top .mv-docgrp > button,
+.mv-top .mv-menu,
+.mv-top > span > button.mv-plain {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 6px;
+  justify-content: center;
+  line-height: 28px;
+  border-radius: 3px;
+}
+.mv.mv-top > button:not(.mv-pill, .mv-tog, .mv-search):hover,
+.mv-top .mv-docgrp > button:hover,
+.mv-top > span > button.mv-plain:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.mv.mv-top > .mv-pill {
+  margin: 0 4px;
+}
+.mv.mv-top > .mv-tog {
+  margin-right: 6px;
 }
 .mv.mv-top > * {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
   display: flex;
+  flex: none;
   align-items: center;
   gap: 6px;
   color: var(--t0);
+}
+/* the document title gives way first */
+.mv.mv-top > .mv-docgrp {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.mv-top .mv-docgrp > button:nth-child(2) {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the right-hand group starts at the live toggle */
+.mv.mv-top > .mv-tog {
+  margin-left: auto;
 }
 .mv-top .mv-pill {
   background: var(--red);
@@ -99,6 +142,7 @@
   text-underline-offset: 4px;
 }
 .mv-top .mv-tog {
+  position: relative;
   width: 28px;
   height: 16px;
   border-radius: 8px;
@@ -119,7 +163,8 @@
 }
 .mv-top .mv-search {
   width: 138px;
-  height: 22px;
+  height: 28px;
+  margin-left: 4px;
   border: 1px solid #2f383b;
   border-radius: 2px;
   padding: 0 6px;

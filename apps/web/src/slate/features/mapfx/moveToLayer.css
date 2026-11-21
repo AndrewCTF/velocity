@@ -1,0 +1,30 @@
+/* D78 Move to layer submenu. */
+.mv-move-to-layer {
+  display: inline-flex;
+}
+.mv-mtl-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 28px;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  color: var(--t1);
+  font-size: 12px;
+  cursor: pointer;
+}
+.mv-mtl-trigger:hover {
+  background: var(--field);
+}
+.mv-mtl-menu {
+  min-width: 240px;
+}
+.mv-mtl-count {
+  font-size: 11px;
+  color: var(--t2);
+  background: var(--field);
+  padding: 0 5px;
+  border-radius: 2px;
+}

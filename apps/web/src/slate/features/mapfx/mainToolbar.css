@@ -1,0 +1,54 @@
+/* D66 Main map toolbar: icon + word, separators at 89.5 / 228.5 / 590.5
+   (the copy's seps), Draw pressed state. Scoped under .mv. */
+.mv-main-toolbar {
+  position: absolute;
+  left: 481px;
+  top: 61px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  background: #fff;
+  border: 1px solid #c9ced4;
+  border-radius: 3px;
+  box-shadow: 0 1px 6px rgba(17, 20, 24, 0.25);
+  height: 40px;
+  padding: 0 8px;
+  z-index: 20;
+}
+.mvmt-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+.mvmt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 32px;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  color: #2f343c;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.mvmt-btn:hover:not(:disabled) {
+  background: #eef0f2;
+}
+.mvmt-btn.is-active {
+  background: #e5e8ec;
+}
+.mvmt-btn:disabled {
+  color: #a5acb6;
+  cursor: default;
+}
+.mvmt-item.is-disabled .mvmt-btn {
+  color: #a5acb6;
+}
+.mvmt-sep {
+  width: 1px;
+  height: 24px;
+  background: #c9ced4;
+  margin: 0 6px;
+}

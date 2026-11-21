@@ -1,0 +1,44 @@
+/* D80 SearchDialog. */
+.mv-search-dialog {
+  position: fixed;
+  left: 50%; top: 64px;
+  transform: translateX(-50%);
+  width: 640px;
+  max-height: calc(100vh - 80px);
+  background: #fff;
+  border: 1px solid #c9ced4;
+  border-radius: 4px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  z-index: 400;
+  font-size: 12.5px;
+  color: #1c2430;
+}
+.mv-sd-head { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid #e5e8ec; }
+.mv-sd-input {
+  flex: 1; height: 30px;
+  background: #f4f6f8; border: 1px solid #c9ced4; border-radius: 3px;
+  padding: 0 8px; font-size: 12.5px;
+}
+.mv-sd-close { display: grid; place-items: center; width: 30px; background: none; border: 0; cursor: pointer; color: #5f6b7c; }
+.mv-sd-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #e5e8ec; }
+.mv-sd-chip {
+  background: #eef0f2; border: 1px solid #c9ced4; border-radius: 10px;
+  padding: 3px 10px; font-size: 11.5px; cursor: pointer; color: #1c2430;
+}
+.mv-sd-chip.is-on { background: #2e6dbf; border-color: #2e6dbf; color: #fff; }
+.mv-sd-chip b { font-weight: 600; }
+.mv-sd-shape-chip { background: #fff7e0; border: 1px solid #d9a521; border-radius: 10px; padding: 3px 10px; font-size: 11.5px; color: #7a5a12; }
+.mv-sd-results { flex: 1; overflow-y: auto; }
+.mv-sd-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 7px 10px; border: 0; background: none; cursor: pointer; text-align: left;
+}
+.mv-sd-row:hover { background: #eef0f2; }
+.mv-sd-label { font-weight: 600; min-width: 140px; }
+.mv-sd-kind { font-size: 10.5px; color: #5f6b7c; text-transform: uppercase; min-width: 60px; }
+.mv-sd-kv { display: inline-flex; gap: 10px; color: #5f6b7c; font-size: 11px; margin-left: auto; }
+.mv-sd-empty { padding: 20px; text-align: center; color: #5f6b7c; }
+.mv-sd-foot { padding: 6px 10px; border-top: 1px solid #e5e8ec; font-size: 11px; color: #5f6b7c; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mv-sd-add-all { background: #eef0f2; border: 1px solid #c9ced4; border-radius: 3px; padding: 4px 12px; font-size: 11.5px; color: #8a94a3; cursor: not-allowed; }

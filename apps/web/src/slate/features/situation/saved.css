@@ -1,0 +1,163 @@
+/* Saved situation controls, in the panel's own grammar (.sl-xbtn buttons,
+   .chip tags, 15px body on #222e2e cards). */
+.slate-shell .sl-sitbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 18px 0 17px;
+}
+.slate-shell .sl-sitbar .sl-xbtn,
+.slate-shell .sl-propose .sl-xbtn {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 14.5px;
+}
+.slate-shell .sl-xbtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.slate-shell .sl-xbtn.sl-del {
+  border-color: #b9575e;
+  color: #ff9aa1;
+}
+.slate-shell .ttl .sl-ttlin {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: 18px;
+  height: 28px;
+  padding: 0 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  font: inherit;
+  color: inherit;
+}
+.slate-shell .ttl .sl-ttlin:hover {
+  border-color: #3e4a4c;
+}
+.slate-shell .ttl .sl-ttlin:focus {
+  outline: none;
+  border-color: #4a8fd6;
+  background: #1c2626;
+}
+.slate-shell .sl-sevsel {
+  font: inherit;
+  font-size: 14px;
+  padding: 1px 4px;
+  border: 0;
+  border-radius: 2px;
+  background: #323e40;
+  color: #e9eeef;
+  cursor: pointer;
+}
+.slate-shell .sl-sevsel.r {
+  background: #42282c;
+  color: #ff7e86;
+}
+.slate-shell .sl-intro {
+  margin: 8px 18px 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #a9b3b8;
+}
+.slate-shell .sl-sumin {
+  display: block;
+  width: 100%;
+  min-height: 64px;
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  resize: vertical;
+  background: #1c2626;
+  border: 1px solid #3e4a4c;
+  border-radius: 2px;
+  font: inherit;
+  font-size: 15px;
+  color: #e4e9ea;
+}
+.slate-shell .sl-sumin:focus {
+  outline: none;
+  border-color: #4a8fd6;
+}
+.slate-shell .sl-linked {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 8px;
+}
+.slate-shell .sl-linked button {
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 14px;
+  color: #8fbff5;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slate-shell .sl-linked button:hover {
+  text-decoration: underline;
+}
+.slate-shell .sl-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #f0b37e;
+}
+.slate-shell .sl-propose {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 18px 14px 14px;
+}
+.slate-shell .sl-prop {
+  align-self: stretch;
+  background: #222e2e;
+  border: 1px solid #3e4a4c;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.slate-shell .sl-prop-h {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.slate-shell .sl-prop-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #f5f7f7;
+}
+.slate-shell .sl-prop .chip {
+  flex: none;
+  font-size: 13.5px;
+}
+.slate-shell .sl-prop-by {
+  font-size: 13.5px;
+  color: #a9b3b8;
+}
+.slate-shell .sl-prop-r {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #dfe5e6;
+}
+.slate-shell .sl-prop-b {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.slate-shell .ttl .sl-savebtn {
+  margin-left: auto;
+  margin-right: 18px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 400;
+}

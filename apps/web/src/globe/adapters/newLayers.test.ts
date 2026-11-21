@@ -15,7 +15,12 @@ import {
   tfrLabelText,
   warningLabelText,
 } from "./labelStyle.js";
-import { defaultLayers } from "../../registry/defaults.js";
+import {
+  defaultLayers,
+  OSM_MILITARY_ACTIVE_LAYER_IDS,
+  OSM_MILITARY_DISUSED_LAYER_ID,
+} from "../../registry/defaults.js";
+import { FACILITY_LAYER_IDS } from "../LayerCompositor.js";
 
 // W5 places/airspace enrichment wave: three new layers on the existing
 // PollGeoJsonAdapter — airspace.tfr (polygon), places.bases (icon by
@@ -318,5 +323,71 @@ describe("registry: infrastructure/military facility descriptors", () => {
   it("StyleKind union + applyStyle handle facility", () => {
     expect(ADAPTER_SRC).toMatch(/\|\s*["']facility["']/);
     expect(ADAPTER_SRC).toMatch(/case ["']facility["']: \{/);
+  });
+});
+
+describe("registry: OSM military feature layers", () => {
+  it("one off-by-default in-use layer per category on the osm-military route", () => {
+    expect(OSM_MILITARY_ACTIVE_LAYER_IDS).toHaveLength(15);
+    for (const id of OSM_MILITARY_ACTIVE_LAYER_IDS) {
+      const d = defaultLayers.find((l) => l.id === id);
+      expect(d, id).toBeDefined();
+      expect(d?.visibleByDefault, id).toBe(false);
+      expect(d?.endpoint, id).toMatch(
+        /^\/api\/places\/osm-military\?category=[a-z_]+&status=active&limit=5000$/,
+      );
+      expect(FACILITY_LAYER_IDS.has(id), id).toBe(true);
+      const category = id.replace("military.osm.", "");
+      expect(facilityStyle({ category }).imageUri, id).not.toBe(
+        facilityStyle({ category: "__unknown__" }).imageUri,
+      );
+    }
+  });
+});
+
+describe("OSM military in-use vs disused filter", () => {
+  it("serves out-of-use sites as one separate layer, drawn on a slate tile", () => {
+    const d = defaultLayers.find((l) => l.id === OSM_MILITARY_DISUSED_LAYER_ID);
+    expect(d?.endpoint).toBe("/api/places/osm-military?status=inactive&limit=5000");
+    expect(d?.visibleByDefault).toBe(false);
+    expect(FACILITY_LAYER_IDS.has(OSM_MILITARY_DISUSED_LAYER_ID)).toBe(true);
+    const live = facilityStyle({ category: "bunker" }).imageUri;
+    for (const status of ["disused", "abandoned", "ruins"]) {
+      expect(facilityStyle({ category: "bunker", status }).imageUri).not.toBe(live);
+    }
+  });
+});
+
+describe("OSM military icons stay tellable apart", () => {
+  it("every category draws its own icon", () => {
+    const uris = OSM_MILITARY_ACTIVE_LAYER_IDS.map(
+      (id) => facilityStyle({ category: id.replace("military.osm.", "") }).imageUri,
+    );
+    expect(new Set(uris).size).toBe(uris.length);
+  });
+
+  it("bases with a service branch use the air / naval / army glyphs", () => {
+    const air = facilityStyle({ category: "base", branch: "air" }).imageUri;
+    const naval = facilityStyle({ category: "base", branch: "naval" }).imageUri;
+    const army = facilityStyle({ category: "base", branch: "army" }).imageUri;
+    const plain = facilityStyle({ category: "base" }).imageUri;
+    expect(new Set([air, naval, army, plain]).size).toBe(4);
+    expect(facilityStyle({ category: "airfield", branch: "air" }).imageUri).toBe(air);
+    expect(
+      facilityStyle({ category: "base", branch: "naval", status: "abandoned" }).imageUri,
+    ).not.toBe(naval);
+  });
+
+  it("unnamed OSM features carry no caption; named ones keep their name", () => {
+    expect(facilityLabelText({ subcategory: "Bunker", osm_url: "https://www.openstreetmap.org/node/1" })).toBeNull();
+    expect(facilityLabelText({ name: "Fort X", osm_url: "https://www.openstreetmap.org/node/1" })).toBe("Fort X");
+  });
+});
+
+describe("MIRTA/Wikidata military icons are untouched by the OSM glyphs", () => {
+  it("installation and garrison keep the star, not the bunker dome", () => {
+    const bunker = facilityStyle({ category: "bunker" }).imageUri;
+    expect(facilityStyle({ category: "military_installation" }).imageUri).not.toBe(bunker);
+    expect(facilityStyle({ category: "garrison" }).imageUri).not.toBe(bunker);
   });
 });

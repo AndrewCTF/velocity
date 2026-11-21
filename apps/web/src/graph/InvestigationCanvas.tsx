@@ -27,7 +27,7 @@ import { useSelection } from "../state/stores.js";
 import { relLabel, useOntologySchema } from "../state/ontologySchema.js";
 import { apiFetch } from "../transport/http.js";
 import { search, LOCATION_KINDS } from "../transport/search.js";
-import { SectionLabel, Btn, MicroLabel, Badge } from "../shell/instruments.js";
+import { Btn, MicroLabel, Badge } from "../shell/instruments.js";
 import { Icon } from "../normal/Icon.js";
 
 // ── ontology wire types (mirror intel/ontology.py response models) ────────────
@@ -123,17 +123,26 @@ interface LEdge {
   onPath: boolean;
 }
 
-const VIEW_W = 320;
-const VIEW_H = 340;
+// Seed size only: the layout space is the SVG's measured pixel box (its
+// viewBox tracks it), so 11px labels paint at 11px at any window size instead
+// of a fixed 320x340 stage scaled to fit.
+const SEED_W = 320;
+const SEED_H = 340;
 const WARM_TICKS = 220; // relaxation iterations after a graph change, then idle
 
 // One step of a small spring-embedder: links pull connected nodes to a target
 // distance; every pair repels (Coulomb-ish); a weak centring force keeps the
 // graph on-canvas. Deterministic given the same input, so the layout is stable.
-function relax(nodes: LNode[], edges: LEdge[]): void {
-  const k = 64; // ideal link length
-  const repel = 2600; // repulsion constant
-  const center = { x: VIEW_W / 2, y: VIEW_H / 2 };
+function relax(nodes: LNode[], edges: LEdge[], w: number, h: number): void {
+  // Ideal link length: room for an 11px relation label, and longer for a big
+  // fan-out so sixty leaves ring the root instead of stacking their labels.
+  // Capped by the canvas height so the ring does not pile onto the edges.
+  const k = Math.min(
+    170 * Math.min(2, Math.max(1, Math.sqrt(nodes.length / 12))),
+    Math.max(120, (h - 80) / 2.4),
+  );
+  const repel = 0.62 * k * k; // repulsion constant, scaled with k^2
+  const center = { x: w / 2, y: h / 2 };
   // Repulsion (O(n^2) — node counts here are tens, not thousands).
   for (let i = 0; i < nodes.length; i++) {
     const a = nodes[i]!;
@@ -181,14 +190,14 @@ function relax(nodes: LNode[], edges: LEdge[]): void {
       n.vy = 0;
       continue;
     }
-    n.vx += (center.x - n.x) * 0.008;
+    n.vx += (center.x - n.x) * 0.008 * Math.min(1, h / w);
     n.vy += (center.y - n.y) * 0.008;
     n.vx *= 0.86;
     n.vy *= 0.86;
     n.x += Math.max(-12, Math.min(12, n.vx));
     n.y += Math.max(-12, Math.min(12, n.vy));
-    n.x = Math.max(14, Math.min(VIEW_W - 14, n.x));
-    n.y = Math.max(14, Math.min(VIEW_H - 14, n.y));
+    n.x = Math.max(20, Math.min(w - 20, n.x));
+    n.y = Math.max(20, Math.min(h - 28, n.y));
   }
 }
 
@@ -449,41 +458,39 @@ export function InvestigationCanvas(): JSX.Element {
 
   if (!rootId) {
     return (
-      <div className="p-4">
-        <SectionLabel title="Investigation" />
-        <p className="mt-2 text-txt-3 text-[11px] leading-snug">
+      <div className="flex flex-col gap-[12px] p-[12px]">
+        <p className="text-txt-3 text-[11px] leading-snug">
           No investigation open. Select an entity and press{" "}
           <span className="mono text-txt-2">⊹ Search around</span> in its panel
           to build a multi-hop link graph from the saved ontology, or seed it by
           name below.
         </p>
-        <div className="mt-3">
-          <SeedSearch />
-        </div>
+        <SeedSearch />
       </div>
     );
   }
 
   return (
-    <div className="p-3 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <SectionLabel
-          title="Investigation"
-          {...(objects.size ? { count: `${objects.size} nodes` } : {})}
-        />
+    <div className="flex h-full min-h-0 flex-col gap-[12px] p-[12px]">
+      {/* The menu row already names the app; this row is the graph's status,
+          not a second title bar. */}
+      <div className="flex items-center gap-[8px]">
+        <span className="text-[13px] text-txt-0 tabular-nums">
+          {objects.size} node{objects.size === 1 ? "" : "s"}
+        </span>
+        <span className="mono min-w-0 flex-1 truncate text-[11px] text-txt-3">
+          root <span className="text-txt-1">{rootId}</span> · click expands ·
+          alt-click removes
+        </span>
         <button
           type="button"
           onClick={clear}
-          className="mono text-[10px] text-txt-3 hover:text-alert px-1"
+          className="flex h-[28px] w-[28px] flex-none items-center justify-center rounded text-txt-3 hover:bg-bg-2 hover:text-alert"
           title="Close investigation"
+          aria-label="Close investigation"
         >
-          <Icon name="x" className="w-3 h-3" />
+          <Icon name="x" className="w-3.5 h-3.5" />
         </button>
-      </div>
-
-      <div className="mono text-[10px] text-txt-3 leading-snug">
-        root <span className="text-txt-1">{rootId}</span> · click expands ·
-        alt-click removes
       </div>
 
       {/* Re-seed the graph by typing (callsign / MMSI / name), without a map click. */}
@@ -519,83 +526,85 @@ export function InvestigationCanvas(): JSX.Element {
         }}
       />
 
-      {/* Path-finding controls */}
-      <section className="rounded-md border border-line bg-bg-1/70 p-2.5 space-y-1.5">
-        <div className="flex items-center justify-between">
-          <MicroLabel>Path between</MicroLabel>
-          <button
-            type="button"
-            className="mono text-[10px] text-txt-3 hover:text-txt-1"
-            onClick={() => {
-              setPathFrom(null);
-              setPathTo(null);
-              setPath(null);
-            }}
-          >
-            reset
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          <EndpointSlot label="A" id={pathFrom} color="var(--accent)" />
-          <EndpointSlot label="B" id={pathTo} color="var(--mag)" />
-        </div>
-        <p className="mono text-[10px] text-txt-3 leading-tight">
-          shift-click two nodes to set A and B
-        </p>
-        <Btn
-          size="sm"
-          tone="accent"
-          disabled={!pathFrom || !pathTo}
-          onClick={runPath}
-        >
-          ⇆ Find path
-        </Btn>
-        {path && (
-          <div className="mono text-[10px] leading-snug mt-1">
-            {path.found ? (
-              <span className="text-ok">
-                connected · {path.hops} hop{path.hops === 1 ? "" : "s"}
-              </span>
-            ) : (
-              <span className="text-warn">no connection within 6 hops</span>
-            )}
+      <div className="grid gap-[12px] md:grid-cols-2">
+        {/* Path-finding controls */}
+        <section className="rounded-md border border-line bg-bg-1/70 p-[12px] space-y-[8px]">
+          <div className="flex items-center justify-between">
+            <MicroLabel>Path between</MicroLabel>
+            <button
+              type="button"
+              className="mono text-[10px] text-txt-3 hover:text-txt-1"
+              onClick={() => {
+                setPathFrom(null);
+                setPathTo(null);
+                setPath(null);
+              }}
+            >
+              reset
+            </button>
           </div>
-        )}
-      </section>
-
-      {/* Save investigation */}
-      <section className="rounded-md border border-line bg-bg-1/70 p-2.5 space-y-1.5">
-        <MicroLabel>Save investigation</MicroLabel>
-        <div className="flex items-center gap-1.5">
-          <input
-            type="text"
-            value={saveName}
-            onChange={(e) => setSaveName(e.target.value)}
-            placeholder="name…"
-            maxLength={120}
-            className="flex-1 min-w-0 bg-bg-2 border border-line-2 rounded-sm px-2 py-1 mono text-[10px] text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
-          />
+          <div className="grid grid-cols-2 gap-[8px]">
+            <EndpointSlot label="A" id={pathFrom} color="var(--accent)" />
+            <EndpointSlot label="B" id={pathTo} color="var(--mag)" />
+          </div>
+          <p className="mono text-[10px] text-txt-3 leading-tight">
+            shift-click two nodes to set A and B
+          </p>
           <Btn
             size="sm"
-            disabled={saving || !saveName.trim() || objects.size === 0}
-            onClick={saveInvestigation}
+            tone="accent"
+            disabled={!pathFrom || !pathTo}
+            onClick={runPath}
           >
-            {saving ? "…" : "Save"}
+            ⇆ Find path
           </Btn>
-        </div>
-        {saveMsg && (
-          <span
-            className={`mono text-[10px] ${saveMsg.startsWith("saved") ? "text-ok" : "text-alert"}`}
-          >
-            {saveMsg}
-          </span>
-        )}
-        <p className="mono text-[10px] text-txt-3 leading-tight">
-          persists the {objects.size} node id{objects.size === 1 ? "" : "s"} as
-          an <span className="text-txt-2">investigation:</span> object on your
-          account
-        </p>
-      </section>
+          {path && (
+            <div className="mono text-[10px] leading-snug mt-[4px]">
+              {path.found ? (
+                <span className="text-ok">
+                  connected · {path.hops} hop{path.hops === 1 ? "" : "s"}
+                </span>
+              ) : (
+                <span className="text-warn">no connection within 6 hops</span>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* Save investigation */}
+        <section className="rounded-md border border-line bg-bg-1/70 p-[12px] space-y-[8px]">
+          <MicroLabel>Save investigation</MicroLabel>
+          <div className="flex items-center gap-[8px]">
+            <input
+              type="text"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="name…"
+              maxLength={120}
+              className="flex-1 min-w-0 bg-bg-2 border border-line-2 rounded-sm px-2 py-1 mono text-[10px] text-txt-1 placeholder:text-txt-3 focus:border-accent-line outline-hidden"
+            />
+            <Btn
+              size="sm"
+              disabled={saving || !saveName.trim() || objects.size === 0}
+              onClick={saveInvestigation}
+            >
+              {saving ? "…" : "Save"}
+            </Btn>
+          </div>
+          {saveMsg && (
+            <span
+              className={`mono text-[10px] ${saveMsg.startsWith("saved") ? "text-ok" : "text-alert"}`}
+            >
+              {saveMsg}
+            </span>
+          )}
+          <p className="mono text-[10px] text-txt-3 leading-tight">
+            persists the {objects.size} node id{objects.size === 1 ? "" : "s"}{" "}
+            as an <span className="text-txt-2">investigation:</span> object on
+            your account
+          </p>
+        </section>
+      </div>
 
       {/* Change-over-time: revision log + read-only scrubber. */}
       <GraphHistory />
@@ -614,7 +623,7 @@ function EndpointSlot({
   color: string;
 }): JSX.Element {
   return (
-    <div className="flex items-center gap-1.5 border border-line-2 rounded-sm px-1.5 py-1 bg-bg-2 min-w-0">
+    <div className="flex h-[28px] items-center gap-1.5 border border-line-2 rounded px-2 bg-bg-2 min-w-0">
       <span className="mono text-[10px] text-txt-3 flex-none">{label}</span>
       <span
         className="h-2 w-2 rounded-full flex-none"
@@ -663,8 +672,8 @@ function SeedSearch(): JSX.Element {
   }, [text, busy]);
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-1.5">
+    <div className="space-y-[4px]">
+      <div className="flex items-center gap-[8px]">
         <input
           type="text"
           value={text}
@@ -735,6 +744,32 @@ function GraphView({
   const warmRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const [, force] = useState(0);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [size, setSize] = useState({ w: SEED_W, h: SEED_H });
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => {
+      const w = Math.round(e!.contentRect.width);
+      const h = Math.round(e!.contentRect.height);
+      if (w <= 0 || h <= 0) return;
+      // Carry the layout (pinned root included) to the new centre.
+      const prev = sizeRef.current;
+      const dx = (w - prev.w) / 2;
+      const dy = (h - prev.h) / 2;
+      for (const n of nodesRef.current.values()) {
+        n.x += dx;
+        n.y += dy;
+      }
+      sizeRef.current = { w, h };
+      warmRef.current = WARM_TICKS;
+      setSize({ w, h });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // View transform (pan/zoom) — pure presentation, doesn't perturb layout.
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
@@ -772,8 +807,8 @@ function GraphView({
           id: o.id,
           kind: o.kind,
           label: nodeLabel(o),
-          x: VIEW_W / 2 + Math.cos(angle) * rad,
-          y: VIEW_H / 2 + Math.sin(angle) * rad,
+          x: sizeRef.current.w / 2 + Math.cos(angle) * rad,
+          y: sizeRef.current.h / 2 + Math.sin(angle) * rad,
           vx: 0,
           vy: 0,
           pinned: isRoot,
@@ -797,7 +832,7 @@ function GraphView({
     const step = (): void => {
       const nodes = Array.from(nodesRef.current.values());
       if (warmRef.current > 0 && nodes.length > 0) {
-        relax(nodes, ledges);
+        relax(nodes, ledges, sizeRef.current.w, sizeRef.current.h);
         warmRef.current -= 1;
         force((t) => t + 1);
         rafRef.current = requestAnimationFrame(step);
@@ -812,7 +847,7 @@ function GraphView({
         rafRef.current = null;
       }
     };
-  }, [ledges]);
+  }, [ledges, size]);
 
   // Pointer handlers: drag a node to pin it, or drag the background to pan.
   // Typed to the common SVG base so it accepts both the root <svg> pointerdown
@@ -852,12 +887,12 @@ function GraphView({
       const n = nodesRef.current.get(d.id);
       if (n) {
         n.x = Math.max(
-          14,
-          Math.min(VIEW_W - 14, d.ox + (e.clientX - d.sx) / view.scale),
+          20,
+          Math.min(size.w - 20, d.ox + (e.clientX - d.sx) / view.scale),
         );
         n.y = Math.max(
-          14,
-          Math.min(VIEW_H - 14, d.oy + (e.clientY - d.sy) / view.scale),
+          20,
+          Math.min(size.h - 28, d.oy + (e.clientY - d.sy) / view.scale),
         );
         force((t) => t + 1);
       }
@@ -884,12 +919,12 @@ function GraphView({
   const byId = new Map(nodes.map((n) => [n.id, n] as const));
 
   return (
-    <div className="relative">
+    <div className="relative flex min-h-[340px] flex-1 flex-col">
       <svg
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        className="w-full rounded-md border border-line bg-bg-2/40 touch-none select-none"
+        ref={svgRef}
+        viewBox={`0 0 ${size.w} ${size.h}`}
+        className="min-h-0 w-full flex-1 rounded-md border border-line bg-bg-2/40 touch-none select-none"
         style={{
-          height: VIEW_H,
           cursor: dragRef.current?.kind === "pan" ? "grabbing" : "grab",
         }}
         onPointerDown={(e) => onPointerDown(e)}
@@ -914,21 +949,26 @@ function GraphView({
                   stroke={e.onPath ? "var(--mag)" : "var(--line-2)"}
                   strokeWidth={e.onPath ? 2 : 1}
                 />
-                <text
-                  x={(a.x + b.x) / 2}
-                  y={(a.y + b.y) / 2 - 2}
-                  textAnchor="middle"
-                  fontFamily="IBM Plex Mono, monospace"
-                  fontSize={6.5}
-                  fill="var(--txt-3)"
-                >
-                  {/* Read the edge from the node the analyst expanded out of.
+                {/* Past a couple of dozen links the relation names pile up
+                    into an unreadable knot at the root; the legend and the
+                    entity panel carry them instead. */}
+                {ledges.length <= 24 && (
+                  <text
+                    x={(a.x + b.x) / 2}
+                    y={(a.y + b.y) / 2 - 4}
+                    textAnchor="middle"
+                    fontFamily="IBM Plex Mono, monospace"
+                    fontSize={11}
+                    fill="var(--txt-3)"
+                  >
+                    {/* Read the edge from the node the analyst expanded out of.
                       An edge whose ROOT is the target is being traversed
                       backwards, so it gets the relation's other name — a
                       `person --officer_of--> org` edge expanded from the org
                       reads "has officer", not "officer of". */}
-                  {relLabel(ontSchema, e.rel, e.dst === rootId)}
-                </text>
+                    {relLabel(ontSchema, e.rel, e.dst === rootId)}
+                  </text>
+                )}
               </g>
             );
           })}
@@ -936,7 +976,7 @@ function GraphView({
           {nodes.map((n) => {
             const isRoot = n.id === rootId;
             const onPath = pathIds.has(n.id);
-            const r = isRoot ? 7 : 5;
+            const r = isRoot ? 9 : 6;
             return (
               <g
                 key={n.id}
@@ -985,13 +1025,13 @@ function GraphView({
                 )}
                 <text
                   x={n.x}
-                  y={n.y + r + 7}
+                  y={n.y + r + 14}
                   textAnchor="middle"
                   fontFamily="IBM Plex Mono, monospace"
-                  fontSize={7.5}
+                  fontSize={12}
                   fill="var(--txt-1)"
                 >
-                  {n.label.slice(0, 16)}
+                  {n.label.slice(0, 24)}
                 </text>
               </g>
             );
@@ -1030,7 +1070,7 @@ function GraphView({
       )}
 
       {/* legend */}
-      <div className="flex flex-wrap gap-1.5 mt-1.5">
+      <div className="flex flex-wrap items-center gap-[8px] mt-[8px]">
         {Array.from(new Set(nodes.map((n) => n.kind)))
           .slice(0, 6)
           .map((k) => (

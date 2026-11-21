@@ -1,16 +1,14 @@
 // The Reports app under the Slate scheme: the Europa copy
 // (gotham/europa/features.html, E1-E15) wired to the live routes. Ten pages,
-// each the copy's own crop of the 1920x1080 frame scaled to the surface: chat,
-// Gaia home, the Gaia map, the slides editor, two presentation slides, the
-// link graph, the data lineage and the simulation globe in two states. Pages
-// link to each other through the copy's own chrome (title bar logos, thumbnail
-// tabs, the rail, slide thumbnails and pager); the Gaia "Reports" tab and
-// "Case export" open the Reports app this surface replaced.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+// all native reflowing layouts: the Gaia home, chat, map, the slides editor, two
+// presentation slides, the link graph, the data lineage and the simulation
+// globe in two states. Pages link to each other through their toolbar (Gaia
+// home, the page switcher, the slide pager); the Gaia "Reports" tab and "Case
+// export" open the Reports app this surface replaced.
+import { useEffect, useMemo, useState } from "react";
 import type * as Cesium from "cesium";
 import { ErrorBoundary } from "../../../shell/ErrorBoundary.js";
 import { ReportsApp } from "../../../reports/ReportsApp.js";
-import { FR } from "./ui.js";
 import {
   INC_QUERIES,
   SAT_BBOX,
@@ -34,50 +32,22 @@ import {
   type SweepAoi,
   type Vessel,
 } from "./data.js";
-import { ChatFrame } from "./Chat.js";
+import { ChatPage } from "./Chat.js";
 import { GaiaFrame } from "./Gaia.js";
-import { GaiaMapFrame, type Page } from "./SatMap.js";
-import { Present1, Present2, SlidesFrame, type Sanctions } from "./Slides.js";
-import { GraphFrame } from "./Graph.js";
-import { LineageFrame } from "./Lineage.js";
-import { MetaFrame, type Mark } from "./Meta.js";
-import "./europa.css";
+import { MapPage, type Page } from "./SatMap.js";
+import { Present1, Present2, SlidesPage, type Sanctions } from "./Slides.js";
+import { GraphPage } from "./Graph.js";
+import { LineagePage } from "./Lineage.js";
+import { SimPage, type Mark } from "./Meta.js";
 
-type Crop = [number, number, number, number];
-const CHAT: Crop = [766, 279, 1100, 631];
-const MAP: Crop = [730, 273, 1140, 641];
-const CROP: Record<Page, Crop> = {
-  chat: CHAT,
-  gaia: CHAT,
-  map: MAP,
-  slides: MAP,
-  present1: MAP,
-  present2: [713, 273, 1140, 641],
-  graph: [720, 255, 690, 535],
-  lineage: [0, 0, 1920, 1080],
-  globe: [507, 162, 905, 510],
-  ring: [507, 162, 905, 510],
-};
 const on = (p: Page, ...ps: Page[]): boolean => ps.includes(p);
 
 export function EuropaApp({ viewer, initial = "gaia" }: { viewer: Cesium.Viewer | null; initial?: Page }): JSX.Element {
-  const host = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState<Page | "reports">(initial);
-  const [k, setK] = useState(1);
   const [nonce, setNonce] = useState(0);
   const [drawer, setDrawer] = useState(true);
   const [now] = useState(() => Math.floor(Date.now() / 1000));
   const p: Page = page === "reports" ? "gaia" : page;
-  const [x0, y0, W, H] = CROP[p];
-  useLayoutEffect(() => {
-    const el = host.current;
-    if (!el) return;
-    const fit = (): void => setK(Math.min(el.clientWidth / W, el.clientHeight / H));
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [page, W, H]);
 
   // routes, each pulled only by the pages that read it
   const ch = useJson<unknown>("/api/collab/channels");
@@ -160,12 +130,6 @@ export function EuropaApp({ viewer, initial = "gaia" }: { viewer: Cesium.Viewer 
   if (page === "reports")
     return (
       <div className="absolute inset-0 z-(--z-overlay) flex flex-col bg-bg-0">
-        <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line-2 bg-bg-1 px-3">
-          <button type="button" className="text-[12px] text-accent" onClick={() => setPage("gaia")}>
-            Gaia home
-          </button>
-          <span className="text-[12px] text-txt-3">· Reports</span>
-        </div>
         <div className="min-h-0 flex-1 overflow-auto csl2-app-measure">
           <ReportsApp viewer={viewer} />
         </div>
@@ -179,16 +143,16 @@ export function EuropaApp({ viewer, initial = "gaia" }: { viewer: Cesium.Viewer 
   let body: JSX.Element;
   switch (p) {
     case "chat":
-      body = <ChatFrame ch={ch} toGaia={() => go("gaia")} />;
+      body = <ChatPage ch={ch} toGaia={() => go("gaia")} />;
       break;
     case "gaia":
-      body = <GaiaFrame ev={ev} chokes={chokes} chokeRes={chokeRes} warns={warns} aircraft={aircraft} toMap={() => go("map")} toChat={() => go("chat")} toReports={() => setPage("reports")} />;
+      body = <GaiaFrame ev={ev} chokes={chokes} chokeRes={chokeRes} warns={warns} aircraft={aircraft} toMap={() => go("map")} toChat={() => go("chat")} toReports={() => setPage("reports")} reload={reload} />;
       break;
     case "map":
-      body = <GaiaMapFrame vs={vs} vRes={vRes} ev={evid} briefsN={briefsN} drawer={drawer} setDrawer={setDrawer} reload={reload} go={go} />;
+      body = <MapPage vs={vs} vRes={vRes} ev={evid} briefsN={briefsN} drawer={drawer} setDrawer={setDrawer} reload={reload} go={go} />;
       break;
     case "slides":
-      body = <SlidesFrame vs={vs} pv={pv} ev={evid} briefsN={briefsN} now={now} go={go} />;
+      body = <SlidesPage vs={vs} pv={pv} ev={evid} briefsN={briefsN} go={go} />;
       break;
     case "present1":
       body = <Present1 ev={evid} evRes={ev} now={now} go={go} chatWhy={chatWhy} />;
@@ -197,16 +161,15 @@ export function EuropaApp({ viewer, initial = "gaia" }: { viewer: Cesium.Viewer 
       body = <Present2 pv={pv} vRes={vRes} sanc={sanc} go={go} chatWhy={chatWhy} />;
       break;
     case "graph":
-      body = <GraphFrame all={inc.all} done={inc.done} total={INC_QUERIES.length} status={inc.status} go={() => go("gaia")} />;
+      body = <GraphPage all={inc.all} done={inc.done} total={INC_QUERIES.length} status={inc.status} go={go} />;
       break;
     case "lineage":
-      body = <LineageFrame lin={linRes?.data ?? null} linRes={linRes} fs={fsRes?.data ?? null} go={go} />;
+      body = <LineagePage lin={linRes?.data ?? null} linRes={linRes} fs={fsRes?.data ?? null} go={go} />;
       break;
     default:
       body = (
-        <MetaFrame
+        <SimPage
           state={p === "ring" ? "ring" : "globe"}
-          setState={(s) => go(s)}
           plan={gp.plan}
           gpRes={gp.res}
           gpTotal={gp.res?.data?.count ?? gp.res?.data?.items?.length ?? null}
@@ -219,17 +182,9 @@ export function EuropaApp({ viewer, initial = "gaia" }: { viewer: Cesium.Viewer 
             setGp({ res: null, plan: null });
             setGpRun((n) => n + 1);
           }}
-          go={() => go("gaia")}
+          go={go}
         />
       );
   }
-  return (
-    <div className="sl-eu" ref={host} data-page={p}>
-      <ErrorBoundary label="Reports">
-        <div className="copy" style={{ width: W, height: H, position: "relative", overflow: "hidden", zoom: k, background: "#0b1018", border: "1px solid #2b353b", boxSizing: "content-box" }}>
-          {FR(x0, y0, body)}
-        </div>
-      </ErrorBoundary>
-    </div>
-  );
+  return <ErrorBoundary label="Reports">{body}</ErrorBoundary>;
 }

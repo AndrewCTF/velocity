@@ -1,13 +1,21 @@
-/* fmv.css: the reference video surface (header, toolbar, telemetry, panes,
-   timeline, detections legend, context menu, nomination list, detection
-   chip), transcribed from the copy page's builders in its own 1920 x 1080
-   frame units and scaled with `zoom` (Fmv.tsx). Colours and sizes are the
-   copy's. Classes are prefixed under .mfv so the shell's rules cannot reach in. */
+/* fmv.css: the video surface (toolbar, telemetry, panes, timeline, detections
+   legend, context menu, nomination list, detection chip). The host is a grid
+   of four regions that reflows at native size: toolbar across the top, the
+   left column, the video well, the timeline under the well. Overlays share the
+   well's grid area. One gutter (8px) everywhere. Classes are prefixed under
+   .mfv so the shell's rules cannot reach in. */
 
 .mfv {
   position: absolute;
   inset: 0;
   overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 40px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "bar bar"
+    "lp main"
+    "lp tl";
   background: #0e1414;
   color: #e6eaea;
   font:
@@ -18,14 +26,6 @@
 .mfv *,
 .mfv *::before {
   box-sizing: border-box;
-}
-.mfv .st {
-  position: absolute;
-  left: 0;
-  top: 0;
-}
-.mfv .st > * {
-  position: absolute;
 }
 .mfv svg {
   fill: currentColor;
@@ -48,72 +48,35 @@
   outline-offset: 1px;
 }
 
-/* M2/M15 header row (0..24) and toolbar (24..64) */
-.mfv .top {
-  left: 0;
-  top: 0;
-  right: 0;
-  height: 24px;
-  background: #0f1515;
+/* M15 toolbar (0..40): the shell's menu row is the header, so no inner one */
+.mfv .row2 {
+  grid-area: bar;
+  height: 40px;
+  border-bottom: 1px solid #0b1010;
+  background: #161f1e;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 8px 0 9px;
+  gap: 0;
+  padding-left: 12px;
+  /* native size on a narrow host: the row scrolls rather than crushing icons */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
-.mfv .top .logo {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2.2px solid #f3f5f5;
-  border-top-color: transparent;
-  position: relative;
-  flex: none;
+.mfv .row2 > * {
+  flex-shrink: 0;
 }
-.mfv .top .logo::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #f3f5f5;
-}
-.mfv .top .pill {
-  width: 37px;
-  height: 18px;
-  border-radius: 9px;
-  background: #cf3b45;
-  color: #fff;
-  font-size: 11.5px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  margin-left: 12px;
-}
-.mfv .top .pill svg {
-  width: 12px;
-  height: 12px;
-}
-.mfv .top .fttl {
+.mfv .row2 .fttl {
+  margin-right: 12px;
   font-size: 13px;
   font-weight: 600;
   color: #f3f5f5;
   white-space: nowrap;
   min-width: 150px;
 }
-.mfv .top .sh {
-  width: 14px;
-  height: 14px;
-  color: #dde2e3;
-}
-.mfv .top > button {
-  color: #e6eaea;
-}
-.mfv .top .fchip {
-  height: 19px;
+.mfv .row2 .fchip {
+  margin-right: 12px;
+  height: 24px;
   padding: 0 7px;
   display: flex;
   align-items: center;
@@ -123,15 +86,15 @@
   font-size: 11.5px;
   white-space: nowrap;
 }
-.mfv .top .fchip.live {
+.mfv .row2 .fchip.live {
   background: transparent;
   border-color: transparent;
   color: #d9535c;
 }
-.mfv .top .srch {
-  margin-left: auto;
-  width: 138px;
-  height: 19px;
+.mfv .row2 .srch {
+  margin: 0 8px;
+  width: 160px;
+  height: 28px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -140,34 +103,25 @@
   border-radius: 2px;
   color: #c6cdd0;
 }
-.mfv .top .srch svg {
+.mfv .row2 .srch svg {
   width: 14px;
   height: 14px;
 }
-.mfv .top .srch input {
+.mfv .row2 .srch input {
   flex: 1;
   min-width: 0;
   color: #e6eaea;
   font-size: 13px;
 }
-.mfv .top .srch input::placeholder {
+.mfv .row2 .srch input::placeholder {
   color: #9aa5a8;
   opacity: 1;
 }
-.mfv .row2 {
-  left: 0;
-  top: 24px;
-  right: 0;
-  height: 40px;
-  background: #161f1e;
-  display: flex;
-  align-items: center;
-  gap: 0;
-  padding-left: 28px;
-}
 .mfv .row2 .ib {
-  width: 49px;
+  width: 32px;
   height: 32px;
+  margin: 0 2px;
+  border-radius: 3px;
   display: grid;
   place-items: center;
   color: #c6cdd0;
@@ -176,17 +130,19 @@
   width: 17px;
   height: 17px;
 }
+.mfv .row2 .ib:hover {
+  background: #232e2e;
+}
 .mfv .row2 .ib.on {
   color: #5b8fd9;
 }
 .mfv .row2 .tag {
-  width: 59px;
-  height: 27px;
-  margin: 0 4px 0 -4px;
+  height: 28px;
+  margin: 0 2px;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-left: 9px;
+  padding: 0 10px;
   border-radius: 2px;
   background: #2a3a5a;
   color: #c6cdd0;
@@ -201,9 +157,8 @@
   height: 15px;
 }
 .mfv .row2 .ts {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  position: static;
+  margin: 0 12px;
   font-size: 11px;
   color: #dde2e3;
   letter-spacing: 0.02em;
@@ -215,9 +170,6 @@
   align-items: center;
   gap: 4px;
   padding-right: 8px;
-}
-.mfv .row2 .rt .ib {
-  width: 30px;
 }
 .mfv .row2 .cube {
   width: 26px;
@@ -264,9 +216,44 @@
 }
 
 /* panes */
+/* the video well: panes side by side with one gutter around and between */
+.mfv .vids {
+  grid-area: main;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: #0e1414;
+}
 .mfv .pane {
+  position: relative;
+  flex: none;
   overflow: hidden;
   background: #0e1414;
+}
+/* overlays share the well's grid cell, pinned to a corner */
+.mfv .dchip,
+.mfv .dbg,
+.mfv .leg {
+  grid-area: main;
+  margin: 16px;
+  position: relative;
+}
+.mfv .dchip {
+  align-self: end;
+  justify-self: start;
+  z-index: 3;
+}
+.mfv .dbg {
+  align-self: start;
+  justify-self: start;
+  margin-top: 56px;
+}
+.mfv .leg {
+  align-self: end;
+  justify-self: end;
 }
 .mfv .pv {
   position: relative;
@@ -316,7 +303,7 @@
   color: #fff;
 }
 .mfv .mhd span {
-  font-size: 9.5px;
+  font-size: 11px;
   color: #e6eaea;
 }
 .mfv .omap {
@@ -435,10 +422,11 @@
   pointer-events: none;
 }
 .mfv .nopl {
-  position: absolute;
+  margin: auto;
+  max-width: 320px;
+  text-align: center;
   font-size: 15px;
   color: #9aa5a8;
-  margin: 0;
 }
 
 /* M27 detection chip */
@@ -479,6 +467,7 @@
   z-index: 4;
 }
 .mfv .ctx {
+  position: absolute;
   z-index: 5;
   width: 324px;
   padding: 6px 0;
@@ -543,14 +532,14 @@
 
 /* left column (0..374) */
 .mfv .lp {
-  left: 0;
-  top: 64px;
-  bottom: 0;
-  width: 374px;
+  grid-area: lp;
+  width: 360px; /* LP_W in Fmv.tsx */
+  min-height: 0;
+  overflow-y: auto;
   background: #252d2f;
   display: flex;
   flex-direction: column;
-  border-right: 9px solid #131d1e;
+  border-right: 1px solid #0b1010;
 }
 .mfv .mm {
   position: relative;
@@ -583,7 +572,7 @@
   color: #fff;
 }
 .mfv .mmh small {
-  font-size: 9px;
+  font-size: 11px;
   color: #dde2e3;
 }
 .mfv .mmf {
@@ -795,7 +784,9 @@
 }
 .mfv .vs {
   flex: none;
-  height: 20px;
+  margin-top: auto;
+  height: 32px;
+  border-top: 1px solid #0b1010;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -826,18 +817,28 @@
   all: revert;
 }
 
-/* M23/M26 timeline (942..1080) */
+/* M23/M26 timeline: a controls row, then the coverage track, under the well */
 .mfv .ftl {
-  left: 0;
-  bottom: 0;
-  height: 138px;
+  grid-area: tl;
+  padding: 8px 16px 10px;
   background: #252d2f;
+  border-top: 1px solid #0b1010;
 }
-.mfv .ftl > * {
+.mfv .ftl .ctl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+}
+.mfv .ftl .trk {
+  position: relative;
+  height: 84px;
+  margin-top: 4px;
+}
+.mfv .ftl .trk > * {
   position: absolute;
 }
 .mfv .ftl .box {
-  top: 15px;
   width: 85px;
   height: 24px;
   display: flex;
@@ -853,7 +854,7 @@
   margin-left: 5px;
 }
 .mfv .ftl .tr {
-  top: 15px;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -905,16 +906,24 @@
   border-radius: 50%;
   background: #fff;
 }
+.mfv .ftl .tick:first-child {
+  transform: none;
+}
+.mfv .ftl .tick:nth-child(9) {
+  transform: translateX(-100%);
+}
 .mfv .ftl .tick {
-  top: 44px;
-  width: 60px;
-  text-align: center;
-  font-size: 9.5px;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
   color: #aab3b6;
 }
 .mfv .ftl .cov {
-  top: 68px;
-  height: 49px;
+  top: 20px;
+  left: 0;
+  right: 0;
+  height: 44px;
   /* unrecorded time (before the archive starts) is hatched, as the copy draws it */
   background: repeating-linear-gradient(135deg, #34494f 0 2px, #2a3d43 2px 5px);
   overflow: hidden;
@@ -931,14 +940,15 @@
   background: repeating-linear-gradient(135deg, #34494f 0 2px, #2a3d43 2px 5px);
 }
 .mfv .ftl .cur {
-  top: 116px;
+  top: 64px;
+  transform: translateX(-2px);
   width: 49px;
   height: 13px;
   display: grid;
   place-items: center;
   background: #3a7096;
   color: #fff;
-  font-size: 9.5px;
+  font-size: 11px;
 }
 .mfv .ftl .cur::before {
   content: "";
@@ -946,11 +956,19 @@
   left: 0;
   bottom: 13px;
   width: 4px;
-  height: 50px;
+  height: 44px;
   background: #5c98b4;
 }
+.mfv .ftl .cur.end {
+  transform: translateX(calc(-100% + 2px));
+}
+.mfv .ftl .cur.end::before {
+  left: auto;
+  right: 0;
+}
 .mfv .ftl .err {
-  top: 84px;
+  top: 34px;
+  left: 8px;
   font-size: 12px;
   color: #f5d98a;
 }
@@ -958,8 +976,9 @@
 /* M24 legend */
 .mfv .leg {
   z-index: 2;
-  width: 137px;
-  min-height: 133px;
+  border-radius: 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  width: 160px;
   padding: 6px 10px 8px;
   background: #242c2e;
 }

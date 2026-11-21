@@ -29,6 +29,9 @@ import { planRoute } from "./routePlanner.js";
 import { deriveFacets, bucketLabel } from "../explorer/facets.js";
 import { defaultLayers } from "../registry/defaults.js";
 import { mgrs } from "../slate/features/maven/geo.js";
+import { SaveMenu } from "../slate/features/mapfx/SaveMenu.js";
+import { SearchAround } from "../slate/features/mapfx/SearchAround.js";
+import { RouteArcs } from "../slate/features/mapfx/RouteArcs.js";
 import { toast } from "../shell/toast.js";
 
 // The reference map-workspace page (gotham/maven/hero.html, feature rows M1,
@@ -135,6 +138,7 @@ export function MavenHeader({
   ctx,
   live,
   onLive,
+  viewer,
 }: {
   title: string;
   pinned: boolean;
@@ -147,13 +151,12 @@ export function MavenHeader({
   ctx: MenuCtx;
   live: boolean;
   onLive: () => void;
+  viewer?: Cesium.Viewer | null;
 }): JSX.Element {
-  const widths = [38, 39, 45, 50, 42, 47, 40];
   return (
     <div className="mv mv-top">
       <button
         type="button"
-        style={{ left: 10 }}
         aria-label="All apps"
         title="All apps"
         onClick={(e) => onLauncher(e.currentTarget)}
@@ -164,7 +167,6 @@ export function MavenHeader({
       <button
         type="button"
         className="mv-pill"
-        style={{ left: 62 }}
         aria-label={`Inbox, ${inbox}`}
         title="Inbox"
         onClick={() => ctx.openInbox()}
@@ -172,8 +174,8 @@ export function MavenHeader({
         <BpIcon name="inbox" size={12} />
         {inbox}
       </button>
-      <span className="mv-vsep" style={{ left: 108 }} />
-      <span style={{ left: 118, gap: 9 }}>
+      <span className="mv-vsep" />
+      <span className="mv-docgrp" style={{ gap: 9 }}>
         <span className="mv-doc">
           <BpIcon name="map" size={10} />
         </span>
@@ -206,22 +208,21 @@ export function MavenHeader({
           <BpIcon name="caret-down" size={9} />
         </button>
       </span>
-      <span className="mv-vsep" style={{ left: 283 }} />
+      <span className="mv-vsep" />
       <span
-        style={{ left: 292, gap: 12 }}
+        style={{ gap: 12 }}
         title="Classification marking from the server configuration"
       >
         <BpIcon name="shield" size={16} />
         <BpIcon name="tick" size={16} style={{ color: "#3ec27a" }} />
       </span>
-      <span className="mv-vsep" style={{ left: 340 }} />
-      <span style={{ left: 352, gap: 0 }}>
-        {MAVEN_MENUS.map((m, i) => (
+      <span className="mv-vsep" />
+      <span style={{ gap: 0 }}>
+        {MAVEN_MENUS.map((m) => (
           <button
             key={m}
             type="button"
             className="mv-menu"
-            style={{ width: widths[i] }}
             aria-expanded={menu === m}
             aria-haspopup="menu"
             onClick={(e) => onMenu(m, e.currentTarget)}
@@ -243,7 +244,6 @@ export function MavenHeader({
       <button
         type="button"
         className="mv-tog"
-        style={{ left: "auto", right: 288 }}
         aria-pressed={live}
         aria-label={live ? "Live: pause the clock" : "Held: resume live"}
         title={live ? "Live updates on" : "Live updates paused"}
@@ -253,7 +253,7 @@ export function MavenHeader({
       </button>
       <button
         type="button"
-        style={{ left: "auto", right: 254, color: "#c6cdd0" }}
+        style={{ color: "#c6cdd0" }}
         aria-label="Keyboard shortcuts"
         title="Keyboard shortcuts"
         onClick={() => runItem("Keyboard shortcuts", ctx)}
@@ -262,16 +262,26 @@ export function MavenHeader({
       </button>
       <button
         type="button"
-        style={{ left: "auto", right: 224, color: "#c6cdd0" }}
+        style={{ color: "#c6cdd0" }}
         aria-label="Alerts"
         title="Alerts: the live rule-hit ticker"
         onClick={() => ctx.openAlerts()}
       >
         <BpIcon name="timeline-events" size={16} />
       </button>
+      <SaveMenu title={title} viewer={viewer ?? null} />
       <button
         type="button"
-        style={{ left: "auto", right: 164 }}
+        style={{ color: "#c6cdd0" }}
+        aria-label="Settings"
+        title="Settings"
+        data-testid="d60-settings"
+        onClick={() => ctx.openSettings()}
+      >
+        <BpIcon name="cog" size={16} />
+      </button>
+      <button
+        type="button"
         title="Copy a link to this view"
         onClick={() => {
           void navigator.clipboard?.writeText(window.location.href);
@@ -283,7 +293,6 @@ export function MavenHeader({
       <button
         type="button"
         className="mv-search"
-        style={{ left: "auto", right: 7 }}
         title="Search objects, places and commands (Ctrl K)"
         onClick={() => runItem("Command palette…", ctx)}
       >
@@ -1032,6 +1041,7 @@ export function MavenSelection({
     details: true,
     props: true,
     featured: true,
+    links: true,
   });
   const flip = (k: string): void => setOpen((o) => ({ ...o, [k]: !o[k] }));
   const [tiles, setTiles] = useState(false);
@@ -1065,6 +1075,8 @@ export function MavenSelection({
       !k.startsWith("__") && v !== null && v !== undefined && v !== "",
   );
   return (
+    <>
+      <RouteArcs airportId={id} viewer={viewer} />
     <aside className="mv mv-rp" aria-label="Selection">
       <div className="mv-hd">
         Selection
@@ -1278,6 +1290,9 @@ export function MavenSelection({
           >
             Search around in the graph
           </button>
+          <div style={{ padding: "6px 0" }}>
+            <SearchAround entityId={id} viewer={viewer} />
+          </div>
         </Sec>
         <Sec
           icon="info-sign"
@@ -1396,6 +1411,7 @@ export function MavenSelection({
         </Sec>
       </div>
     </aside>
+    </>
   );
 }
 

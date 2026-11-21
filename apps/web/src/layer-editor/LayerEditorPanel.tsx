@@ -42,7 +42,7 @@ export function LayerEditorPanel(): JSX.Element {
   const field = "w-full border border-line bg-bg-2 px-2 py-1 text-txt-0";
 
   return (
-    <div className="flex h-full min-h-0 bg-bg-1 font-sans text-txt-0">
+    <div className="le-root flex h-full min-h-0 bg-bg-1 font-sans text-txt-0">
       <aside className="flex w-72 shrink-0 flex-col overflow-y-auto border-r border-line">
         <div className="k-title">Map layers</div>
         <div className="px-4 pb-2">

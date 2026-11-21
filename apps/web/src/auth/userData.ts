@@ -29,6 +29,9 @@ export const USER_DATA_KEYS = [
 ] as const;
 
 export const DEVICE_PREF_KEYS = [
+  // UI layout prefs (slateUi.ts): panel state, which page a sheet is on.
+  // No investigation data in them, so they stay with the machine.
+  "velocity.slateUiPrefs",
   "velocity.settings",
   "velocity.theme",
   "velocity.dashboardMode",
@@ -39,6 +42,7 @@ export const DEVICE_PREF_KEYS = [
   "velocity.lowEndDismissed",
   "velocity.openModeDismissed",
   "velocity.layerStyles.v1",
+  "velocity.layerRenames.v1",
   "velocity.devNoLogin", // dev-server-only login skip for headless screenshots (sessionStorage)
   "csl.leftW",
   "csl.rightW",

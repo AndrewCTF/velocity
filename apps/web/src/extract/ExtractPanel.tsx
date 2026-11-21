@@ -153,7 +153,7 @@ export function ExtractPanel({ situationId }: { situationId?: string }) {
       {error && <InlineAlert tone="alert">{error}</InlineAlert>}
       {result && (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <MarkingBadge
               level={level}
               compartments={comps
@@ -184,7 +184,7 @@ const inputStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.15)",
   borderRadius: 4,
   color: "inherit",
-  padding: "4px 6px",
+  padding: "4px 8px",
 };
 const btnStyle: CSSProperties = {
   background: "rgba(255,255,255,0.08)",

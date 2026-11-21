@@ -1,0 +1,25 @@
+/* D79 AddToMapMenu split button. */
+.mv-add-to-map { position: relative; display: inline-flex; }
+.mv-atm-main {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 12px;
+  background: #fff; border: 1px solid #c9ced4; border-radius: 3px 0 0 3px;
+  font-size: 12.5px; color: #1c2430; cursor: pointer;
+}
+.mv-atm-caret {
+  height: 28px; width: 26px; display: grid; place-items: center;
+  background: #e5e8ec; border: 1px solid #c9ced4; border-left: 0;
+  border-radius: 0 3px 3px 0; color: #1c2430; cursor: pointer;
+}
+.mv-atm-caret:hover { background: #d5d9de; }
+.mv-atm-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 320;
+  min-width: 220px; padding: 6px;
+}
+.mv-atm-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  min-height: 32px; padding: 0 10px; border: 0; background: transparent;
+  font-size: 12.5px; color: #1c2430; cursor: pointer; text-align: left;
+}
+.mv-atm-item:hover { background: #eef0f2; }
+.mv-atm-hint { margin-left: auto; font-size: 10.5px; color: #5f6b7c; }

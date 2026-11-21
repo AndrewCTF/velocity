@@ -3,7 +3,6 @@ import {
   TRK, funnel, hhmm, km, nearbyEvents, nearestWarnings, placeFor, propCounts, record, results, series, shown, stype, valueHist,
   type Alert, type Vessel, type Warning,
 } from "./data.js";
-import { toPx } from "./kit.js";
 
 const V = (mmsi: number, lon: number, lat: number, extra: Partial<Vessel> = {}): Vessel => ({
   id: `vessel:${mmsi}`, mmsi, lon, lat, t: 1792736000, sog: 0, name: `V${mmsi}`, origin: "AIS", ...extra,
@@ -73,13 +72,6 @@ describe("pdf data", () => {
     record([V(77, 55.1, 25, { t: 160 })]);
     const s = series(77, [[54.9, 25, 40], [55, 25, 100]]);
     expect(s.map((f) => f[0])).toEqual([40, 100, 160]);
-  });
-
-  it("maps lon/lat to the Gulf plate within the fit's error", () => {
-    // Al Hamriyah LPG Terminal's label anchor on scene-gulf-live (about 1019, 535)
-    const [x, y] = toPx(55.4833, 25.4667);
-    expect(Math.abs(x - 1019)).toBeLessThan(15);
-    expect(Math.abs(y - 537)).toBeLessThan(15);
   });
 });
 

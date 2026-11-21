@@ -14,7 +14,7 @@ import {
   type SourceCatalog,
 } from "../vertex/useJson.js";
 
-type WidgetType = "metric" | "series" | "table" | "maps";
+type WidgetType = "metric" | "series" | "table" | "maps" | "chokepoints";
 type MetricKey = "aircraft_count" | "vessel_count" | "parked_count";
 type SeriesKey = "aircraft" | "vessel" | "total";
 export interface Widget {
@@ -44,6 +44,7 @@ const TYPE_LABEL: Record<WidgetType, string> = {
   series: "Series",
   table: "Source table",
   maps: "Saved maps",
+  chokepoints: "Chokepoint vessels",
 };
 const METRIC_LABEL: Record<MetricKey, string> = {
   aircraft_count: "Aircraft",
@@ -188,6 +189,54 @@ function MapsBody(): JSX.Element {
   );
 }
 
+interface ChokepointFeature {
+  id?: string;
+  properties?: {
+    name?: string;
+    vessels?: number;
+    stationary?: number;
+    congestion?: string;
+  };
+}
+interface ChokepointResponse {
+  type?: string;
+  features?: ChokepointFeature[];
+}
+
+// D212 (docs-workshop-quiver-vertex): non-aggregated value config, static
+// property [Velocity] Chokepoint / Vessels, legend header Vessels. Counts
+// are live from GET /api/maritime/chokepoints (GeoJSON Points, 60 s TTL).
+function ChokepointsBody(): JSX.Element {
+  const { data, err } = useJson<ChokepointResponse>("/api/maritime/chokepoints");
+  if (err) return <div className="k-empty">Chokepoint counts unavailable ({err}).</div>;
+  if (!data) return <div className="k-empty">loading…</div>;
+  const rows = (data.features ?? []).filter((f) => f.properties?.name != null);
+  if (rows.length === 0)
+    return <div className="k-empty">No chokepoints reported (HTTP 200, 0 features).</div>;
+  return (
+    <table className="w-full text-[13.5px]">
+      <thead>
+        <tr className="text-left text-txt-3">
+          <th className="px-3 py-1 font-normal">Chokepoint</th>
+          <th className="px-3 py-1 font-normal">Vessels</th>
+          <th className="px-3 py-1 font-normal">Stationary</th>
+          <th className="px-3 py-1 font-normal">Congestion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((f, i) => (
+          <tr key={f.id ?? `${f.properties!.name}-${i}`} className="border-t border-line">
+            <td className="px-3 py-1">{f.properties!.name!}</td>
+            <td className="px-3 py-1 mono">{f.properties!.vessels ?? "—"}</td>
+            <td className="px-3 py-1 mono">{f.properties!.stationary ?? "—"}</td>
+            <td className="px-3 py-1">{f.properties!.congestion ?? "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function WidgetConfig({
   w,
   onChange,
@@ -253,6 +302,7 @@ function WidgetConfig({
             </label>
           )}
           {w.type === "maps" && <div className="text-txt-3">Lists GET /api/maps and takes no parameters.</div>}
+          {w.type === "chokepoints" && <div className="text-txt-3">Static property — Chokepoint vessels, GET /api/maritime/chokepoints.</div>}
         </div>
       )}
       {tab === "display" && (
@@ -403,11 +453,13 @@ export function WorkshopApp(): JSX.Element {
                   {w.type === "series" && `${w.series} · last ${WINDOWS.find((x) => x.sec === w.windowSec)?.label ?? `${w.windowSec}s`}`}
                   {w.type === "table" && `catalog · ${w.category || "all categories"}`}
                   {w.type === "maps" && "saved maps"}
+                  {w.type === "chokepoints" && "chokepoint · Vessels"}
                 </div>
                 {w.type === "metric" && <MetricBody w={w} />}
                 {w.type === "series" && <SeriesBody w={w} />}
                 {w.type === "table" && <TableBody w={w} />}
                 {w.type === "maps" && <MapsBody />}
+                {w.type === "chokepoints" && <ChokepointsBody />}
               </section>
             ))}
           </div>

@@ -27,13 +27,12 @@ import { GanttStrip, DetailStrip } from "./Strip.js";
 import { ObjectPanel } from "./ObjectPanel.js";
 import { destination, distNm, mgrs, zClock, zDate } from "./geo.js";
 
-// The watch workspace (reference page rows M36 to M54): rail, the left column
-// of Panels.tsx, a floating header over the map, view controls, status row,
-// the bottom strip and the object side panel. The stage is transparent over
-// the live globe; the rings and pairing lines are drawn on an unzoomed SVG by
-// projecting real positions through the Cesium camera.
+// The watch workspace: a slim toolbar, the left column of Panels.tsx, the map
+// column (header, view controls, status row, bottom strip) and the object side
+// panel, all at native px. The map column is transparent over the live globe;
+// the rings and pairing lines are drawn on an SVG that fills .mvw by projecting
+// real positions through the Cesium camera.
 
-const FRAME_H = 737; // the copy's frame height, in its own units
 const RAD = Math.PI / 180;
 
 type Pt = { x: number; y: number };
@@ -345,19 +344,19 @@ export function Workspace({
   onBoard: () => void;
 }): JSX.Element {
   const host = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 1600, h: 900 });
+  const mapEl = useRef<HTMLDivElement>(null);
+  const [mapW, setMapW] = useState(800);
+  const [mapH, setMapH] = useState(600);
   useEffect(() => {
-    const el = host.current;
+    const el = mapEl.current;
     if (!el) return;
-    const ro = new ResizeObserver(() =>
-      setSize({ w: el.clientWidth, h: el.clientHeight }),
-    );
+    const ro = new ResizeObserver(() => {
+      setMapW(el.clientWidth);
+      setMapH(el.clientHeight);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const k = Math.max(1, Math.min(1920 / 1313, size.h / FRAME_H));
-  const W = size.w / k;
-  const H = size.h / k;
 
   // The reference workspace sits on a dark basemap: switch to Esri's keyless
   // dark canvas while the workspace is open and hand the operator's choice
@@ -548,9 +547,6 @@ export function Workspace({
     return m;
   }, [entries, fixes]);
 
-  const lw = ws.collapsed ? 33 : 275;
-  const objW = ws.objOpen && entry ? 405 : 0;
-  const mapMid = lw + (W - lw - objW) / 2;
   const stripOn =
     ws.strip &&
     (ws.mode === "create" ||
@@ -558,17 +554,20 @@ export function Workspace({
       taskings.some(
         (t) => t.targetId === ws.target && t.status !== "rejected",
       ));
-  const stripW = W - (ws.collapsed ? 43 : 285) - objW;
   const nowLabel = `${zDate(now)} ${zClock(now)}`;
 
-  const rail: Array<[string, string, () => void, boolean?]> = [
+  // [icon, label, title, handler, active]
+  const bar: Array<[string, string, string, () => void, boolean?]> = [
     [
       "menu-open",
+      "Panel",
       "Collapse the panel",
       () => set({ collapsed: !ws.collapsed }),
+      !ws.collapsed,
     ],
     [
       "target",
+      "Targets",
       "Targets",
       () => set({ mode: "targets" }),
       ws.mode === "targets",
@@ -576,23 +575,35 @@ export function Workspace({
     [
       "route",
       "Taskings",
+      "Taskings",
       () => set({ mode: "taskings" }),
       ws.mode === "taskings",
     ],
     [
       "timeline-bar-chart",
+      "Gantt",
       "Show or hide the Gantt strip",
       () => set({ strip: !ws.strip }),
       ws.strip,
     ],
-    ["graph", "Open the link graph", () => setApp("graph")],
-  ];
-  const rail2: Array<[string, string, () => void]> = [
-    ["satellite", "Asset recommender", () => set({ mode: "rec" })],
-    ["search", "Search targets", () => set({ mode: "targets" })],
-    ["database", "Open Explorer", () => setApp("explorer")],
-    ["book", "Open Reports", () => setApp("reports")],
-    ["settings", "Recommender metrics", () => set({ metrics: true })],
+    ["graph", "Graph", "Open the link graph", () => setApp("graph")],
+    [
+      "satellite",
+      "Recommend",
+      "Asset recommender",
+      () => set({ mode: "rec" }),
+      ws.mode === "rec",
+    ],
+    ["search", "Search", "Search targets", () => set({ mode: "targets" })],
+    ["database", "Explorer", "Open Explorer", () => setApp("explorer")],
+    ["book", "Reports", "Open Reports", () => setApp("reports")],
+    [
+      "settings",
+      "Metrics",
+      "Recommender metrics",
+      () => set({ metrics: true }),
+    ],
+    ["globe", "Map", "Back to the map", () => setApp("map")],
   ];
 
   return (
@@ -607,54 +618,33 @@ export function Workspace({
         picked={picked?.asset}
         taskAsset={taskAsset}
       />
-      <div className="st" style={{ width: W, height: H, zoom: k }}>
-        <nav className="mv-rail" aria-label="Workspace rail">
+      <div className="mvw-bar" role="toolbar" aria-label="Workspace tools">
+        <button
+          type="button"
+          className="mvw-tb back"
+          title="Back to the board"
+          onClick={onBoard}
+        >
+          <BpIcon name="arrow-left" />
+          <span>Back to board</span>
+        </button>
+        <span className="mvw-sep" aria-hidden="true" />
+        {bar.map(([ic, label, t, fn, on]) => (
           <button
+            key={ic + label}
             type="button"
-            className="logo"
-            title="Back to the board"
-            onClick={onBoard}
+            className={`mvw-tb${on ? " on" : ""}`}
+            title={t}
+            aria-label={t}
+            aria-pressed={on === undefined ? undefined : on}
+            onClick={fn}
           >
-            <BpIcon name="lightning" />
+            <BpIcon name={ic} />
+            <span>{label}</span>
           </button>
-          {rail.map(([ic, t, fn, on]) => (
-            <button
-              key={ic}
-              type="button"
-              className={on ? "on" : ""}
-              title={t}
-              aria-label={t}
-              onClick={fn}
-            >
-              <BpIcon name={ic} />
-            </button>
-          ))}
-          <span className="sp" />
-          {rail2.map(([ic, t, fn]) => (
-            <button
-              key={ic}
-              type="button"
-              title={t}
-              aria-label={t}
-              onClick={fn}
-            >
-              <BpIcon name={ic} />
-            </button>
-          ))}
-          <button
-            type="button"
-            className="bot"
-            title="Back to the map"
-            aria-label="Back to the map"
-            onClick={() => setApp("map")}
-          >
-            <BpIcon
-              name="globe"
-              style={{ width: 12, height: 12, color: "#f3f5f5" }}
-            />
-          </button>
-        </nav>
-        <span className="gut" />
+        ))}
+      </div>
+      <div className="mvw-body">
         {!ws.collapsed && (
           <LeftPanel
             entries={entries}
@@ -667,9 +657,9 @@ export function Workspace({
             setDraft={setDraft}
           />
         )}
-
+        <div className="mvw-map" ref={mapEl}>
         {entry && (
-          <div className="hdr" style={{ left: mapMid }}>
+          <div className="hdr">
             <span className="tg">
               <BpIcon name="target" />
             </span>
@@ -743,7 +733,7 @@ export function Workspace({
           </div>
         )}
 
-        <div className="vc" style={{ right: 8 + objW }}>
+        <div className="vc">
           <button
             type="button"
             className={ws.overlays ? "on" : ""}
@@ -824,7 +814,7 @@ export function Workspace({
           </span>
         </div>
 
-        <div className="sr" style={{ right: objW, bottom: stripOn ? 220 : 0 }}>
+        <div className="sr" style={{ bottom: stripOn ? 220 : 0 }}>
           <button
             type="button"
             title="Centre on the target"
@@ -884,24 +874,22 @@ export function Workspace({
           (ws.mode === "taskings" && active ? (
             <DetailStrip
               t={active}
-              w={stripW}
-              pos={{ left: W - objW - stripW, right: objW }}
+              w={mapW}
+              pos={{ left: 0, right: 0 }}
               fix={fixes.get(active.targetId)}
             />
           ) : (
             <GanttStrip
-              w={stripW}
-              pos={{ left: W - objW - stripW, right: objW }}
+              w={mapW}
+              pos={{ left: 0, right: 0 }}
               draft={ws.mode === "create" ? draft : null}
               setDraft={setDraft}
               picked={picked}
             />
           ))}
 
-        {ws.objOpen && entry && <ObjectPanel e={entry} fix={fix} />}
-
         {ws.toast && (
-          <div className="toast" role="status" style={{ left: mapMid }}>
+          <div className="toast" role="status">
             <span className="ok">
               <BpIcon name="tick" />
             </span>
@@ -918,14 +906,16 @@ export function Workspace({
 
         {ws.metrics && (
           <MetricsDialog
-            left={mapMid}
-            top={H / 2}
+            left={mapW / 2}
+            top={mapH / 2}
             onOptimize={() => {
               frozen.current = liveRanked;
               setOpt((n) => n + 1);
             }}
           />
         )}
+        </div>
+        {ws.objOpen && entry && <ObjectPanel e={entry} fix={fix} />}
       </div>
     </div>
   );
