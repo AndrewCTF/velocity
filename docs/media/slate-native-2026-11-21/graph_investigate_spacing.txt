@@ -1,0 +1,18 @@
+1920 graph-empty            2 controls, 0 violations
+1920 graph-seeded           5 controls, 0 violations
+1920 inv-lookup             7 controls, 0 violations
+1920 graph-after-lookup     5 controls, 0 violations
+1920 inv-extract            5 controls, 0 violations
+1920 inv-extract-preview    5 controls, 0 violations
+1920 inv-sources            23 controls, 0 violations
+1920 inv-sources-ran        15 controls, 0 violations
+2560 graph-empty            2 controls, 0 violations
+2560 graph-seeded           5 controls, 0 violations
+2560 inv-lookup             7 controls, 0 violations
+2560 graph-after-lookup     5 controls, 0 violations
+2560 inv-extract            5 controls, 0 violations
+2560 inv-extract-preview    5 controls, 0 violations
+2560 inv-sources            33 controls, 0 violations
+2560 inv-sources-ran        25 controls, 0 violations
+all states on the metric
+exit 0

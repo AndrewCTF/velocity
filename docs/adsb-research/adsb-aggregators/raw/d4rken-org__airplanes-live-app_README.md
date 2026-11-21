@@ -1,0 +1,46 @@
+<img src="https://raw.githubusercontent.com/d4rken-org/airplanes-live-app/main/app/src/main/ic_launcher-playstore.png" width="128">
+
+# airplanes.live App
+
+[![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/d4rken-org/airplanes-live-app?include_prereleases)](https://github.com/d4rken-org/airplanes-live-app/releases/latest)
+[![RB Status](https://shields.rbtlog.dev/simple/eu.darken.apl)](https://shields.rbtlog.dev/eu.darken.apl)
+[![Code tests & eval](https://img.shields.io/github/actions/workflow/status/d4rken-org/airplanes-live-app/code-checks.yml?logo=githubactions&label=Code%20tests)](https://github.com/d4rken-org/airplanes-live-app/actions)
+[![Github Downloads](https://img.shields.io/github/downloads/d4rken-org/airplanes-live-app/total.svg?label=GitHub%20Downloads&logo=github)](https://github.com/d4rken-org/airplanes-live-app/releases/latest)
+
+An Android app for https://airplanes.live
+
+Features:
+
+- View aircraft on map
+- Search for aircraft by HEX, callsign, registration, airframe or SQUAWK code
+- Flight route information with origin and destination airports
+- ICAO alerts: Notifications if a specific aircraft is airborne
+- Callsign alerts: Notifications if a specific flight is active
+- SQUAWK alerts: Notifications if specific SQUAWK codes are transmitted
+- Location alerts: Notifications when aircraft appear in a geographic area
+- Feeder monitoring with offline notifications
+- Shortcuts to show the map from the POV of a specific feeder
+- Watchlist backup and restore
+
+## Download
+
+| Source                                                                            | Status                                                                                                                                                                                                                                                               |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Github (Release)](https://github.com/d4rken-org/airplanes-live-app/releases)     | ![](<https://img.shields.io/github/v/release/d4rken-org/airplanes-live-app?display_name=release&logo=github&label=GitHub%20(Release)>) ![](https://img.shields.io/github/downloads/d4rken-org/airplanes-live-app/latest/total?label=%20)                             |
+| [Github (Pre-Release)](https://github.com/d4rken-org/airplanes-live-app/releases) | ![](<https://img.shields.io/github/v/release/d4rken-org/airplanes-live-app?include_prereleases&display_name=release&logo=github&label=GitHub%20(Pre-Release)>) ![](https://img.shields.io/github/downloads-pre/d4rken-org/airplanes-live-app/latest/total?label=%20) |
+| [F-Droid (IzzyOnDroid)](https://apt.izzysoft.de/packages/eu.darken.apl/)          | ![](<https://img.shields.io/endpoint?url=https://apt.izzysoft.de/fdroid/api/v1/shield/eu.darken.apl&label=IzzyOnDroid%20(latest)>)                                                                                                                                   |
+
+## Screenshots
+
+<img src="https://github.com/d4rken-org/airplanes-live-app/raw/main/fastlane/metadata/android/en-US/images/phoneScreenshots/1_map.png" width="100"><img src="https://github.com/d4rken-org/airplanes-live-app/raw/main/fastlane/metadata/android/en-US/images/phoneScreenshots/2_search.png" width="100"><img src="https://github.com/d4rken-org/airplanes-live-app/raw/main/fastlane/metadata/android/en-US/images/phoneScreenshots/3_watch.png" width="100"><img src="https://github.com/d4rken-org/airplanes-live-app/raw/main/fastlane/metadata/android/en-US/images/phoneScreenshots/4_feeders.png" width="100">
+
+## License
+
+Code is available under a GPL v3 license, this excludes:
+
+- Icons, logos, mascots, marketing materials and assets.
+- Animations and videos.
+- Documentation.
+- Screenshots.
+- Texts & descriptions.
+- Translations.

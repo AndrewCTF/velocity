@@ -110,3 +110,27 @@ docs/superpowers/
 docs/security/references/*.pdf
 # release smoke failure screenshots/logs (scripts/smoke-release.cjs)
 smoke-artifacts/
+
+# Local scratch, scrape output and probe workspaces: large, third-party or
+# nested git checkouts. Never part of the product tree.
+/.core3d_probe/
+/.tmp-test/
+/adsblol-repos/
+/ais_probe/
+/gotham/
+/mvs3dm_verify/
+/research/
+/satscrape/
+/shipspotting/
+/vf/
+/docs/media/walkthrough/
+/docs/media/walkthrough-final/
+/docs/media/walkthrough-post/
+/docs/media/walkthrough-post2/
+# Website pre-publish gate state (local approvals, not source).
+/website/.pwp-approval.json
+/website/.pwp-gate
+/website/.pwp-gate-override
+/.pwp-ignore
+# Sample YOLO dataset ultralytics downloads into the CWD on a first run.
+/apps/api/datasets/

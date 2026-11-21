@@ -1,0 +1,15 @@
+1366 two-panel-tl         {"host":[42,136,1324,632],"bareHostPoints":"0/1485","rowOverflow":false,"panes":[[410,184,470,441],[888,184,470,441]],"timelineX":402}
+1366 two-nopanel          {"host":[42,136,1324,632],"bareHostPoints":"0/1485","rowOverflow":false,"panes":[[50,184,650,441],[708,184,650,441]],"timelineX":42}
+1366 single-nopanel-notl  {"host":[42,136,1324,632],"bareHostPoints":"0/1485","rowOverflow":false,"panes":[[50,184,1308,576]],"timelineX":null}
+1366 single-panel         {"host":[42,136,1324,632],"bareHostPoints":"0/1485","rowOverflow":false,"panes":[[410,184,948,441]],"timelineX":402}
+1366 ctx-geometry         {"menu":"52.3898N 4.8754E","header":"☀ 52.3898N 4.8754E"}
+1920 two-panel-tl         {"host":[42,136,1878,944],"bareHostPoints":"0/3160","rowOverflow":false,"panes":[[410,184,747,753],[1165,184,747,753]],"timelineX":402}
+1920 two-nopanel          {"host":[42,136,1878,944],"bareHostPoints":"0/3160","rowOverflow":false,"panes":[[50,184,927,753],[985,184,927,753]],"timelineX":42}
+1920 single-nopanel-notl  {"host":[42,136,1878,944],"bareHostPoints":"0/3160","rowOverflow":false,"panes":[[50,184,1862,888]],"timelineX":null}
+1920 single-panel         {"host":[42,136,1878,944],"bareHostPoints":"0/3160","rowOverflow":false,"panes":[[410,184,1502,753]],"timelineX":402}
+1920 ctx-geometry         {"menu":"52.3898N 4.8754E","header":"☀ 52.3898N 4.8754E"}
+2560 two-panel-tl         {"host":[42,136,2518,1304],"bareHostPoints":"0/5775","rowOverflow":false,"panes":[[410,184,1067,1113],[1485,184,1067,1113]],"timelineX":402}
+2560 two-nopanel          {"host":[42,136,2518,1304],"bareHostPoints":"0/5775","rowOverflow":false,"panes":[[50,184,1247,1113],[1305,184,1247,1113]],"timelineX":42}
+2560 single-nopanel-notl  {"host":[42,136,2518,1304],"bareHostPoints":"0/5775","rowOverflow":false,"panes":[[50,184,2502,1248]],"timelineX":null}
+2560 single-panel         {"host":[42,136,2518,1304],"bareHostPoints":"0/5775","rowOverflow":false,"panes":[[410,184,2142,1113]],"timelineX":402}
+2560 ctx-geometry         {"menu":"52.3891N 4.8767E","header":"☀ 52.3891N 4.8767E"}
