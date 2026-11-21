@@ -153,6 +153,17 @@ def test_a_base_python_outside_usr_is_bound_at_the_path_the_venv_names(tmp_path,
     monkeypatch.setattr(python_exec.sys, "executable", str(usr_py))
     assert python_exec._base_python_binds() == []  # /usr is already in the jail
 
+    # An alias that RESOLVES to a parent of the repo is refused: bwrap mounts
+    # the realpath of the source, which would carry the .env into the jail.
+    (tmp_path / "runtime" / "bin").mkdir(parents=True)
+    (tmp_path / "runtime" / "bin" / "python3.12").write_text("")
+    (tmp_path / "runtime-alias").symlink_to(tmp_path / "runtime")
+    sneaky = tmp_path / "venv" / "bin" / "python3.12"
+    sneaky.symlink_to(tmp_path / "runtime-alias" / "bin" / "python3.12")
+    monkeypatch.setattr(python_exec.sys, "executable", str(sneaky))
+    monkeypatch.setattr(python_exec, "_RUNNER", tmp_path / "runtime" / "project" / "py_runner.py")
+    assert python_exec._base_python_binds() == []
+
 
 def test_the_probe_uses_the_same_bind_list_as_the_real_spawn():
     """A probe testing a different sandbox than the one that runs proves nothing

@@ -129,7 +129,7 @@ def _JAIL_BINDS(exe: str) -> list[str]:  # noqa: N802 - reads as a constant at c
                  "--ro-bind-try", "/etc/hosts", "/etc/hosts"]
     else:
         argv.insert(1, "--unshare-net")
-    return argv
+    return [*argv, *_base_python_binds()]
 
 
 def _base_python_binds() -> list[str]:
@@ -151,7 +151,9 @@ def _base_python_binds() -> list[str]:
         if (
             root == Path("/usr") or root.is_relative_to("/usr")
             or root.is_relative_to(sys.prefix)  # the venv itself, bound below
-            or _RUNNER.is_relative_to(root)     # never a parent of the repo (.env)
+            # never a parent of the repo (.env) — checked on the resolved path
+            # too, because bwrap mounts the realpath() of the bind source
+            or _RUNNER.is_relative_to(root) or _RUNNER.is_relative_to(root.resolve())
             or str(root) in binds
         ):
             continue
@@ -173,7 +175,6 @@ def _child_argv() -> list[str]:
         return [sys.executable, str(_RUNNER)]
     return [
         *_JAIL_BINDS(exe),
-        *_base_python_binds(),
         "--ro-bind", sys.prefix, sys.prefix,      # the venv: interpreter + site-packages
         "--ro-bind", str(_RUNNER), str(_RUNNER),  # the runner, and nothing else from the repo
         "--",
