@@ -1,0 +1,1145 @@
+[
+  {
+    "id": "portwatch-chokepoints",
+    "title": "IMF PortWatch · maritime chokepoints",
+    "category": "maritime",
+    "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/PortWatch_chokepoints_database/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson",
+    "format": "geojson",
+    "interval_s": 86400,
+    "license": "IMF PortWatch (CC BY 4.0)"
+  },
+  {
+    "id": "portwatch-disruptions",
+    "title": "IMF PortWatch · port & shipping disruptions",
+    "category": "maritime",
+    "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/portwatch_disruptions_database/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson",
+    "format": "geojson",
+    "interval_s": 3600,
+    "license": "IMF PortWatch (CC BY 4.0)"
+  },
+  {
+    "id": "eccc-weather-alerts",
+    "title": "Environment Canada · active weather alerts",
+    "category": "hazards",
+    "url": "https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit=500",
+    "format": "geojson",
+    "interval_s": 900,
+    "license": "ECCC Open Government Licence – Canada"
+  },
+  {
+    "id": "wmo-severe-weather",
+    "title": "WMO · severe weather warnings (all members)",
+    "category": "hazards",
+    "url": "https://severeweather.wmo.int/v2/json/wmo_all.json",
+    "format": "json",
+    "rows_path": "items",
+    "interval_s": 900,
+    "license": "WMO Severe Weather Information Centre"
+  },
+  {
+    "id": "jma-earthquakes",
+    "title": "Japan Meteorological Agency · earthquake list",
+    "category": "hazards",
+    "url": "https://www.jma.go.jp/bosai/quake/data/list.json",
+    "format": "json",
+    "interval_s": 600,
+    "license": "JMA (government standard terms)"
+  },
+  {
+    "id": "usgs-elevated-volcanoes",
+    "title": "USGS · volcanoes at elevated alert",
+    "category": "hazards",
+    "url": "https://volcanoes.usgs.gov/hans-public/api/volcano/getElevatedVolcanoes",
+    "format": "json",
+    "interval_s": 3600,
+    "license": "USGS (public domain)"
+  },
+  {
+    "id": "bc-wildfires",
+    "title": "BC Wildfire Service · current fire points",
+    "category": "hazards",
+    "url": "https://openmaps.gov.bc.ca/geo/pub/ows?service=WFS&version=2.0.0&request=GetFeature&typeName=pub:WHSE_LAND_AND_NATURAL_RESOURCE.PROT_CURRENT_FIRE_PNTS_SP&outputFormat=json&srsName=EPSG:4326",
+    "format": "geojson",
+    "interval_s": 1800,
+    "license": "Open Government Licence – British Columbia"
+  },
+  {
+    "id": "safecast-radiation",
+    "title": "Safecast · latest crowd radiation readings",
+    "category": "hazards",
+    "url": "https://api.safecast.org/measurements.json?per_page=500&order=captured_at+desc",
+    "format": "json",
+    "interval_s": 3600,
+    "license": "Safecast (CC0)"
+  },
+  {
+    "id": "tzevaadom-alerts",
+    "title": "Tzeva Adom · Israel rocket/drone alert history",
+    "category": "conflict",
+    "url": "https://api.tzevaadom.co.il/alerts-history",
+    "format": "json",
+    "interval_s": 300,
+    "license": "Tzeva Adom (unofficial mirror of Home Front Command)"
+  },
+  {
+    "id": "who-disease-outbreaks",
+    "title": "WHO · Disease Outbreak News",
+    "category": "health",
+    "url": "https://www.who.int/api/news/diseaseoutbreaknews?sf_culture=en&$orderby=PublicationDateAndTime%20desc&$top=50",
+    "format": "json",
+    "rows_path": "value",
+    "interval_s": 3600,
+    "license": "WHO"
+  },
+  {
+    "id": "c2intel-ips",
+    "title": "C2IntelFeeds · command-and-control IPs (30d)",
+    "category": "cyber",
+    "url": "https://raw.githubusercontent.com/drb-ra/C2IntelFeeds/master/feeds/IPC2s-30day.csv",
+    "format": "csv",
+    "interval_s": 3600,
+    "license": "C2IntelFeeds (MIT)"
+  },
+  {
+    "id": "ecb-fx",
+    "title": "ECB · euro reference FX rates",
+    "category": "markets",
+    "url": "https://data-api.ecb.europa.eu/service/data/EXR/D.USD+GBP+JPY+CNY+RUB+CHF+TRY.EUR.SP00.A?lastNObservations=5&format=csvdata",
+    "format": "csv",
+    "interval_s": 21600,
+    "license": "ECB (free reuse with attribution)"
+  },
+  {
+    "id": "us-treasury-debt",
+    "title": "US Treasury · debt to the penny",
+    "category": "markets",
+    "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?sort=-record_date&page%5Bsize%5D=30",
+    "format": "json",
+    "rows_path": "data",
+    "interval_s": 21600,
+    "license": "US Treasury (public domain)"
+  },
+  {
+    "id": "kalshi-events",
+    "title": "Kalshi · open prediction-market events",
+    "category": "markets",
+    "url": "https://api.elections.kalshi.com/trade-api/v2/events?status=open&limit=200",
+    "format": "json",
+    "rows_path": "events",
+    "interval_s": 3600,
+    "license": "Kalshi public API"
+  },
+  {
+    "id": "ukraine-air-raid-alerts",
+    "title": "Ukraine · air-raid alert status by oblast",
+    "category": "conflict",
+    "url": "https://ubilling.net.ua/aerialalerts/",
+    "format": "json",
+    "rows_path": "states",
+    "interval_s": 300,
+    "license": "ubilling.net.ua aerial alerts API (unofficial)"
+  },
+  {
+    "id": "geonet-quakes",
+    "title": "GeoNet · New Zealand felt earthquakes",
+    "category": "hazards",
+    "url": "https://api.geonet.org.nz/quake?MMI=3",
+    "format": "geojson",
+    "interval_s": 600,
+    "license": "GeoNet (CC BY 4.0)"
+  },
+  {
+    "id": "geonet-volcanoes",
+    "title": "GeoNet · New Zealand volcanic alert levels",
+    "category": "hazards",
+    "url": "https://api.geonet.org.nz/volcano/val",
+    "format": "geojson",
+    "interval_s": 3600,
+    "license": "GeoNet (CC BY 4.0)"
+  },
+  {
+    "id": "ingv-quakes",
+    "title": "INGV · Italy earthquakes (M2+)",
+    "category": "hazards",
+    "url": "https://webservices.ingv.it/fdsnws/event/1/query?format=geojson&minmag=2&limit=500",
+    "format": "geojson",
+    "interval_s": 600,
+    "license": "INGV (CC BY 4.0)"
+  },
+  {
+    "id": "uk-flood-warnings",
+    "title": "UK Environment Agency · active flood warnings",
+    "category": "hazards",
+    "url": "https://environment.data.gov.uk/flood-monitoring/id/floods",
+    "format": "json",
+    "rows_path": "items",
+    "interval_s": 900,
+    "license": "Open Government Licence v3"
+  },
+  {
+    "id": "nifc-wildfires",
+    "title": "NIFC · current US wildfire incidents",
+    "category": "hazards",
+    "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson",
+    "format": "geojson",
+    "interval_s": 1800,
+    "license": "NIFC WFIGS (public domain)"
+  },
+  {
+    "id": "spamhaus-drop",
+    "title": "Spamhaus DROP · hijacked / criminal IPv4 netblocks",
+    "category": "cyber",
+    "url": "https://www.spamhaus.org/drop/drop_v4.json",
+    "format": "ndjson",
+    "interval_s": 43200,
+    "license": "Spamhaus DROP (free, attribution)"
+  },
+  {
+    "id": "meteoalarm-germany",
+    "title": "MeteoAlarm · Germany weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-germany",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-france",
+    "title": "MeteoAlarm · France weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-france",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-italy",
+    "title": "MeteoAlarm · Italy weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-italy",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-spain",
+    "title": "MeteoAlarm · Spain weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-spain",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-poland",
+    "title": "MeteoAlarm · Poland weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-poland",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-ukraine",
+    "title": "MeteoAlarm · Ukraine weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-ukraine",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "tsunami-ntwc",
+    "title": "NOAA NTWC · US/Canada tsunami messages",
+    "category": "hazards",
+    "url": "https://www.tsunami.gov/events/xml/PAAQAtom.xml",
+    "format": "rss",
+    "interval_s": 600,
+    "license": "NOAA (public domain)"
+  },
+  {
+    "id": "tsunami-pacific",
+    "title": "NOAA PTWC · Pacific tsunami messages",
+    "category": "hazards",
+    "url": "https://www.tsunami.gov/events/xml/PHEBAtom.xml",
+    "format": "rss",
+    "interval_s": 600,
+    "license": "NOAA (public domain)"
+  },
+  {
+    "id": "nsw-rfs-incidents",
+    "title": "NSW Rural Fire Service · major incidents",
+    "category": "hazards",
+    "url": "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
+    "format": "geojson",
+    "interval_s": 900,
+    "license": "NSW RFS"
+  },
+  {
+    "id": "jma-warnings",
+    "title": "JMA · weather warnings by prefecture",
+    "category": "hazards",
+    "url": "https://www.jma.go.jp/bosai/warning/data/warning/map.json",
+    "format": "json",
+    "interval_s": 900,
+    "license": "JMA"
+  },
+  {
+    "id": "ga-quakes",
+    "title": "Geoscience Australia · earthquakes (7d)",
+    "category": "hazards",
+    "url": "https://earthquakes.ga.gov.au/geoserver/earthquakes/wfs?service=WFS&request=getfeature&typeNames=earthquakes:earthquakes_seven_days&outputFormat=application/json",
+    "format": "geojson",
+    "interval_s": 600,
+    "license": "Geoscience Australia (CC BY 4.0)"
+  },
+  {
+    "id": "calfire-incidents",
+    "title": "CAL FIRE · active incidents",
+    "category": "hazards",
+    "url": "https://www.fire.ca.gov/umbraco/api/IncidentApi/List?inactive=false",
+    "format": "json",
+    "interval_s": 1800,
+    "license": "CAL FIRE"
+  },
+  {
+    "id": "ecdc-threats",
+    "title": "ECDC · communicable disease threats",
+    "category": "health",
+    "url": "https://www.ecdc.europa.eu/en/taxonomy/term/1307/feed",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "ECDC"
+  },
+  {
+    "id": "who-news",
+    "title": "WHO · news releases",
+    "category": "health",
+    "url": "https://www.who.int/rss-feeds/news-english.xml",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "WHO"
+  },
+  {
+    "id": "emsc-quakes",
+    "title": "EMSC · global earthquakes M2.5+",
+    "category": "hazards",
+    "url": "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=500&minmag=2.5",
+    "format": "geojson",
+    "interval_s": 600,
+    "license": "EMSC (CC BY 4.0)"
+  },
+  {
+    "id": "spc-storm-reports",
+    "title": "NOAA SPC · today's storm reports",
+    "category": "hazards",
+    "url": "https://www.spc.noaa.gov/climo/reports/today.csv",
+    "format": "csv",
+    "interval_s": 1800,
+    "license": "NOAA (public domain)"
+  },
+  {
+    "id": "fbi-wanted",
+    "title": "FBI · most wanted",
+    "category": "security",
+    "url": "https://api.fbi.gov/wanted/v1/list?pageSize=50",
+    "format": "json",
+    "rows_path": "items",
+    "interval_s": 21600,
+    "license": "FBI (public domain)"
+  },
+  {
+    "id": "un-news-peace",
+    "title": "UN News · peace and security",
+    "category": "conflict",
+    "url": "https://news.un.org/feed/subscribe/en/news/topic/peace-and-security/feed/rss.xml",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "United Nations"
+  },
+  {
+    "id": "interpol-red",
+    "title": "INTERPOL · red notices",
+    "category": "security",
+    "url": "https://ws-public.interpol.int/notices/v1/red?resultPerPage=160",
+    "format": "json",
+    "rows_path": "_embedded.notices",
+    "interval_s": 21600,
+    "license": "INTERPOL"
+  },
+  {
+    "id": "interpol-yellow",
+    "title": "INTERPOL · yellow notices (missing persons)",
+    "category": "security",
+    "url": "https://ws-public.interpol.int/notices/v1/yellow?resultPerPage=160",
+    "format": "json",
+    "rows_path": "_embedded.notices",
+    "interval_s": 21600,
+    "license": "INTERPOL"
+  },
+  {
+    "id": "cisa-advisories",
+    "title": "CISA · cybersecurity advisories",
+    "category": "cyber",
+    "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "CISA (public domain)"
+  },
+  {
+    "id": "cbp-border-waits",
+    "title": "US CBP · land border wait times",
+    "category": "security",
+    "url": "https://bwt.cbp.gov/api/bwtnew",
+    "format": "json",
+    "interval_s": 900,
+    "license": "CBP (public domain)"
+  },
+  {
+    "id": "sslbl-ips",
+    "title": "abuse.ch SSLBL · botnet C2 IPs",
+    "category": "cyber",
+    "url": "https://sslbl.abuse.ch/blacklist/sslipblacklist.csv",
+    "format": "csv",
+    "interval_s": 3600,
+    "license": "abuse.ch (CC0)"
+  },
+  {
+    "id": "ifrc-appeals",
+    "title": "IFRC GO · emergency appeals",
+    "category": "humanitarian",
+    "url": "https://goadmin.ifrc.org/api/v2/appeal/?limit=200&ordering=-start_date",
+    "format": "json",
+    "rows_path": "results",
+    "interval_s": 3600,
+    "license": "IFRC (CC BY)"
+  },
+  {
+    "id": "manifold-markets",
+    "title": "Manifold · prediction markets",
+    "category": "markets",
+    "url": "https://api.manifold.markets/v0/markets?limit=500",
+    "format": "json",
+    "interval_s": 3600,
+    "license": "Manifold public API"
+  },
+  {
+    "id": "federal-register",
+    "title": "US Federal Register · newest documents",
+    "category": "government",
+    "url": "https://www.federalregister.gov/api/v1/documents.json?per_page=100&order=newest",
+    "format": "json",
+    "rows_path": "results",
+    "interval_s": 3600,
+    "license": "public domain"
+  },
+  {
+    "id": "uk-carbon-intensity",
+    "title": "UK grid · carbon intensity today",
+    "category": "energy",
+    "url": "https://api.carbonintensity.org.uk/intensity/date",
+    "format": "json",
+    "rows_path": "data",
+    "interval_s": 1800,
+    "license": "NESO (CC BY 4.0)"
+  },
+  {
+    "id": "tfl-line-status",
+    "title": "TfL · London line status",
+    "category": "transport",
+    "url": "https://api.tfl.gov.uk/Line/Mode/tube,overground,dlr,elizabeth-line/Status",
+    "format": "json",
+    "interval_s": 600,
+    "license": "TfL open data"
+  },
+  {
+    "id": "federal-register-sanctions",
+    "title": "US Federal Register · OFAC actions",
+    "category": "government",
+    "url": "https://www.federalregister.gov/api/v1/documents.json?per_page=100&order=newest&conditions%5Bagencies%5D%5B%5D=foreign-assets-control-office",
+    "format": "json",
+    "rows_path": "results",
+    "interval_s": 3600,
+    "license": "public domain"
+  },
+  {
+    "id": "elexon-generation",
+    "title": "Elexon · GB generation by fuel",
+    "category": "energy",
+    "url": "https://data.elexon.co.uk/bmrs/api/v1/generation/outturn/summary",
+    "format": "json",
+    "interval_s": 1800,
+    "license": "Elexon BMRS"
+  },
+  {
+    "id": "ifrc-events",
+    "title": "IFRC GO · disaster events",
+    "category": "humanitarian",
+    "url": "https://goadmin.ifrc.org/api/v2/event/?limit=200&ordering=-disaster_start_date",
+    "format": "json",
+    "rows_path": "results",
+    "interval_s": 3600,
+    "license": "IFRC (CC BY)"
+  },
+  {
+    "id": "nasa-eonet-closed",
+    "title": "NASA EONET · open natural events (30d)",
+    "category": "hazards",
+    "url": "https://eonet.gsfc.nasa.gov/api/v3/events/geojson?status=open&days=30",
+    "format": "geojson",
+    "interval_s": 3600,
+    "license": "NASA (public domain)"
+  },
+  {
+    "id": "treasury-rates",
+    "title": "US Treasury · average interest rates",
+    "category": "markets",
+    "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates?sort=-record_date&page%5Bsize%5D=50",
+    "format": "json",
+    "rows_path": "data",
+    "interval_s": 86400,
+    "license": "public domain"
+  },
+  {
+    "id": "usgs-quake-atom",
+    "title": "USGS · M4.5+ earthquakes (Atom)",
+    "category": "hazards",
+    "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.atom",
+    "format": "rss",
+    "interval_s": 600,
+    "license": "USGS"
+  },
+  {
+    "id": "nhc-atlantic",
+    "title": "NOAA NHC · Atlantic advisories",
+    "category": "hazards",
+    "url": "https://www.nhc.noaa.gov/index-at.xml",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "NOAA"
+  },
+  {
+    "id": "uk-fcdo-rss",
+    "title": "UK FCDO · travel advice updates",
+    "category": "security",
+    "url": "https://www.gov.uk/foreign-travel-advice.atom",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "OGL v3"
+  },
+  {
+    "id": "nhc-pacific",
+    "title": "NOAA NHC · East Pacific advisories",
+    "category": "hazards",
+    "url": "https://www.nhc.noaa.gov/index-ep.xml",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "NOAA"
+  },
+  {
+    "id": "sensor-community-dust",
+    "title": "Sensor.Community · PM sensors (last 5 min)",
+    "category": "environment",
+    "url": "https://data.sensor.community/static/v1/data.dust.min.json",
+    "format": "json",
+    "interval_s": 1800,
+    "license": "ODbL"
+  },
+  {
+    "id": "state-travel-rss",
+    "title": "US State Dept · travel advisories",
+    "category": "security",
+    "url": "https://travel.state.gov/_res/rss/TAsTWs.xml",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "public domain"
+  },
+  {
+    "id": "iaea-news",
+    "title": "IAEA · top news",
+    "category": "nuclear",
+    "url": "https://www.iaea.org/feeds/topnews",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "IAEA"
+  },
+  {
+    "id": "bellingcat",
+    "title": "Bellingcat · investigations",
+    "category": "conflict",
+    "url": "https://www.bellingcat.com/feed/",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "Bellingcat"
+  },
+  {
+    "id": "crisisgroup",
+    "title": "Crisis Group · latest analysis",
+    "category": "conflict",
+    "url": "https://www.crisisgroup.org/rss",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "International Crisis Group"
+  },
+  {
+    "id": "gdacs-rss",
+    "title": "GDACS · all alerts (GeoRSS)",
+    "category": "hazards",
+    "url": "https://www.gdacs.org/xml/rss.xml",
+    "format": "rss",
+    "interval_s": 900,
+    "license": "GDACS"
+  },
+  {
+    "id": "nasa-firms-modis-24h",
+    "title": "NASA FIRMS · MODIS fires (24h, keyless file)",
+    "category": "hazards",
+    "url": "https://firms.modaps.eosdis.nasa.gov/data/active_fire/modis-c6.1/csv/MODIS_C6_1_Global_24h.csv",
+    "format": "csv",
+    "interval_s": 3600,
+    "license": "NASA (public domain)"
+  },
+  {
+    "id": "jtwc",
+    "title": "JTWC · western Pacific / Indian Ocean cyclones",
+    "category": "hazards",
+    "url": "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "US Navy JTWC"
+  },
+  {
+    "id": "hacker-news-new",
+    "title": "Hacker News · newest stories",
+    "category": "tech",
+    "url": "https://hn.algolia.com/api/v1/search_by_date?tags=story&hitsPerPage=100",
+    "format": "json",
+    "rows_path": "hits",
+    "interval_s": 1800,
+    "license": "HN Algolia API"
+  },
+  {
+    "id": "vic-emergency",
+    "title": "VicEmergency · all incidents and warnings",
+    "category": "hazards",
+    "url": "https://emergency.vic.gov.au/public/events-geojson.json",
+    "format": "geojson",
+    "interval_s": 900,
+    "license": "Emergency Management Victoria (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-austria",
+    "title": "MeteoAlarm · Austria weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-austria",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-belgium",
+    "title": "MeteoAlarm · Belgium weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-belgium",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-bosnia-herzegovina",
+    "title": "MeteoAlarm · Bosnia Herzegovina weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-bosnia-herzegovina",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-bulgaria",
+    "title": "MeteoAlarm · Bulgaria weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-bulgaria",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-croatia",
+    "title": "MeteoAlarm · Croatia weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-croatia",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-cyprus",
+    "title": "MeteoAlarm · Cyprus weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-cyprus",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-czechia",
+    "title": "MeteoAlarm · Czechia weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-czechia",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-denmark",
+    "title": "MeteoAlarm · Denmark weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-denmark",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-estonia",
+    "title": "MeteoAlarm · Estonia weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-estonia",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-finland",
+    "title": "MeteoAlarm · Finland weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-finland",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-greece",
+    "title": "MeteoAlarm · Greece weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-greece",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-hungary",
+    "title": "MeteoAlarm · Hungary weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-hungary",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-iceland",
+    "title": "MeteoAlarm · Iceland weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-iceland",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-ireland",
+    "title": "MeteoAlarm · Ireland weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-ireland",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-israel",
+    "title": "MeteoAlarm · Israel weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-israel",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-latvia",
+    "title": "MeteoAlarm · Latvia weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-latvia",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-lithuania",
+    "title": "MeteoAlarm · Lithuania weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-lithuania",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-luxembourg",
+    "title": "MeteoAlarm · Luxembourg weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-luxembourg",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-malta",
+    "title": "MeteoAlarm · Malta weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-malta",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-moldova",
+    "title": "MeteoAlarm · Moldova weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-moldova",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-montenegro",
+    "title": "MeteoAlarm · Montenegro weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-montenegro",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-netherlands",
+    "title": "MeteoAlarm · Netherlands weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-netherlands",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-norway",
+    "title": "MeteoAlarm · Norway weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-norway",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-portugal",
+    "title": "MeteoAlarm · Portugal weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-portugal",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-republic-of-north-macedonia",
+    "title": "MeteoAlarm · Republic Of North Macedonia weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-republic-of-north-macedonia",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-romania",
+    "title": "MeteoAlarm · Romania weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-romania",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-serbia",
+    "title": "MeteoAlarm · Serbia weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-serbia",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-slovakia",
+    "title": "MeteoAlarm · Slovakia weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-slovakia",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-slovenia",
+    "title": "MeteoAlarm · Slovenia weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-slovenia",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-sweden",
+    "title": "MeteoAlarm · Sweden weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-sweden",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-switzerland",
+    "title": "MeteoAlarm · Switzerland weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-switzerland",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "meteoalarm-united-kingdom",
+    "title": "MeteoAlarm · United Kingdom weather warnings",
+    "category": "hazards",
+    "url": "https://feeds.meteoalarm.org/api/v1/warnings/feeds-united-kingdom",
+    "format": "json",
+    "rows_path": "warnings",
+    "interval_s": 900,
+    "license": "MeteoAlarm / EUMETNET (CC BY 4.0)"
+  },
+  {
+    "id": "dod-releases",
+    "title": "US DoD · releases",
+    "category": "military",
+    "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=9&Site=945&max=40",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "DoD (public domain)"
+  },
+  {
+    "id": "dod-contracts",
+    "title": "US DoD · contract announcements",
+    "category": "military",
+    "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=400&Site=945&max=20",
+    "format": "rss",
+    "interval_s": 21600,
+    "license": "DoD (public domain)"
+  },
+  {
+    "id": "centcom-press",
+    "title": "US CENTCOM · press releases",
+    "category": "military",
+    "url": "https://www.centcom.mil/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=808&max=40",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "CENTCOM (public domain)"
+  },
+  {
+    "id": "un-press",
+    "title": "UN · meetings coverage & press releases",
+    "category": "conflict",
+    "url": "https://press.un.org/en/rss.xml",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "United Nations"
+  },
+  {
+    "id": "airwars",
+    "title": "Airwars · civilian harm from airstrikes",
+    "category": "conflict",
+    "url": "https://airwars.org/feed/",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "Airwars"
+  },
+  {
+    "id": "long-war-journal",
+    "title": "FDD Long War Journal",
+    "category": "conflict",
+    "url": "https://www.longwarjournal.org/feed",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "FDD Long War Journal"
+  },
+  {
+    "id": "kyiv-independent",
+    "title": "Kyiv Independent",
+    "category": "conflict",
+    "url": "https://kyivindependent.com/news-archive/rss/",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "Kyiv Independent"
+  },
+  {
+    "id": "twz",
+    "title": "The War Zone",
+    "category": "military",
+    "url": "https://www.twz.com/feed",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "The War Zone"
+  },
+  {
+    "id": "defense-news",
+    "title": "Defense News",
+    "category": "military",
+    "url": "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "Defense News"
+  },
+  {
+    "id": "eu-council-press",
+    "title": "Council of the EU · press releases (sanctions, decisions)",
+    "category": "sanctions",
+    "url": "https://www.consilium.europa.eu/en/rss/pressreleases.ashx",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "Council of the EU"
+  },
+  {
+    "id": "msf-news",
+    "title": "MSF · news",
+    "category": "humanitarian",
+    "url": "https://www.msf.org/rss/all",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "MSF"
+  },
+  {
+    "id": "icrc-news",
+    "title": "ICRC · news releases",
+    "category": "humanitarian",
+    "url": "https://www.icrc.org/en/rss/news",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "ICRC"
+  },
+  {
+    "id": "hrw-news",
+    "title": "Human Rights Watch · news",
+    "category": "conflict",
+    "url": "https://www.hrw.org/rss/news",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "HRW"
+  },
+  {
+    "id": "amnesty-news",
+    "title": "Amnesty International · news",
+    "category": "conflict",
+    "url": "https://www.amnesty.org/en/latest/news/feed/",
+    "format": "rss",
+    "interval_s": 3600,
+    "license": "Amnesty"
+  },
+  {
+    "id": "rferl",
+    "title": "RFE/RL · news",
+    "category": "conflict",
+    "url": "https://www.rferl.org/api/epiqq",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "RFE/RL"
+  },
+  {
+    "id": "meduza",
+    "title": "Meduza · English",
+    "category": "conflict",
+    "url": "https://meduza.io/rss/en/all",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "Meduza"
+  },
+  {
+    "id": "al-jazeera",
+    "title": "Al Jazeera · news",
+    "category": "conflict",
+    "url": "https://www.aljazeera.com/xml/rss/all.xml",
+    "format": "rss",
+    "interval_s": 900,
+    "license": "Al Jazeera"
+  },
+  {
+    "id": "bbc-world",
+    "title": "BBC · World",
+    "category": "conflict",
+    "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "format": "rss",
+    "interval_s": 900,
+    "license": "BBC"
+  },
+  {
+    "id": "iran-international",
+    "title": "Iran International",
+    "category": "conflict",
+    "url": "https://www.iranintl.com/en/feed",
+    "format": "rss",
+    "interval_s": 900,
+    "license": "Iran International"
+  },
+  {
+    "id": "nk-news",
+    "title": "NK News",
+    "category": "conflict",
+    "url": "https://www.nknews.org/feed/",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "NK News"
+  },
+  {
+    "id": "sahel-insight",
+    "title": "Sahel · Jeune Afrique",
+    "category": "conflict",
+    "url": "https://www.jeuneafrique.com/feed/",
+    "format": "rss",
+    "interval_s": 1800,
+    "license": "Jeune Afrique"
+  }
+]

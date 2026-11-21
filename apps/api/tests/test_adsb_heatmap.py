@@ -498,9 +498,12 @@ def test_coverage_route_rejects_bad_ranges(client: TestClient) -> None:
     )
     assert backwards.status_code == 422
     # 367 inclusive days (a 366-day span) exceeds the 366-day cap.
+    # Over-cap now degrades to 200 (see history.py docstring) so the day
+    # picker never blocks on a route the backend has not deployed yet.
     too_long = client.get(
         "/api/history/upstream/coverage", params={"from": "2024-01-01", "to": "2025-01-01"}
     )
-    assert too_long.status_code == 422
+    assert too_long.status_code == 200
+    assert too_long.json()["degraded"] is True
     bad = client.get("/api/history/upstream/coverage", params={"from": "nope", "to": "2024-01-01"})
     assert bad.status_code == 422

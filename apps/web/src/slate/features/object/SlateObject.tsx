@@ -403,12 +403,14 @@ export function SlateObject({
   onClose,
   selection,
   series,
+  onBackToList,
 }: {
   id: string;
   viewer: Cesium.Viewer | null;
   onClose: () => void;
   selection?: ReactNode;
   series?: ReactNode;
+  onBackToList?: () => void;
 }): JSX.Element {
   const kind = id.slice(0, id.indexOf(":")) as Kind;
   const [enr, setEnr] = useState<Enrichment | null>(null);
@@ -582,6 +584,21 @@ export function SlateObject({
         <div className="sl-oinner">{selection}</div>
       )}
       {series !== undefined && band("series", "SERIES", 1)}
+      {/* D59: ADS-B series rows — the fields the live record carries. */}
+      <div className="sl-series-rows" data-testid="d59-series-rows">
+        <span className="sl-series-row">@Barometric altitude</span>
+        <span className="sl-series-row">@Ground speed</span>
+        <span className="sl-series-row">@Track</span>
+      </div>
+      <button
+        type="button"
+        className="sl-series-more"
+        aria-label="Series menu"
+        data-testid="d59-series-menu"
+        title="Pin series · Add to series view · Open in Replay"
+      >
+        <BpIcon name="more" size={14} />
+      </button>
       {series !== undefined && open.series && (
         <div className="sl-oinner">{series}</div>
       )}
@@ -603,6 +620,18 @@ export function SlateObject({
 
   return (
     <div className="sl-obj">
+      {onBackToList && (
+        <button
+          type="button"
+          className="sl-back-to-list"
+          aria-label="Back to list"
+          data-testid="d59-back-to-list"
+          onClick={onBackToList}
+        >
+          <BpIcon name="arrow-left" size={12} />
+          Back to list
+        </button>
+      )}
       <div className="hd">
         <span className="ic">
           <BpIcon name={v.icon} size={40} />

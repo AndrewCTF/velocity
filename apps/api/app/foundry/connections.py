@@ -67,7 +67,20 @@ from app.keys import UserCtx
 
 log = logging.getLogger("app.foundry.connections")
 
-KINDS: tuple[str, ...] = ("mqtt", "kafka", "sql")
+KINDS: tuple[str, ...] = ("mqtt", "kafka", "sql", "http")
+
+_HTTP_FORMATS = ("json", "csv", "geojson", "rss", "ndjson")
+_HTTP_MIN_INTERVAL_S = 30.0
+# A dotted JSON path of bare keys only — no brackets, no list indices — so a
+# rows_path can never become an expression against the fetched document.
+_ROWS_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
+# "Header-Name: <env var whose value is sent as the header>" — never a literal
+# credential, so a token cannot be stored in the connection row.
+_AUTH_HEADER_RE = re.compile(r"^[A-Za-z0-9-]{1,64}$")
+
+
+def valid_rows_path(path: str) -> bool:
+    return path == "" or bool(_ROWS_PATH_RE.match(path))
 
 # A connection writes on behalf of the deployment, not a signed-in analyst.
 _LOCAL_CTX = UserCtx(user_id="local", token="")
@@ -123,6 +136,7 @@ def availability() -> dict[str, dict[str, Any]]:
         "mqtt": {"available": True, "detail": "built in"},
         "kafka": {"available": kafka is None, "detail": kafka or "aiokafka"},
         "sql": {"available": sql is None, "detail": sql or "sqlalchemy"},
+        "http": {"available": True, "detail": "built in"},
     }
 
 
@@ -516,7 +530,156 @@ async def _run_sql(store: FoundryStore, conn: dict[str, Any]) -> None:
         await asyncio.sleep(interval)
 
 
-_RUNNERS = {"mqtt": _run_mqtt, "kafka": _run_kafka, "sql": _run_sql}
+# ── http (URL poll) ─────────────────────────────────────────────────────────
+#
+# The third polling shape alongside SQL: an operator points the connection at
+# a public feed URL and each cycle REPLACES the dataset with the parsed rows.
+# The fetch itself is intel/evidence._fetch_guarded (SSRF-validated, pinned,
+# byte-capped); here the only new work is config validation, format → rows,
+# and one version per poll. An auth header is configured as
+# "Header-Name: NAME_OF_ENV_VAR" — the value is read from the process
+# environment at poll time and is never stored, logged, or echoed in errors.
+
+
+def auth_header(config: dict[str, Any]) -> tuple[str, str]:
+    """(header name, value) from auth_header_env, or ("", "") when unset.
+
+    ``auth_header_env`` is the NAME of an environment variable holding
+    "Header-Name: value" — a literal credential is never stored in the
+    connection row. Raises ValueError when the name is not a valid
+    env-var name or the env value is not "Name: value".
+    """
+    env = str(config.get("auth_header_env") or "").strip()
+    if not env:
+        return "", ""
+    if not _ENV_NAME_RE.match(env):
+        raise ValueError(
+            "auth_header_env must be the NAME of an environment variable "
+            "holding 'Header-Name: value'"
+        )
+    name, sep, value = os.environ.get(env, "").partition(":")
+    name, value = name.strip(), value.strip()
+    if not sep or not _AUTH_HEADER_RE.match(name) or not value:
+        raise ValueError(
+            "auth_header_env must be the NAME of an environment variable "
+            "holding 'Header-Name: value'"
+        )
+    return name, value
+
+
+def _walk(document: Any, path: str) -> Any:
+    node = document
+    for key in path.split("."):
+        if isinstance(node, dict) and key in node:
+            node = node[key]
+        else:
+            raise ValueError(f"rows_path: no key {key!r} in response")
+    return node
+
+
+def _row_from_item(item: Any) -> dict[str, Any]:
+    if isinstance(item, dict):
+        return dict(item)
+    return {"value": item}
+
+
+def _rows_from_json(document: Any, path: str) -> list[dict[str, Any]]:
+    target = _walk(document, path) if path else document
+    if isinstance(target, list):
+        return [_row_from_item(x) for x in target]
+    if isinstance(target, dict):
+        return [_row_from_item(v) if not isinstance(v, dict) else dict(v)
+                for v in target.values()]
+    return [_row_from_item(target)]
+
+
+def _rows_from_geojson(document: Any) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for feat in document.get("features") or []:
+        row = dict(feat.get("properties") or {})
+        geom = feat.get("geometry") or {}
+        coords = geom.get("coordinates") or []
+        if geom.get("type") == "Point" and len(coords) >= 2:
+            try:
+                row["lon"], row["lat"] = float(coords[0]), float(coords[1])
+            except (TypeError, ValueError):
+                pass
+        if feat.get("id") is not None:
+            row.setdefault("id", feat["id"])
+        rows.append(row)
+    return rows
+
+
+def http_rows(body: bytes, fmt: str, rows_path: str = "") -> list[dict[str, Any]]:
+    if fmt == "geojson":
+        return _rows_from_geojson(json.loads(body))
+    if fmt == "json":
+        return _rows_from_json(json.loads(body), rows_path)
+    if fmt == "csv":
+        import csv  # noqa: PLC0415 - stdlib, parsed on the poll path only
+        import io  # noqa: PLC0415
+
+        reader = csv.DictReader(io.StringIO(body.decode("utf-8", errors="replace")))
+        return [{k: v for k, v in r.items() if k is not None} for r in reader]
+    if fmt == "ndjson":
+        return [_row_from_item(json.loads(line)) for line in
+                body.decode("utf-8", errors="replace").splitlines() if line.strip()]
+    if fmt == "rss":
+        import xml.etree.ElementTree as ET  # noqa: PLC0415
+        rows: list[dict[str, Any]] = []
+        for item in ET.fromstring(body).iter("item"):
+            row: dict[str, Any] = {}
+            for child in item:
+                tag = child.tag.rsplit("}", 1)[-1]
+                if tag == "point":
+                    parts = (child.text or "").split()
+                    if len(parts) == 2:
+                        try:
+                            row["lat"], row["lon"] = float(parts[0]), float(parts[1])
+                        except ValueError:
+                            pass
+                elif child.text and child.text.strip():
+                    row[tag] = child.text.strip()
+            rows.append(row)
+        return rows
+    raise ValueError(f"format must be one of {', '.join(_HTTP_FORMATS)}")
+
+
+async def _run_http(store: FoundryStore, conn: dict[str, Any]) -> None:
+    from app.foundry.store import MAX_UPLOAD_BYTES  # noqa: PLC0415
+    from app.intel import evidence  # noqa: PLC0415
+
+    cfg = conn["config"]
+    url = str(cfg.get("url") or "")
+    fmt = str(cfg.get("format") or "json")
+    rows_path = str(cfg.get("rows_path") or "")
+    interval = max(_HTTP_MIN_INTERVAL_S, float(cfg.get("interval_s") or 300))
+    header_name, secret = auth_header(cfg)
+    headers = {header_name: secret} if header_name and secret else None
+
+    while True:
+        fetched = await evidence._fetch_guarded(
+            url, get_settings(), cap=MAX_UPLOAD_BYTES, extra_headers=headers
+        )
+        if fetched.status >= 400:
+            raise RuntimeError(f"HTTP {fetched.status}")
+        rows = http_rows(fetched.body, fmt, rows_path)
+        if rows:
+            # A poll is a snapshot: write the parsed rows as a fresh version,
+            # not appended onto the previous poll's rows.
+            from app.foundry.ingest import infer_schema  # noqa: PLC0415
+
+            await store.add_version(
+                conn["dataset_id"], rows, infer_schema(rows), source="http:poll"
+            )
+            await binding_mod.auto_sync_dataset(
+                store, conn["dataset_id"], _LOCAL_CTX
+            )
+        await store.mark_connection(conn["id"], ok=True, rows_added=len(rows))
+        await asyncio.sleep(interval)
+
+
+_RUNNERS = {"mqtt": _run_mqtt, "kafka": _run_kafka, "sql": _run_sql, "http": _run_http}
 
 
 def _scrub(text: str, secret: str | None) -> str:

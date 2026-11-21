@@ -23,7 +23,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.keys import UserCtx, current_user
+from app.keys import UserCtx, current_user_or_local
 from app.routes import targets as tg
 
 
@@ -157,7 +157,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch, current_stage: str = "confirm") -> No
 def test_legal_move_patches_and_audits(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     _wire(monkeypatch, current_stage="confirm")
     try:
         r = client.patch("/api/targets/board/t1", json={"stage": "attach_intel"})
@@ -175,13 +175,13 @@ def test_legal_move_patches_and_audits(
         assert row["user_id"] == "u1"  # WHO
         assert row["ts"].endswith("Z")
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_legal_backward_move_is_audited(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     _wire(monkeypatch, current_stage="execute")
     try:
         r = client.patch("/api/targets/board/t1", json={"stage": "weaponeer"})
@@ -190,7 +190,7 @@ def test_legal_backward_move_is_audited(
         assert len(audit_posts) == 1
         assert audit_posts[0]["params"] == {"from": "execute", "to": "weaponeer", "forced": False}
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 # ── confirmation-checklist gate (requirements) ─────────────────────────────────
@@ -201,7 +201,7 @@ def test_requirements_gate_blocks_advance_into_gated_stage(
 ) -> None:
     # attach_intel → approvals requires target_identity + location_verified. The
     # mocked row carries no requirements (all unmet) → 409, NO patch, NO audit.
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     _wire(monkeypatch, current_stage="attach_intel")
     try:
         r = client.patch("/api/targets/board/t1", json={"stage": "approvals"})
@@ -211,7 +211,7 @@ def test_requirements_gate_blocks_advance_into_gated_stage(
         audit_posts = [p for (u, p) in _RecordingClient.posts if u.endswith("/action_log")]
         assert audit_posts == []  # nothing audited
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_force_advances_past_unmet_checklist_and_audits_forced(
@@ -220,7 +220,7 @@ def test_force_advances_past_unmet_checklist_and_audits_forced(
     # Same move with force=true overrides the gate: 200, the persisted patch has
     # NO `force` key (it is a control flag, not a column), and the audit records
     # forced=True so the override is on the kill-chain trail.
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     _wire(monkeypatch, current_stage="attach_intel")
     try:
         r = client.patch("/api/targets/board/t1", json={"stage": "approvals", "force": True})
@@ -230,7 +230,7 @@ def test_force_advances_past_unmet_checklist_and_audits_forced(
         assert len(audit_posts) == 1
         assert audit_posts[0]["params"] == {"from": "attach_intel", "to": "approvals", "forced": True}
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_checklist_toggle_sends_merged_requirements(
@@ -238,7 +238,7 @@ def test_checklist_toggle_sends_merged_requirements(
 ) -> None:
     # A requirements-only PATCH is ungated (no stage move) and persists the
     # MERGED dict (a jsonb PATCH replaces the column, so a partial would wipe it).
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     _wire(monkeypatch, current_stage="confirm")
     try:
         r = client.patch("/api/targets/board/t1", json={"requirements": {"target_identity": True}})
@@ -247,13 +247,13 @@ def test_checklist_toggle_sends_merged_requirements(
         audit_posts = [p for (u, p) in _RecordingClient.posts if u.endswith("/action_log")]
         assert audit_posts == []  # no stage move → no transition audit
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_illegal_skip_is_409_with_no_patch_and_no_audit(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     _wire(monkeypatch, current_stage="confirm")
     try:
         r = client.patch("/api/targets/board/t1", json={"stage": "execute"})
@@ -262,7 +262,7 @@ def test_illegal_skip_is_409_with_no_patch_and_no_audit(
         assert _RecordingClient.patches == []
         assert [u for (u, _) in _RecordingClient.posts if u.endswith("/action_log")] == []
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_same_stage_patch_is_noop_not_audited(
@@ -270,14 +270,14 @@ def test_same_stage_patch_is_noop_not_audited(
 ) -> None:
     # Dropping a card back onto its own column → same stage → harmless, not
     # gated as illegal and not audited (no real transition happened).
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     _wire(monkeypatch, current_stage="approvals")
     try:
         r = client.patch("/api/targets/board/t1", json={"stage": "approvals"})
         assert r.status_code == 200
         assert [u for (u, _) in _RecordingClient.posts if u.endswith("/action_log")] == []
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_note_only_patch_skips_the_gate(
@@ -285,7 +285,7 @@ def test_note_only_patch_skips_the_gate(
 ) -> None:
     # A note-only PATCH (no stage key) never touches the chain — no audit, and
     # it does NOT depend on the current stage being legal-to-move.
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     _wire(monkeypatch, current_stage="complete")
     try:
         r = client.patch("/api/targets/board/t1", json={"note": "COA text"})
@@ -293,13 +293,13 @@ def test_note_only_patch_skips_the_gate(
         assert _RecordingClient.patches == [{"note": "COA text"}]
         assert [u for (u, _) in _RecordingClient.posts if u.endswith("/action_log")] == []
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_audit_endpoint_returns_rows(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     _wire(monkeypatch, current_stage="confirm")
     try:
         r = client.get("/api/targets/board/t1/audit")
@@ -308,18 +308,19 @@ def test_audit_endpoint_returns_rows(
         assert rows and rows[0]["action"] == "advance_stage"
         assert rows[0]["params"]["to"] == "attach_intel"
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
-def test_audit_endpoint_503_when_supabase_unconfigured(client: TestClient) -> None:
-    # No _wire(): the default test settings carry no supabase_url, so the audit
-    # read raises the store-not-configured 503 (the frontend tolerates it).
-    client.app.dependency_overrides[current_user] = _fake_user
+def test_audit_endpoint_keyless_serves_local_log(client: TestClient) -> None:
+    # No _wire(): the default test settings carry no supabase_url, so the
+    # audit read serves the local action_log (empty → [], not 401/503).
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     try:
         r = client.get("/api/targets/board/t1/audit")
-        assert r.status_code == 503
+        assert r.status_code == 200
+        assert r.json() == []
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_audit_failure_does_not_break_the_move(
@@ -327,7 +328,7 @@ def test_audit_failure_does_not_break_the_move(
 ) -> None:
     # The move has already landed; a failing audit append must NOT flip the
     # operator-visible result to an error (best-effort receipt).
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     _wire(monkeypatch, current_stage="confirm")
 
     class _AuditFailsClient(_RecordingClient):
@@ -341,4 +342,4 @@ def test_audit_failure_does_not_break_the_move(
         assert r.status_code == 200  # move still succeeds
         assert r.json()["stage"] == "attach_intel"
     finally:
-        client.app.dependency_overrides.pop(current_user, None)
+        client.app.dependency_overrides.pop(current_user_or_local, None)

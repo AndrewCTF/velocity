@@ -45,12 +45,26 @@ export function VideoApp({
           <FmvPanel viewer={viewer} />
         ),
       },
+      // Under Slate, Video is full-bleed for the FMV; these two are forms, so
+      // they keep the measured column the other form apps get (AppSurface).
       {
         id: "ground",
         label: "Ground recon",
-        content: <GroundReconPanel viewer={viewer} />,
+        content: (
+          <div className={slate ? "csl2-app-measure h-full" : undefined}>
+            <GroundReconPanel viewer={viewer} />
+          </div>
+        ),
       },
-      { id: "imagery", label: "Imagery", content: <ImageryControl /> },
+      {
+        id: "imagery",
+        label: "Imagery",
+        content: (
+          <div className={slate ? "csl2-app-measure h-full" : undefined}>
+            <ImageryControl />
+          </div>
+        ),
+      },
     ],
     [viewer, slate],
   );

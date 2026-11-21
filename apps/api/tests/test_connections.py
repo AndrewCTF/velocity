@@ -102,7 +102,7 @@ def test_sql_reports_unavailable_when_its_client_is_absent(monkeypatch) -> None:
 
 def test_the_route_reports_availability(client: TestClient) -> None:
     body = client.get("/api/foundry/connections").json()
-    assert set(body["availability"]) == {"mqtt", "kafka", "sql"}
+    assert set(body["availability"]) == {"mqtt", "kafka", "sql", "http"}
 
 
 @pytest.mark.anyio

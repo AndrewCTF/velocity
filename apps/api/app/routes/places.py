@@ -19,7 +19,7 @@ fetch; these routes exist for any caller that wants the raw place record.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
@@ -126,6 +126,35 @@ async def places_military(
         return _EMPTY_FC
     response.headers["Cache-Control"] = "private, max-age=86400"
     return places.facility_bbox_features("military", *box, limit=limit, category=category)
+
+
+@router.get("/api/places/osm-military")
+async def places_osm_military(
+    response: Response,
+    bbox: str | None = Query(None, description="minLon,minLat,maxLon,maxLat"),
+    category: str | None = Query(
+        None,
+        description=(
+            "bunker|military_landuse|trench|barracks|office|checkpoint|range|base|"
+            "unspecified|training_area|danger_area|nuclear_test_site|airfield|"
+            "obstacle_course|other"
+        ),
+    ),
+    status: Literal["active", "inactive"] | None = Query(
+        None,
+        description="active = no OSM disuse tag; inactive = disused, abandoned or ruins",
+    ),
+    limit: int = Query(2000, ge=1, le=20000),
+) -> dict[str, Any]:
+    """OpenStreetMap military features (ODbL) inside the bbox. Feature ids are
+    ``military:osm-{n|w|r}{id}`` and resolve through /api/entity."""
+    box = _parse_bbox(bbox)
+    if box is None:
+        return _EMPTY_FC
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    return places.facility_bbox_features(
+        "osm_military", *box, limit=limit, category=category, status=status, thin=True
+    )
 
 
 @router.get("/api/places/facility/{fid}")

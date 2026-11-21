@@ -1,0 +1,564 @@
+/* Reports slides, presentation, graph, lineage and simulation pages (.eux),
+   native layouts. Blueprint dark like .gaia and .euc: 14px body, 12px
+   secondary, 30px controls (28 dense), 4/8/16px steps, 3px radius. */
+.eux {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow: hidden;
+  background: #10161a;
+  color: #e5e8eb;
+  font:
+    400 14px/1.3 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+}
+.eux * {
+  box-sizing: border-box;
+}
+.eux .eu-dim,
+.eux small {
+  color: #9aa5a8;
+  font-size: 12px;
+}
+.eux .eu-gap {
+  flex: 1;
+}
+.eux .eu-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.eux .eu-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #c4cad0;
+}
+.eux .eu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #1c2228;
+  color: #e5e8eb;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.eux .eu-btn:hover:not(:disabled) {
+  background: #252d34;
+}
+.eux .eu-btn[aria-pressed="true"] {
+  border-color: #6a9ae0;
+}
+.eux :disabled {
+  color: #9aa5a8;
+  cursor: default;
+}
+.eux .eu-ico {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #c4cad0;
+  cursor: pointer;
+}
+.eux .eu-ico:hover:not(:disabled) {
+  background: #252d34;
+}
+.eux button:focus-visible {
+  outline: 2px solid #4c90f0;
+  outline-offset: 1px;
+}
+.eux .eu-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 8px;
+  color: #a4adb4;
+  font-size: 12px;
+}
+.eux .eux-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+}
+.eux .eux-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #1c2228;
+}
+.eux .eux-left {
+  flex: 0 0 clamp(200px, 15vw, 300px);
+}
+.eux .eux-right {
+  flex: 0 0 clamp(260px, 20vw, 380px);
+}
+.eux .eux-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.eux .eux-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-weight: 600;
+}
+.eux .eux-sub {
+  margin: 8px 0 0;
+  color: #9aa5a8;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.eux .eux-card {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #242b32;
+}
+.eux .eux-card p,
+.eux .eux-card h3 {
+  margin: 0;
+}
+.eux .eux-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.eux .eux-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.eux .eux-kv span:first-child {
+  color: #9aa5a8;
+}
+.eux .eux-warn {
+  color: #f0a050;
+}
+.eux .eux-ok {
+  color: #5fcf7f;
+}
+
+/* slides: thumbnails, stage */
+.eux .eux-thumbs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.eux .eux-th {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #242b32;
+  color: #c4cad0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.eux .eux-th:hover:not(:disabled) {
+  background: #2b333b;
+}
+.eux .eux-th[aria-current="true"] {
+  border-color: #6a9ae0;
+  color: #f2f4f6;
+}
+.eux .eux-th .eux-ph {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  border-radius: 3px;
+  background: #10161a;
+  color: #9aa5a8;
+}
+.eux .eux-th b {
+  display: block;
+  margin-top: 4px;
+  font-weight: 600;
+}
+.eux .eux-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #0b1014;
+}
+.eux .eux-slide {
+  position: absolute;
+  width: 1600px;
+  height: 900px;
+  transform-origin: 0 0;
+  overflow: hidden;
+  background: #fff;
+  color: #14181c;
+  font-family: Arimo, "Liberation Sans", Arial, Helvetica, sans-serif;
+}
+.eux .eux-slide.eux-map {
+  background: #05070a;
+}
+.eux .eux-slide img {
+  max-width: none;
+}
+.eux .eux-foot {
+  position: absolute;
+  left: 64px;
+  bottom: 40px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-left: 16px;
+  border-left: 3px solid #1c2228;
+  font-size: 40px;
+  color: #1c2228;
+}
+.eux .eux-rule {
+  position: absolute;
+  left: 64px;
+  right: 64px;
+  top: 64px;
+  height: 2px;
+  background: #8a9096;
+}
+.eux .eux-s1 h1 {
+  position: absolute;
+  left: 64px;
+  right: 64px;
+  top: 130px;
+  margin: 0;
+  font-size: 72px;
+  font-weight: 400;
+  line-height: 1.15;
+}
+.eux .eux-s1 p {
+  position: absolute;
+  left: 64px;
+  margin: 0;
+  font-size: 40px;
+}
+.eux .eux-s2 h1 {
+  position: absolute;
+  left: 64px;
+  top: 96px;
+  margin: 0;
+  font-size: 64px;
+  font-weight: 400;
+}
+.eux .eux-s2 p {
+  margin: 0;
+}
+.eux .eux-photo {
+  position: absolute;
+  left: 64px;
+  top: 220px;
+  width: 700px;
+  height: 540px;
+  overflow: hidden;
+  background: #05070a;
+}
+.eux .eux-photo .eux-cap {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 8px 16px;
+  background: rgba(12, 16, 18, 0.8);
+  color: #f2f4f6;
+  font-size: 22px;
+}
+.eux .eux-photo .eux-box {
+  position: absolute;
+  left: 328px;
+  top: 248px;
+  width: 44px;
+  height: 44px;
+  border: 3px solid #ff5a6a;
+  border-radius: 3px;
+}
+.eux .eux-fields {
+  position: absolute;
+  left: 830px;
+  right: 64px;
+  top: 220px;
+  display: grid;
+  gap: 8px;
+  font-size: 36px;
+  line-height: 1.3;
+}
+.eux .eux-fields dt {
+  font-weight: 700;
+}
+.eux .eux-fields dd {
+  margin: 0 0 16px;
+}
+.eux .eux-sanc {
+  position: absolute;
+  left: 830px;
+  right: 64px;
+  top: 740px;
+  font-size: 36px;
+  font-weight: 700;
+}
+.eux .eux-sanc .eux-bad {
+  color: #b01428;
+  font-weight: 400;
+}
+.eux .eux-sanc .eux-good {
+  color: #0b6b32;
+  font-weight: 400;
+}
+.eux .eux-ship {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border: 2px solid #9ab8d8;
+  border-radius: 3px;
+  background: #f4f8fc;
+  color: #1f6fb0;
+}
+.eux .eux-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* graph */
+.eux .eux-plate {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #161a1e;
+  overflow: hidden;
+}
+.eux .eux-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.eux .eux-prog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c4cad0;
+  font-size: 12px;
+}
+.eux .eux-prog progress {
+  width: 120px;
+  height: 8px;
+  accent-color: #4c90f0;
+}
+.eux .eux-hist {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.eux .eux-hist li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px minmax(0, 96px);
+  align-items: center;
+  gap: 8px;
+}
+.eux .eux-hist li span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.eux .eux-hist li span:nth-child(2) {
+  color: #9aa5a8;
+  text-align: right;
+}
+.eux .eux-hist i {
+  display: block;
+  height: 8px;
+  border-radius: 1px;
+  background: #6a8fd8;
+}
+.eux .eux-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.eux .eux-sw {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 2px;
+}
+.eux .eux-names {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.eux .eux-names li {
+  overflow: hidden;
+  padding: 4px 8px;
+  border-radius: 2px;
+  background: #242b32;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* simulation */
+.eux .eux-globe {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #04060c;
+}
+.eux .eux-gbox {
+  position: relative;
+  aspect-ratio: 648 / 430;
+  width: min(100cqw, calc(100cqh * 648 / 430));
+}
+.eux .eux-globe {
+  container-type: size;
+}
+.eux .eux-gbox canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.eux .eux-glab {
+  position: absolute;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: rgba(4, 6, 12, 0.7);
+  color: #f2f4f6;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.eux .eux-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: #f2f4f6;
+}
+.eux .eux-gmsg {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  color: #cfe0f6;
+  text-align: center;
+  pointer-events: none;
+}
+.eux .eux-seg {
+  display: flex;
+}
+.eux .eux-seg .eu-btn {
+  flex: 1;
+  justify-content: center;
+  border-radius: 0;
+}
+.eux .eux-seg .eu-btn:first-child {
+  border-radius: 3px 0 0 3px;
+}
+.eux .eux-seg .eu-btn:last-child {
+  border-radius: 0 3px 3px 0;
+}
+.eux .eux-tl {
+  flex: none;
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 4px 8px;
+  padding: 8px;
+  border: 1px solid #2b3338;
+  border-radius: 3px;
+  background: #1c2228;
+}
+.eux .eux-tl-row {
+  position: relative;
+  height: 14px;
+  align-self: center;
+  background: #10161a;
+}
+.eux .eux-tl-row i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 1px;
+}
+.eux .eux-tl-lab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #c4cad0;
+  font-size: 12px;
+}
+.eux .eux-tl-hours {
+  position: relative;
+  height: 16px;
+}
+.eux .eux-tl-hours span {
+  position: absolute;
+  transform: translateX(-50%);
+  color: #9aa5a8;
+  font-size: 12px;
+}
+.eux .eux-tl-hours span:first-child {
+  transform: none;
+}
+.eux .eux-tl-hours span:last-child {
+  transform: translateX(-100%);
+}
+.eux .eux-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

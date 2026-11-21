@@ -45,18 +45,18 @@ describe("AlertRulesSection", () => {
     expect(useAlertDraft.getState().seq).toBe(seq0 + 1);
 
     const { unmount } = render(<AlertRulesSection />);
-    expect(
-      (screen.getByPlaceholderText("lat") as HTMLInputElement).value,
-    ).toBe("26.5000");
-    expect(
-      (screen.getByPlaceholderText("lon") as HTMLInputElement).value,
-    ).toBe("56.2500");
+    expect((screen.getByPlaceholderText("lat") as HTMLInputElement).value).toBe(
+      "26.5000",
+    );
+    expect((screen.getByPlaceholderText("lon") as HTMLInputElement).value).toBe(
+      "56.2500",
+    );
     // The draft is consumed: a second mount starts empty.
     unmount();
     render(<AlertRulesSection />);
-    expect(
-      (screen.getByPlaceholderText("lat") as HTMLInputElement).value,
-    ).toBe("");
+    expect((screen.getByPlaceholderText("lat") as HTMLInputElement).value).toBe(
+      "",
+    );
   });
 
   it("POSTs a well-formed AlertRuleIn body via apiFetch on submit", async () => {

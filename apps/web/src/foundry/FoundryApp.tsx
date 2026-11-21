@@ -1,4 +1,5 @@
 import type * as Cesium from "cesium";
+import { useState } from "react";
 import { HomeView } from "./HomeView.js";
 import { DatasetsView } from "./DatasetsView.js";
 import { PipelineView } from "./PipelineView.js";
@@ -59,6 +60,48 @@ export function FoundryApp({
   void viewer; // reserved for future fly-to-on-select parity with other apps
   const view = useFoundryNav((s) => s.view);
   const setView = useFoundryNav((s) => s.setView);
+  const [newOpen, setNewOpen] = useState(false);
+  // D65: "+ New" resource menu. Each row opens the real create action:
+  // dataset = upload modal (handled by DatasetsView via nav), transform =
+  // pipeline, connection = connections, binding = ontology, monitor = the
+  // Monitors tab on the first dataset.
+  const NEW_ITEMS: Array<{
+    id: string;
+    label: string;
+    icon: IconName;
+    run: () => void;
+  }> = [
+    {
+      id: "dataset",
+      label: "Dataset",
+      icon: "database" as IconName,
+      run: () => setView("datasets"),
+    },
+    {
+      id: "transform",
+      label: "Transform",
+      icon: "transform" as IconName,
+      run: () => setView("pipeline"),
+    },
+    {
+      id: "connection",
+      label: "Connection",
+      icon: "link" as IconName,
+      run: () => setView("connections"),
+    },
+    {
+      id: "binding",
+      label: "Binding",
+      icon: "network" as IconName,
+      run: () => setView("ontology"),
+    },
+    {
+      id: "monitor",
+      label: "Monitor",
+      icon: "bell" as IconName,
+      run: () => setView("datasets"),
+    },
+  ];
 
   return (
     <div className="h-full flex text-txt-1 bg-bg-0">
@@ -109,6 +152,47 @@ export function FoundryApp({
         </div>
         <div className="px-3 py-2 border-t border-line-2 text-[9px] uppercase tracking-[0.4px] text-txt-4">
           keyless · local
+        </div>
+        <div
+          style={{
+            position: "relative",
+            padding: "8px 12px",
+            marginTop: "auto",
+            marginBottom: "40px",
+          }}
+        >
+          <button
+            type="button"
+            className="foundry-new"
+            aria-haspopup="menu"
+            aria-expanded={newOpen}
+            data-testid="d65-new"
+            onClick={() => setNewOpen((v) => !v)}
+          >
+            + New
+          </button>
+          {newOpen && (
+            <div
+              role="menu"
+              aria-label="New resource"
+              className="foundry-new-menu"
+            >
+              {NEW_ITEMS.map((it) => (
+                <button
+                  key={it.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    it.run();
+                    setNewOpen(false);
+                  }}
+                >
+                  <Icon name={it.icon} className="w-4 h-4" />
+                  <span>{it.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </nav>
       <div className="flex-1 min-w-0 overflow-auto">

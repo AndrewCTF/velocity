@@ -1276,8 +1276,8 @@ function ConnectorRow(): JSX.Element {
   }
 
   return (
-    <div className="border-b border-line-2 px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="border-b border-line-2 px-[12px] py-[8px]">
+      <div className="flex flex-wrap items-center gap-[8px]">
         <div className="min-w-[220px] flex-1">
           <div className="text-[12px] text-txt-0">Single connector</div>
           <div className="text-[11px] text-txt-3">
@@ -1297,7 +1297,7 @@ function ConnectorRow(): JSX.Element {
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-1 text-[11px] text-txt-3">
+        <label className="flex items-center gap-[4px] text-[11px] text-txt-3">
           {key}
           <input
             className="mono w-[150px] rounded border border-line-2 bg-bg-2 px-1.5 py-0.5 text-[11px] text-txt-0"
@@ -1305,7 +1305,7 @@ function ConnectorRow(): JSX.Element {
             onChange={(e) => setValue(e.target.value)}
           />
         </label>
-        <label className="flex items-center gap-1 text-[11px] text-txt-3">
+        <label className="flex items-center gap-[4px] text-[11px] text-txt-3">
           extra
           <input
             className="mono w-[130px] rounded border border-line-2 bg-bg-2 px-1.5 py-0.5 text-[11px] text-txt-0"
@@ -1316,19 +1316,19 @@ function ConnectorRow(): JSX.Element {
         </label>
         <button
           type="button"
-          className="rounded border border-line-2 bg-bg-2 px-2 py-1 text-[11px] text-txt-0 hover:bg-bg-3"
+          className="rounded border border-line-2 bg-bg-2 px-2 py-[4px] text-[11px] text-txt-0 hover:bg-bg-3"
           disabled={state === "running"}
           onClick={() => void run()}
         >
           {state === "running" ? "running…" : "Run"}
         </button>
       </div>
-      <div className="mono mt-1 text-[10px] text-txt-3">{url}</div>
+      <div className="mono mt-[4px] text-[10px] text-txt-3">{url}</div>
       {error !== null && (
-        <div className="mt-1 text-[11px] text-alert">{error}</div>
+        <div className="mt-[4px] text-[11px] text-alert">{error}</div>
       )}
       {result !== null && (
-        <pre className="mono mt-1 max-h-[280px] overflow-auto rounded bg-bg-2 p-2 text-[11px] text-txt-1">
+        <pre className="mono mt-[4px] max-h-[280px] overflow-auto rounded bg-bg-2 p-[8px] text-[11px] text-txt-1">
           {result}
         </pre>
       )}
@@ -1391,8 +1391,8 @@ function LookupRow({
   }
 
   return (
-    <div className="border-b border-line-2 px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="border-b border-line-2 px-[12px] py-[8px]">
+      <div className="flex flex-wrap items-center gap-[8px]">
         <div className="min-w-[220px] flex-1">
           <div className="text-[12px] text-txt-0">{lookup.label}</div>
           <div className="text-[11px] text-txt-3">{lookup.hint}</div>
@@ -1400,7 +1400,7 @@ function LookupRow({
         {(lookup.args ?? []).map((a) => (
           <label
             key={a.name}
-            className="flex items-center gap-1 text-[11px] text-txt-3"
+            className="flex items-center gap-[4px] text-[11px] text-txt-3"
           >
             {a.label}
             <input
@@ -1417,19 +1417,19 @@ function LookupRow({
         ))}
         <button
           type="button"
-          className="rounded border border-line-2 bg-bg-2 px-2 py-1 text-[11px] text-txt-0 hover:bg-bg-3"
+          className="rounded border border-line-2 bg-bg-2 px-2 py-[4px] text-[11px] text-txt-0 hover:bg-bg-3"
           disabled={state === "running"}
           onClick={() => void run()}
         >
           {state === "running" ? "running…" : "Run"}
         </button>
       </div>
-      <div className="mono mt-1 text-[10px] text-txt-3">{url}</div>
+      <div className="mono mt-[4px] text-[10px] text-txt-3">{url}</div>
       {error !== null && (
-        <div className="mt-1 text-[11px] text-alert">{error}</div>
+        <div className="mt-[4px] text-[11px] text-alert">{error}</div>
       )}
       {result !== null && (
-        <pre className="mono mt-1 max-h-[280px] overflow-auto rounded bg-bg-2 p-2 text-[11px] text-txt-1">
+        <pre className="mono mt-[4px] max-h-[280px] overflow-auto rounded bg-bg-2 p-[8px] text-[11px] text-txt-1">
           {result}
         </pre>
       )}
@@ -1532,7 +1532,7 @@ export function SourcesPanel(): JSX.Element {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-line-2 px-3 py-2">
+      <div className="border-b border-line-2 px-[12px] py-[8px]">
         <div className="text-[12px] uppercase tracking-[0.8px] text-txt-0">
           Lookups
         </div>
@@ -1546,7 +1546,7 @@ export function SourcesPanel(): JSX.Element {
       <div className="min-h-0 flex-1 overflow-auto">
         {LOOKUPS.map((g) => (
           <section key={g.group}>
-            <div className="bg-bg-2 px-3 py-1 text-[11px] uppercase tracking-[0.8px] text-txt-2">
+            <div className="bg-bg-2 px-[12px] py-[4px] text-[11px] uppercase tracking-[0.8px] text-txt-2">
               {g.group}
             </div>
             {g.items.map((l) => (
@@ -1561,14 +1561,14 @@ export function SourcesPanel(): JSX.Element {
         ))}
 
         <section>
-          <div className="bg-bg-2 px-3 py-1 text-[11px] uppercase tracking-[0.8px] text-txt-2">
+          <div className="bg-bg-2 px-[12px] py-[4px] text-[11px] uppercase tracking-[0.8px] text-txt-2">
             Digital OSINT connectors
           </div>
           <ConnectorRow />
         </section>
 
-        <div className="border-b border-t border-line-2 px-3 py-2">
-          <div className="flex items-center gap-2">
+        <div className="border-b border-t border-line-2 px-[12px] py-[8px]">
+          <div className="flex items-center gap-[8px]">
             <div className="text-[12px] uppercase tracking-[0.8px] text-txt-0">
               Source catalog
             </div>
@@ -1589,9 +1589,11 @@ export function SourcesPanel(): JSX.Element {
             </select>
           </div>
           {catalogError !== null && (
-            <div className="mt-1 text-[11px] text-alert">{catalogError}</div>
+            <div className="mt-[4px] text-[11px] text-alert">
+              {catalogError}
+            </div>
           )}
-          <div className="mt-1 text-[11px] text-txt-3">
+          <div className="mt-[4px] text-[11px] text-txt-3">
             {health
               ? `Measured this session · ${health.counts.ok ?? 0} answering · ` +
                 `${health.counts.failing ?? 0} failing · ${health.unmeasured.length} ` +
@@ -1600,8 +1602,11 @@ export function SourcesPanel(): JSX.Element {
           </div>
         </div>
         {shown.map((s) => (
-          <div key={s.id} className="border-b border-line-2 px-3 py-1.5">
-            <div className="flex flex-wrap items-baseline gap-2">
+          <div
+            key={s.id}
+            className="border-b border-line-2 px-[12px] py-[4px].5"
+          >
+            <div className="flex flex-wrap items-baseline gap-[8px]">
               <span className="text-[12px] text-txt-0">{s.name}</span>
               <span className="mono text-[10px] text-txt-3">{s.category}</span>
               <span className="text-[10px] text-txt-3">

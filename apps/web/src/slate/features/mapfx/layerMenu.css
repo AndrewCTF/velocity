@@ -1,0 +1,50 @@
+/* D71/D76 layer row + menu: count, ••• menu, eye, chevron; 8-item menu. */
+.mv-layer-row {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+}
+.mv-layer-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.mv-layer-name {
+  font-size: 13.5px;
+  color: var(--t0);
+}
+.mv-layer-count {
+  font-size: 11.5px;
+  color: var(--t2);
+}
+.mv-layer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.mv-layer-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  color: var(--t1);
+  cursor: pointer;
+}
+.mv-layer-btn:hover {
+  background: var(--field);
+}
+.mv-layer-menu {
+  min-width: 158px;
+}
+.mv-layer-menu button.is-danger {
+  color: #ac2f33;
+  background: #f9e7e7;
+}
+.mv-layer-menu button.is-danger:hover:not(:disabled) {
+  background: #f3d5d5;
+  color: #ac2f33;
+}

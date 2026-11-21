@@ -9,6 +9,9 @@ import {
   acquireStats,
 } from "../../globe/entityStats.js";
 import { chokepoints } from "../../registry/chokepoints.js";
+import { useAoi } from "../../state/aoi.js";
+import { flyToChokepoint } from "../../globe/camera.js";
+import { useReducedMotion } from "../useReducedMotion.js";
 import { apiFetch } from "../../transport/http.js";
 
 // Info, built from docs/mockups/console-2026-08 (`15-map-info.html`).
@@ -63,6 +66,9 @@ export function InfoPanel({
   const feedsMap = useFeeds((s) => s.feeds);
   const counted = useEntityStats((s) => s.counted);
   const aoiCounts = useEntityStats((s) => s.aoiCounts);
+  const activeAoi = useAoi((s) => s.active);
+  const setAoi = useAoi((s) => s.setActive);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     if (!viewer) return;
@@ -246,10 +252,28 @@ export function InfoPanel({
             AOI watch
           </span>
           <span className="flex-1" />
-          <span className="mono text-[12px] tabular-nums text-txt-3">
-            {chokepoints.length}
-          </span>
+          {activeAoi ? (
+            <button
+              type="button"
+              className="text-[12px] text-accent hover:underline"
+              title="Stop scoping the feeds to this area"
+              onClick={() => setAoi(null)}
+            >
+              Clear {activeAoi.name}
+            </button>
+          ) : (
+            <span className="mono text-[12px] tabular-nums text-txt-3">
+              {chokepoints.length}
+            </span>
+          )}
         </div>
+        {/* The rows read as unexplained presets: say what a click does and
+            what the number and the bar measure. */}
+        <p className="px-[14px] pb-1 text-[12px] leading-relaxed text-txt-3">
+          Strategic chokepoints. Click one to fly there and scope the feeds to
+          it. The number is contacts inside it now; the bar compares that with
+          its typical hourly traffic.
+        </p>
         {chokepoints.map((c) => {
           const live = aoiCounts[c.id] ?? 0;
           const typical = c.daily_transits ?? 0;
@@ -257,10 +281,16 @@ export function InfoPanel({
           // read rather than computed.
           const frac = typical > 0 ? Math.min(1, live / (typical / 24)) : 0;
           return (
-            <div
+            <button
               key={c.id}
-              className="flex min-h-[38px] items-center gap-2 px-[14px] py-1 hover:bg-(--hover)"
-              title={c.region}
+              type="button"
+              aria-pressed={activeAoi?.id === c.id}
+              onClick={() => {
+                setAoi(c);
+                if (viewer) flyToChokepoint(viewer, c, reduced ? 0 : 1.4);
+              }}
+              className={`flex min-h-[38px] w-full items-center gap-2 border-l-2 px-[12px] py-1 text-left hover:bg-(--hover) ${activeAoi?.id === c.id ? "border-accent bg-accent-dim" : "border-transparent"}`}
+              title={c.significance}
             >
               <Icon name="route" className="h-3 w-3 shrink-0 text-txt-3" />
               <span className="min-w-0 flex-1">
@@ -285,7 +315,7 @@ export function InfoPanel({
                   }}
                 />
               </span>
-            </div>
+            </button>
           );
         })}
       </section>

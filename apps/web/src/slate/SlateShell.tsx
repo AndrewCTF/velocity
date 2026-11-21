@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import type * as Cesium from "cesium";
+import { apiFetch } from "../transport/http.js";
 import { useMapTools } from "../globe/mapTools.js";
 import "./slate.css";
 import { useAuth } from "../auth/AuthContext.js";
@@ -34,6 +35,9 @@ import { SlatePlaces } from "./features/places/SlatePlaces.js";
 import { SituationObject } from "./features/situation/SituationObject.js";
 import { TaskFlow } from "./features/tasking/TaskFlow.js";
 import { MapFx } from "./features/mapfx/MapFx.js";
+import { MainToolbar } from "./features/mapfx/MainToolbar.js";
+import { DrawToolbar } from "./features/mapfx/DrawToolbar.js";
+import { SearchDialogHost } from "./features/mapfx/SearchDialogHost.js";
 import { ObsPopover } from "./features/observation/ObsPopover.js";
 import { ProjectToast } from "./features/observation/ProjectToast.js";
 import { DocPins } from "./features/dossier/DocPins.js";
@@ -179,6 +183,23 @@ export function SlateShell({
   );
   const [right, setRight] = useState<"selection" | "series">("selection");
   const [objOpen, setObjOpen] = useState(Boolean(selected));
+  // D64: app-launcher hover card counts (registry size + live aircraft).
+  const [hoverApp, setHoverApp] = useState<AppId | null>(null);
+  const [aircraftLive, setAircraftLive] = useState<number | null>(null);
+  useEffect(() => {
+    if (!hoverApp) return;
+    let cancelled = false;
+    apiFetch("/api/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { aircraft_count?: number } | null) => {
+        if (!cancelled && typeof j?.aircraft_count === "number")
+          setAircraftLive(j.aircraft_count);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [hoverApp]);
   useEffect(() => setObjOpen(Boolean(selected)), [selected]);
 
   const popRef = useRef<HTMLDivElement | null>(null);
@@ -432,6 +453,7 @@ export function SlateShell({
               ctx={ctx}
               live={playing}
               onLive={() => useTime.getState().togglePlay()}
+              viewer={chrome.viewer ?? null}
             />
           </div>
         )}
@@ -463,7 +485,7 @@ export function SlateShell({
           <span className="sep" style={{ left: 237 }} />
           {/* The open document: the pin star, the app glyph, the title. The
               chevron opens the launcher. */}
-          <span style={{ left: "50%", transform: "translate(-50%, -50%)", gap: 8 }}>
+          <span className="sl-doc" style={{ gap: 8 }}>
             <button
               type="button"
               className="sl-plain"
@@ -505,7 +527,7 @@ export function SlateShell({
                 setMenu(null);
               }}
             >
-              {title}
+              <span className="sl-doc-t">{title}</span>
               <BpIcon
                 name="chevron-down"
                 size={12}
@@ -597,6 +619,9 @@ export function SlateShell({
                     key={id}
                     type="button"
                     role="menuitem"
+                    onMouseEnter={() => setHoverApp(id)}
+                    onMouseLeave={() => setHoverApp(null)}
+                    onFocus={() => setHoverApp(id)}
                     onClick={() => {
                       setApp(id);
                       setLauncher(false);
@@ -609,6 +634,29 @@ export function SlateShell({
                     />
                     <span className="lbl">{APP_META[id].label}</span>
                     {id === app && <span className="hint">open</span>}
+                    {hoverApp === id && (
+                      <span
+                        className="sl-hovercard"
+                        aria-label="App details"
+                        data-testid="d64-hovercard"
+                      >
+                        <span className="sl-hc-title">
+                          {APP_META[id].label}
+                        </span>
+                        <span className="sl-hc-hint">{APP_META[id].hint}</span>
+                        <span className="sl-hc-counts">
+                          {(
+                            window as unknown as {
+                              __registry?: { list(): unknown[] };
+                            }
+                          ).__registry?.list().length ?? 0}{" "}
+                          layers registered
+                          {aircraftLive !== null
+                            ? `, ${aircraftLive.toLocaleString()} aircraft live`
+                            : ""}
+                        </span>
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -616,6 +664,11 @@ export function SlateShell({
           </div>,
           document.body,
         )}
+      {launcher && anchor && hoverApp && (
+        <span className="sl-hc-open" data-testid="d64-open-map">
+          Open {APP_META[hoverApp].label}
+        </span>
+      )}
 
       <nav className="a rail" aria-label="Apps and panels">
         {RAIL_APPS.map((id, i) => (
@@ -697,6 +750,9 @@ export function SlateShell({
           {!bleed && <MapFx viewer={chrome.viewer ?? null} />}
           {!bleed && <DocPins viewer={chrome.viewer ?? null} />}
           {!bleed && <GlobeFx viewer={chrome.viewer ?? null} />}
+          {maven && <MainToolbar viewer={chrome.viewer ?? null} />}
+          {maven && <DrawToolbar viewer={chrome.viewer ?? null} />}
+          {maven && <SearchDialogHost viewer={chrome.viewer ?? null} />}
           {maven && (
             <MavenMapChrome
               viewer={chrome.viewer ?? null}
@@ -855,6 +911,7 @@ export function SlateShell({
                 onClose={() => setObjOpen(false)}
                 selection={rightPanels.selection}
                 series={rightPanels.series}
+                onBackToList={() => setObjOpen(false)}
               />
             </ErrorBoundary>
           </aside>

@@ -18,8 +18,8 @@ import {
   wpx,
   type Airport,
 } from "./data.js";
-import { pyRound, scaleFs } from "./kit.js";
-import { descOf, subOf, wrap } from "./Marketplace.js";
+import { pyRound } from "./kit.js";
+import { descOf, subOf } from "./Marketplace.js";
 
 const ap = (
   iata: string,
@@ -39,12 +39,9 @@ describe("foundry copy derivations", () => {
   it("haversine on a 12742 km diameter", () => {
     expect(KM([0, 0], [0, 1])).toBeCloseTo(111.19, 1);
   });
-  it("python round half to even, font-size post-pass skips decimals", () => {
+  it("python round half to even", () => {
     expect(pyRound(2.5)).toBe(2);
     expect(pyRound(3.5)).toBe(4);
-    expect(scaleFs("font-size:25px;font-size:28.75px", 1.16)).toBe(
-      "font-size:29px;font-size:28.75px",
-    );
   });
   it("counts departures and keeps only airports that have them", () => {
     const deps = depsOf([
@@ -151,13 +148,12 @@ describe("foundry copy derivations", () => {
     expect(fmt_t(0)).toBe("12:00:00 AM");
     expect(fmt_slash(86400 * 31 + 13 * 3600)).toBe("02/01/1970, 1:00:00 PM");
   });
-  it("marketplace copy carries no em dash and wraps like textwrap", () => {
+  it("marketplace copy carries no em dash", () => {
     const d = descOf(
       "Live intel as MCP tools — ADS-B, AIS — bundled with a skill.",
     );
     expect(d).not.toContain("—");
     expect(d.startsWith("Live intel as MCP tools. ADS-B")).toBe(true);
     expect(subOf("A — B, as 46 tools")).toBe("A, B");
-    expect(wrap("aaa bbb ccc", 7)).toEqual(["aaa bbb", "ccc"]);
   });
 });

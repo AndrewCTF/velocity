@@ -116,6 +116,8 @@ def test_tier_aliases_map_to_models() -> None:
 def test_pick_ollama() -> None:
     assert llm._pick_ollama(["llama3:70b", "qwen2.5:3b"], "") == "qwen2.5:3b"
     assert llm._pick_ollama([], "") is None
+    assert llm._pick_ollama(["nomic-embed-text:latest"], "") is None
+    assert llm._pick_ollama(["nomic-embed-text:latest", "qwen3:8b"], "") == "qwen3:8b"
     assert llm._pick_ollama(["a"], "phi3:mini") == "phi3:mini"
 
 

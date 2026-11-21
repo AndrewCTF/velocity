@@ -1,13 +1,10 @@
-/* Foundry apps copy (gotham/docs/foundry-apps.html lines 4-17, plus the font,
-   box-sizing and svg.i rules it inherits from gotham/_kit/features.css),
-   scoped under .sl-fx. The copy's page chrome (h1, .pair, .note, .ev) is not
-   product UI and is not ported. */
+/* The Foundry surface root (.sl-fx): fills the host, owns the font, box-sizing
+   and sprite-glyph rules every page shares, and the Apps menu. Page layouts are
+   in native.css and ontology.css. */
 .sl-fx {
   position: absolute;
   inset: 0;
   z-index: var(--z-overlay);
-  display: grid;
-  place-items: center;
   overflow: hidden;
   font:
     400 14px/1.3 "Source Sans 3",
@@ -23,36 +20,6 @@
   fill: currentColor;
   flex: none;
 }
-.sl-fx .copy {
-  position: relative;
-  overflow: hidden;
-  background: #f4f4f2;
-}
-.sl-fx .fr {
-  position: absolute;
-  left: 0;
-  top: 0;
-  transform-origin: 0 0;
-  overflow: hidden;
-  background: #f4f4f2;
-  font-size: 12.5px;
-  color: #1c2127;
-}
-.sl-fx .fr div,
-.sl-fx .fr svg,
-.sl-fx .fr img,
-.sl-fx .fr button {
-  position: absolute;
-}
-.sl-fx .t {
-  white-space: nowrap;
-}
-.sl-fx .card {
-  background: #fff;
-  border: 1px solid #c9ced4;
-  border-radius: 3px;
-  box-shadow: 0 1px 4px rgba(17, 20, 24, 0.18);
-}
 .sl-fx .sl-hit {
   background: transparent;
   border: 0;
@@ -67,19 +34,7 @@
   outline: 2px solid #2d72d2;
   outline-offset: 1px;
 }
-.sl-fx .fx-err {
-  position: absolute;
-  z-index: 5;
-  left: 12px;
-  bottom: 12px;
-  padding: 4px 8px;
-  border-radius: 3px;
-  background: #fff;
-  border: 1px solid #cd4246;
-  color: #ac2f33;
-  font-size: 12px;
-}
-/* the logo-tile menu: the copy's apps, reached from each frame's own logo */
+/* the Apps menu opened by each page toolbar's Apps button */
 .sl-fx .fx-menu {
   position: absolute;
   z-index: 6;

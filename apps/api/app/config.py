@@ -848,6 +848,12 @@ class Settings(BaseSettings):
     # On-disk cache of fetched chunks (data/heatmap/YYYY/MM/DD/NN.bin.ttf.gz),
     # immutable once the half hour has closed; LRU by atime under this budget.
     heatmap_cache_gb: float = 4.0  # HEATMAP_CACHE_GB
+    # Coverage probe negative cache: a dead host must not be re-probed every
+    # request (365 days x 20 s timeouts saturate the loop). None results are
+    # memoised for this long, then re-probed.
+    heatmap_coverage_negative_ttl_s: float = 3600.0  # HEATMAP_COVERAGE_NEGATIVE_TTL_S
+    # Coverage probe wall-clock budget: give up on the sweep, return degraded.
+    heatmap_coverage_max_seconds: float = 8.0  # HEATMAP_COVERAGE_MAX_SECONDS
 
     # ── Ontology local spine ──
     # Default (keyless) backend for the ontology: local SQLite next to

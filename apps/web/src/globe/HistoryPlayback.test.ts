@@ -517,7 +517,10 @@ describe("HistoryPlayback: replay source routing reads stats.oldest_ts, not stat
 
   // The default keyless archive: one legacy SQLite file, so stats carries no
   // oldest_ts and no dated shard. The floor comes from coverage instead.
-  function mockLegacySqlite(calls: string[], coverageOldest: number | null): void {
+  function mockLegacySqlite(
+    calls: string[],
+    coverageOldest: number | null,
+  ): void {
     mockedFetch.mockReset();
     mockedFetch.mockImplementation(async (url: string) => {
       const u = url.toString();

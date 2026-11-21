@@ -1,0 +1,41 @@
+/* D62 SaveMenu: split button + Duplicate / Save as template menu. Scoped
+   under .mv (mavenMap.css root) so it lives in the Maven header row. */
+.mv .mv-save {
+  display: inline-flex;
+  align-items: stretch;
+  height: 28px;
+  border-radius: 3px;
+  overflow: visible;
+}
+.mv .mv-save-main {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 13px;
+  border-radius: 3px 0 0 3px;
+  border-right: 1px solid rgba(255, 255, 255, 0.25);
+}
+.mv .mv-save-main:hover:not(:disabled) {
+  background: #3a6db0;
+}
+.mv .mv-save-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  background: #264d8a;
+  color: #fff;
+  border-radius: 0 3px 3px 0;
+}
+.mv .mv-save-caret:hover:not(:disabled) {
+  background: #2f5ba0;
+}
+.mv .mv-save button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.mv-save-pop {
+  min-width: 180px;
+}

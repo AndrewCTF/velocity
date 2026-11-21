@@ -1255,6 +1255,7 @@ with real bodies rendered.
 
 ## Backend test baseline history
 
+- 2026-11-21: 3284 passed + 21 skipped in ~268 s (branch security-deps-2026-11); displaced the same day by 3332 + 21 (branch slate-native-surfaces-2026-11: master merged with the OSM military features layer, military vessel tiers, HTTP connections and local target board).
 - 2026-10-17: 3276 passed + 21 skipped in ~317 s (branch reach-wave-2026-10); displaced 2026-11-21 by 3284 + 21 (branch security-deps-2026-11: the jail binds a base Python that lives outside /usr, plus its guard).
 - 2026-10-17: 3159 passed + 21 skipped in ~273 s (branch frontend-speed-2026-10); displaced the same day by 3276 + 21 (branch reach-wave-2026-10: ntfy area alerts, rewind links, public-archive replay on SQLite, /api/overhead, polygon focus_area, history buffering off when recording is off).
 - 2026-10-04: 3102 passed + 21 skipped in ~262 s (branch palantir-stack-2026-09, AIS pipeline wave, measured on the uncommitted shared tree); displaced 2026-10-17 by 3159 + 21 (branch frontend-speed-2026-10: the AIS, keyless Google 3D and clearance work committed and master's #95/#96 merged).

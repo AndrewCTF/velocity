@@ -39,6 +39,7 @@ COPY apps/api/pyproject.toml apps/api/uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 
 COPY apps/api/app ./app
+COPY infra/db/20_history_timescale.sql ./infra/db/20_history_timescale.sql
 RUN uv sync --locked --no-dev
 
 # Run as an unprivileged user (defense-in-depth: the API shells out to recon/

@@ -1,11 +1,11 @@
-// E12 to E15: the simulation frame (meta_frame() in _build_features.py), crop
-// 507,162 905x510, in its globe state (E12-E14) and zoomed ring state (E15).
-// Satellites, passes, the sky plot, the ground track and the sightline are SGP4
-// from /api/space/gp; sunlight is solar geometry at the AOI; the sweep card is
-// /api/intel/sar/sweep; globe markers are live chokepoints and EMSC quakes. The
-// globe plate is painted here from the Natural Earth image, as _eu_data.py did.
+// E12 to E15: the simulation page, laid out natively, in its globe state
+// (E12-E14) and zoomed ring state (E15). Satellites, passes, the sky plot, the
+// ground track and the sightline are SGP4 from /api/space/gp; sunlight is solar
+// geometry at the AOI; the sweep card is /api/intel/sar/sweep; globe markers are
+// live chokepoints and EMSC quakes. The globe plate is painted here from the
+// Natural Earth image, as _eu_data.py did, at 2x and scaled to its pane.
 import { useEffect, useMemo, useRef } from "react";
-import { A, I, T, Hit, circ, frag, hexlogo, type N } from "./ui.js";
+import { BpIcon } from "../../../shell/BpIcon.js";
 import {
   AOI,
   RE,
@@ -29,12 +29,15 @@ import {
   type SweepAoi,
   type V3,
 } from "./data.js";
+import { EuBar } from "./Bar.js";
+import { along } from "./layout.js";
+import type { Go } from "./SatMap.js";
 // shortcut: reference-derived image kept out of the repo; the page draws without it. Ship a licensed asset to restore it.
 const equirect: string = "";
 
 const VW = 648;
 const VH = 430;
-const MB = "#103662";
+const SS = 2; // canvas supersampling: the plate is drawn at 2x and scaled to its pane
 interface View {
   R: number;
   cx: number;
@@ -118,7 +121,7 @@ export interface Mark {
   name: string;
 }
 
-/** render_view() of _eu_data.py: plate, graticule, tracks, ring, sightline, markers. */
+/** Plate, graticule, tracks, ring, sightline, markers, drawn at SS x the 648x430 frame. */
 function GlobeView({
   state,
   plan,
@@ -146,13 +149,25 @@ function GlobeView({
         Math.cos(d0 * r) * Math.sin(l0 * r),
         Math.sin(d0 * r),
       ];
-      const img = g.createImageData(VW, VH);
-      paintGlobe(eq, img.data, VW, VH, b, v.R, v.cx, v.cy, sun, v.tint, v.haze);
+      const img = g.createImageData(VW * SS, VH * SS);
+      paintGlobe(
+        eq,
+        img.data,
+        VW * SS,
+        VH * SS,
+        b,
+        v.R * SS,
+        v.cx * SS,
+        v.cy * SS,
+        sun,
+        v.tint,
+        v.haze,
+      );
       g.putImageData(img, 0, 0);
       const line = (pts: V3[], col: string, w: number): void => {
         g.strokeStyle = col;
-        g.lineWidth = w;
-        for (const run of visibleRuns(pts, b, v.R, v.cx, v.cy)) {
+        g.lineWidth = w * SS;
+        for (const run of visibleRuns(pts, b, v.R * SS, v.cx * SS, v.cy * SS)) {
           g.beginPath();
           run.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
           g.stroke();
@@ -222,14 +237,20 @@ function GlobeView({
         }
       }
       for (const m of marks) {
-        const [x, y, d] = proj(llaEcef(m.lat, m.lon), b, v.R, v.cx, v.cy);
-        if (d > 0 && x > 6 && x < VW - 6 && y > 6 && y < VH - 6) {
+        const [x, y, d] = proj(
+          llaEcef(m.lat, m.lon),
+          b,
+          v.R * SS,
+          v.cx * SS,
+          v.cy * SS,
+        );
+        if (d > 0 && x > 6 && x < VW * SS - 6 && y > 6 && y < VH * SS - 6) {
           g.beginPath();
-          g.arc(x, y, 3, 0, 2 * Math.PI);
+          g.arc(x, y, 3 * SS, 0, 2 * Math.PI);
           g.fillStyle = "rgb(120,190,250)";
           g.fill();
           g.strokeStyle = "rgb(20,40,70)";
-          g.lineWidth = 1;
+          g.lineWidth = SS;
           g.stroke();
         }
       }
@@ -241,48 +262,43 @@ function GlobeView({
   return (
     <canvas
       ref={ref}
-      width={VW}
-      height={VH}
+      width={VW * SS}
+      height={VH * SS}
+      role="img"
       aria-label={
         state === "globe" ? "Globe with the selected pass" : "AOI azimuth ring"
       }
       style={{
-        position: "absolute",
-        left: 0,
-        top: 0,
-        width: VW,
-        height: VH,
         filter: `brightness(${state === "globe" ? 0.82 : 0.78}) saturate(${state === "globe" ? 0.85 : 0.7})`,
       }}
     />
   );
 }
 
-function polarPlot(
-  cx: number,
-  cy: number,
-  R: number,
-  sky: { az: number; el: number }[],
-): N {
-  const ox = R + 20;
-  const oy = R + 12;
+const NONE = "\u2014"; // no value reported
+const WIN = 6 * 3600;
+
+/** Azimuth/elevation sky plot of the pass, in a 240x224 viewBox. */
+function PolarPlot({
+  sky,
+}: {
+  sky: { az: number; el: number }[];
+}): JSX.Element {
+  const R = 100;
+  const ox = 120;
+  const oy = 112;
   const pt = (a: number, e: number): [number, number] => [
     ox + ((R * (90 - e)) / 90) * Math.sin((a * Math.PI) / 180),
     oy - ((R * (90 - e)) / 90) * Math.cos((a * Math.PI) / 180),
   ];
   const pts = sky.map((s) => pt(s.az, s.el));
   const p0 = pts[0];
-  const s: N[] = [
+  return (
     <svg
-      key="polar"
-      aria-hidden
-      style={{
-        left: cx - R - 20,
-        top: cy - R - 12,
-        width: 2 * R + 40,
-        height: 2 * R + 24,
-        overflow: "visible",
-      }}
+      viewBox="0 0 240 224"
+      role="img"
+      aria-label="Sky plot of the selected pass"
+      style={{ width: "100%", maxHeight: 260 }}
     >
       <circle
         cx={ox}
@@ -317,7 +333,19 @@ function polarPlot(
           />
         );
       })}
-      {p0 ? (
+      {[30, 45, 60].map((el) => {
+        const r = (R * (90 - el)) / 90;
+        return (
+          <text
+            key={el}
+            x={ox + r * 0.7 + 3}
+            y={oy - r * 0.7 - 1}
+            fontSize={10}
+            fill="#8ab2ee"
+          >{`${el}\u00b0`}</text>
+        );
+      })}
+      {p0 && (
         <>
           <polyline
             points={pts
@@ -325,43 +353,24 @@ function polarPlot(
               .join(" ")}
             fill="none"
             stroke="#f0a43c"
-            strokeWidth="1.4"
+            strokeWidth="1.6"
           />
-          <circle cx={p0[0]} cy={p0[1]} r="2.4" fill="#f0a43c" />
-          <path d={`M${p0[0] - 1} ${p0[1] - 6} l-3 -5 h6z`} fill="#f0c43c" />
+          <circle cx={p0[0]} cy={p0[1]} r="3" fill="#f0a43c" />
+          <text
+            x={p0[0] - 6}
+            y={p0[1] - 4}
+            fontSize={10}
+            textAnchor="end"
+            fill="#f0c43c"
+          >{`${sky[0]!.az.toFixed(0)}\u00b0`}</text>
         </>
-      ) : null}
-    </svg>,
-  ];
-  for (const [el, lab] of [
-    [30, "30°"],
-    [45, "45°"],
-    [60, "60°"],
-  ] as const) {
-    const r = (R * (90 - el)) / 90;
-    s.push(
-      T(cx + r * 0.7 + 3, cy - r * 0.7 - 1, lab, 3.8, "#8ab2ee", 400, "l", 0),
-    );
-  }
-  if (p0 && sky[0])
-    s.push(
-      T(
-        p0[0] + cx - R - 20 - 6,
-        p0[1] + cy - R - 12 - 2,
-        `${sky[0].az.toFixed(0)}°`,
-        3.8,
-        "#f0c43c",
-        400,
-        "r",
-        0,
-      ),
-    );
-  return frag(s);
+      )}
+    </svg>
+  );
 }
 
-export function MetaFrame({
+export function SimPage({
   state,
-  setState,
   plan,
   gpRes,
   gpTotal,
@@ -374,7 +383,6 @@ export function MetaFrame({
   go,
 }: {
   state: "globe" | "ring";
-  setState: (s: "globe" | "ring") => void;
   plan: Plan | null;
   gpRes: Res<unknown> | null;
   gpTotal: number | null;
@@ -384,8 +392,8 @@ export function MetaFrame({
   quakes: Mark[];
   now: number;
   rerun: () => void;
-  go: () => void;
-}): N {
+  go: Go;
+}): JSX.Element {
   const best = plan?.best ?? null;
   const v = VIEWS[state];
   const marks = useMemo(
@@ -401,402 +409,289 @@ export function MetaFrame({
       ? unavailable("Satellite elements", gpRes)
       : plan
         ? "No SAR pass over the AOI in the next 9 h"
-        : "Propagating satellites…";
+        : "Propagating satellites\u2026";
   const win0 = plan?.win0 ?? now - Math.trunc(2.7 * 3600);
-  const s: N[] = [
-    A(507, 162, 905, 510, "background:#082236"),
-    <div
-      key="map"
-      style={{
-        left: 762,
-        top: 162,
-        width: 648,
-        height: 430,
-        overflow: "hidden",
-        background: "#04060c",
-      }}
-    >
-      <GlobeView state={state} plan={plan} now={now} marks={marks} />
-    </div>,
-  ];
+  const pct = (t: number): string =>
+    `${(100 * along(t, win0, WIN)).toFixed(2)}%`;
+  // label anchor: the satellite on the globe, the AOI on the ring
+  let label: { x: number; y: number; dot: boolean } | null = null;
   if (best) {
     const b = orthoBasis(...centreOf(v));
     const [ax, ay] = proj(llaEcef(...AOI), b, v.R, v.cx, v.cy);
     const S = satEcef(best.tle, [best.t0])[0];
     const [sx, sy] = S ? proj(S, b, v.R, v.cx, v.cy) : [NaN, NaN];
-    const [lx, ly] =
-      state === "globe"
-        ? [762 + sx - 40, 162 + sy + 2]
-        : [762 + ax - 78, 162 + ay - 18];
-    if (Number.isFinite(lx))
-      s.push(T(lx, ly, best.name, 4.6, "#f2f4f6", 400, "l", 0));
-    if (state === "globe" && Number.isFinite(sx))
-      s.push(circ(762 + sx, 162 + sy, 2.6, "#f2f4f6"));
-  } else s.push(T(1086, 200, satWhy, 7, "#f2f6fa", 600, "c", 0));
-  // panel
-  s.push(
-    A(537, 162, 224, 430, "background:#0e2e52"),
-    A(537, 162, 224, 35, `background:${MB}`),
-    I("settings", 553, 179, 11, "#a8c8f0"),
-    T(566, 179.5, "Simulation Parameters", 11, "#e8f0f8", 400, "l", 0),
-    I("chevron-left", 739, 179, 8, "#c8dcf4"),
-    T(544, 212.5, "Satellite Criteria", 9.5, "#e0eaf4", 400, "l", 0),
-    A(545, 227, 208, 38, "background:#163a5c"),
-    T(
-      552,
-      241,
-      plan && gpTotal !== null
-        ? `Currently working with ${plan.sarCount} of ${gpTotal.toLocaleString("en-US")}`
-        : satWhy,
-      7.4,
-      "#e8f0f8",
-      400,
-      "l",
-      0,
-    ),
-    T(
-      552,
-      257,
-      <>
-        satellites where <b>Constellation</b> is
-      </>,
-      7.4,
-      "#e8f0f8",
-      400,
-      "l",
-      0,
-    ),
-    A(681, 251, 18, 10, "background:#1e4a80;border-radius:2px"),
-    T(690, 256.5, "SAR", 4.8, "#6a96d8", 400, "c", 0),
-    I("edit", 733, 248, 8, "#a8c8f0"),
-    T(544, 300.5, "Required Parameters", 9.5, "#e0eaf4", 400, "l", 0),
-    T(544, 321, "Area of Interest *", 6.8, "#e8f0f8", 700, "l", 0),
-    T(551, 341, "Strait of Hormuz", 8.6, "#d0def0", 400, "l", 0),
-    I("edit", 721, 341, 7.5, "#a8c8f0"),
-    I("cross", 742, 341, 7.5, "#a8c8f0"),
-    T(544, 365, "Mission Time Window *", 6.8, "#e8f0f8", 700, "l", 0),
-    T(544, 386, "From", 6.6, "#e8f0f8", 400, "l", 0),
-    T(580, 386, UTC(win0, "%d %b %Y %H:%MZ"), 6.6, "#f2f6fa", 700, "l", 0),
-    T(679, 386, "for", 6.6, "#e8f0f8", 400, "l", 0),
-    A(
-      697,
-      377,
-      56,
-      19,
-      "border:1px solid #3a6aa8;border-radius:2px;box-sizing:border-box",
-    ),
-    T(702, 386.5, "6 Hours", 6.4, "#7aa0d0", 400, "l", 0),
-    I("double-caret-vertical", 743, 386, 7, "#c8dcf4"),
-    A(545, 407, 208, 1, "background:#1a4070"),
-    T(544, 418.5, "Exploration Type", 9.5, "#e0eaf4", 400, "l", 0),
-    A(545, 433, 88, 22, "background:#16457a"),
-    T(589, 444.5, "Monitoring", 6.8, "#6a9ae0", 400, "c", 0),
-    T(690, 444.5, "Mission Planning", 6.8, "#a8c4ea", 400, "c", 0),
-  );
-  [
-    "A monitoring exploration lists every pass of the selected",
-    "satellites over the area of interest for the entire",
-    "window selected above, with elevation, azimuth and",
-    "sunlight at the area for each pass.",
-  ].forEach((ln, i) =>
-    s.push(
-      T(
-        545,
-        468 + i * 12.8,
-        ln,
-        6.1,
-        "#7e9cc4",
-        400,
-        "l",
-        0,
-        "font-style:italic",
-      ),
-    ),
-  );
-  s.push(
-    A(545, 523, 208, 1, "background:#1a4070"),
-    T(544, 541.5, "Monitoring Parameters", 9, "#e0eaf4", 400, "l", 0),
-    A(537, 556, 224, 1, "background:#0a2646"),
-    A(547, 566, 101, 16, "background:#2e6ed0"),
-    T(589, 574.5, "Simulate", 6.8, "#f2f6fa", 400, "c", 0),
-    I("caret-right", 617, 574.5, 6, "#f2f6fa"),
-    Hit(547, 566, 101, 16, "Simulate", rerun),
-    A(651, 566, 101, 16, "background:#2c6ecc"),
-    T(690, 574.5, "View Results", 6.8, "#f2f6fa", 400, "c", 0),
-    I("arrow-right", 729, 574.5, 8, "#f2f6fa"),
-    Hit(651, 566, 101, 16, "View results", () =>
-      setState(state === "globe" ? "ring" : "globe"),
-    ),
-    // rail
-    A(508, 162, 29, 510, "background:#0a2a4a"),
-    hexlogo(520, 179, 5, "#e8f0f8"),
-    Hit(512, 171, 18, 18, "Gaia home", go),
-    A(512, 205, 20, 20, "background:#1e4a80;border-radius:2px"),
-  );
-  for (const [yc, ic, on] of [
-    [215, "globe-network", 1],
-    [244, "ring", 0],
-    [272, "timeline-line-chart", 0],
-    [309, "filter", 1],
-    [337, "settings", 1],
-    [366, "satellite", 1],
-    [394, "globe", 1],
-    [430, "play", 1],
-    [513, "cloud", 1],
-    [538, "lightbulb", 1],
-    [562, "lock", 1],
-  ] as const)
-    s.push(I(ic, 521, yc, 9, on ? "#a8c8f0" : "#4a6a90"));
-  s.push(
-    Hit(512, 205, 20, 20, "Globe", () => setState("globe")),
-    Hit(512, 234, 20, 20, "AOI ring", () => setState("ring")),
-    A(512, 328, 20, 20, "background:#1e4a80;border-radius:2px"),
-    I("settings", 521, 337, 9, "#d0e4fa"),
-    A(
-      509,
-      585,
-      27,
-      27,
-      "border:1px solid #6a96d8;border-radius:50%;box-sizing:border-box",
-    ),
-    T(522.5, 594, "N", 4.4, "#8ab2ee", 400, "c", 0),
-    T(522.5, 620, state === "globe" ? "0°" : "5°", 5.4, "#c8dcf4", 400, "c", 0),
-    A(
-      513,
-      631,
-      20,
-      20,
-      "border-left:1px solid #6a96d8;border-bottom:1px solid #6a96d8;box-sizing:border-box;background:#14335a",
-    ),
-    T(
-      522.5,
-      660,
-      state === "globe" ? "9°" : "10°",
-      5.4,
-      "#c8dcf4",
-      400,
-      "c",
-      0,
-    ),
-  );
-  if (state === "ring")
-    s.push(
-      I("add", 522, 640, 11, "#f2f6fa"),
-      Hit(513, 631, 20, 20, "Zoom out to the globe", () => setState("globe")),
-    );
-  // sweep card
-  s.push(
-    A(1161, 168, 248, 190, "background:#1d457a"),
-    T(1168, 188, "Strait of Hormuz", 14, "#e8f0f8", 400, "l", 0),
-    T(1168, 221, "SAR Sweeps", 9.5, "#e0eaf4", 400, "l", 0),
-  );
-  if (sweep)
-    s.push(
-      A(1168, 237, 234, 46, "background:#1b4276"),
-      T(1172, 246, "Latest Capture:", 6.6, "#f2f6fa", 700, "l", 0),
-      T(1172, 258.5, "Date:", 6.4, "#9ab6dc", 400, "l", 0),
-      T(
-        1195,
-        258.5,
-        UTC(sweep.swept_at, "%-d %b %Y %H:%M"),
-        6.4,
-        "#f2f6fa",
-        400,
-        "l",
-        0,
-      ),
-      T(1172, 272, "Status:", 6.4, "#9ab6dc", 400, "l", 0),
-      I("tick", 1213, 272, 7, "#4ac08a"),
-      T(1222, 272, "SUCCESS", 6.4, "#4ac08a", 400, "l", 0),
-      T(1168, 304.5, "Detections", 6.6, "#f2f6fa", 400, "l", 0),
-      A(
-        1204,
-        299,
-        12,
-        11,
-        "background:#2a5a96;border-radius:5px;font-size:5.2px;color:#cfe0f6;display:grid;place-items:center",
-        String(sweep.detections),
-      ),
-      A(1168, 312, 52, 1.5, "background:#e8f0f8"),
-      T(1233, 304.5, "Dark", 6.6, "#9ab6dc", 400, "l", 0),
-      A(
-        1256,
-        299,
-        12,
-        11,
-        "background:#2a5a96;border-radius:5px;font-size:5.2px;color:#cfe0f6;display:grid;place-items:center",
-        String(sweep.dark_candidates),
-      ),
-      ...(sweep.dark_candidates === 0
-        ? [
-            T(
-              1285,
-              333,
-              'No dark-vessel candidates found for this AOI. View the "Detections"',
-              5.9,
-              "#cfe0f6",
-              400,
-              "c",
-              0,
-            ),
-            T(
-              1285,
-              346,
-              "tab to see all of its detections.",
-              5.9,
-              "#cfe0f6",
-              400,
-              "c",
-              0,
-            ),
-          ]
-        : [
-            T(
-              1285,
-              333,
-              `${sweep.dark_candidates} detections have no AIS match. View the "Dark"`,
-              5.9,
-              "#cfe0f6",
-              400,
-              "c",
-              0,
-            ),
-            T(
-              1285,
-              346,
-              "tab to see the candidates.",
-              5.9,
-              "#cfe0f6",
-              400,
-              "c",
-              0,
-            ),
-          ]),
-    );
-  else
-    s.push(
-      T(
-        1285,
-        280,
-        sweepRes?.ok
-          ? "No sweep of this AOI yet"
-          : unavailable("SAR sweep", sweepRes),
-        7,
-        "#cfe0f6",
-        400,
-        "c",
-        0,
-      ),
-    );
-  // satellite card
-  s.push(A(1161, 366, 248, 226, "background:#1d457a"));
-  if (best)
-    s.push(
-      T(1168, 385, best.name, 12, "#e8f0f8", 400, "l", 0),
-      T(
-        1168,
-        401.5,
-        `${best.norad} · ${operatorOf(best.name)}`,
-        5.8,
-        "#9ab6dc",
-        400,
-        "l",
-        0,
-      ),
-      I("satellite", 1384, 389, 22, "#f2f6fa"),
-      polarPlot(1283, 484, 55, sky),
-      A(1168, 558, 232, 13, "background:#0a1822"),
-      A(1168, 558, 1, 13, "background:#e8f0f8"),
-      T(
-        1168,
-        580,
-        UTC(best.t0, "%b %d %Y %H:%M:%SZ").toUpperCase(),
-        5.6,
-        "#e8f0f8",
-        400,
-        "l",
-        0,
-      ),
-      T(
-        1398,
-        580,
-        UTC(best.t1, "%b %d %Y %H:%M:%SZ").toUpperCase(),
-        5.6,
-        "#e8f0f8",
-        400,
-        "r",
-        0,
-      ),
-    );
-  else
-    s.push(
-      I("satellite", 1384, 389, 22, "#f2f6fa"),
-      T(1285, 480, satWhy, 6.6, "#cfe0f6", 400, "c", 0),
-    );
-  // timeline
-  const X0 = 620;
-  const X1 = 1412;
-  const tx = (t: number): number => X0 + ((t - win0) / (6 * 3600)) * (X1 - X0);
-  s.push(
-    A(537, 592, 875, 80, "background:#082236"),
-    A(537, 592, 875, 1, "background:#0f3358"),
-    T(
-      979,
-      602,
-      UTC(best?.t0 ?? now, "%b %d %Y %H:%M:%SZ").toUpperCase(),
-      9.2,
-      "#e8f0f8",
-      400,
-      "c",
-      0,
-    ),
-    I("play", 1068, 602, 7, "#e8f0f8"),
-    T(1081, 602.5, "60x", 5.4, "#c8dcf4", 400, "l", 0),
-    I("step-forward", 1110, 602, 7, "#e8f0f8"),
-    T(1121, 602.5, "Go Live", 5.4, "#c8dcf4", 400, "l", 0),
-    I("arrows-horizontal", 551, 602, 8, "#5a96e0"),
-    T(561, 602.5, "6h", 5.6, "#4a76b0", 400, "l", 0),
-  );
-  for (const [yc, ic, lab, col] of [
-    [616.5, "sweep", "SAR", "#a8c8f0"],
-    [626.5, "repeat", "Revisit", "#8ac080"],
-    [637, "wind", "Sunlight", "#e0c040"],
-  ] as const)
-    s.push(
-      I(ic, 550, yc, 6, col),
-      T(562, yc + 0.5, lab, 5.2, col, 400, "l", 0),
-    );
-  s.push(A(X0, 623, X1 - X0, 1, "background:#4ac08a"));
-  for (const p of (plan?.passes ?? []).filter((q) => q.peak >= 35))
-    s.push(
-      A(
-        tx(p.t0) - 1.5,
-        613,
-        3,
-        10,
-        `background:${p.name.includes("CAPELLA") ? "#8fc43c" : "#4fa86a"};border-radius:1px`,
-      ),
-    );
+    const [lx, ly] = state === "globe" ? [sx + 6, sy - 8] : [ax - 90, ay - 24];
+    if (Number.isFinite(lx) && Number.isFinite(ly))
+      label = { x: lx, y: ly, dot: state === "globe" && Number.isFinite(sx) };
+    if (label && label.dot) label = { ...label, x: sx, y: sy };
+  }
   // sunlight bar: real solar elevation at the AOI, sampled every 5 min
+  const sun: [number, number][] = [];
   let run: number | null = null;
-  for (let t = win0; t <= win0 + 6 * 3600 + 300; t += 300) {
-    const up = t <= win0 + 6 * 3600 && solarElev(t, ...AOI) > 0;
+  for (let t = win0; t <= win0 + WIN + 300; t += 300) {
+    const up = t <= win0 + WIN && solarElev(t, ...AOI) > 0;
     if (up && run === null) run = t;
     if (!up && run !== null) {
-      const xa = Math.max(X0, tx(run));
-      const xb = Math.min(X1, tx(t - 300));
-      if (xb > xa) s.push(A(xa, 635, xb - xa, 3, "background:#e0b82c"));
+      if (t - 300 > run) sun.push([run, t - 300]);
       run = null;
     }
   }
-  for (let h = 0; h < 7; h++) {
-    const t = win0 + h * 3600;
-    s.push(
-      A(tx(t), 650, 1, 6, "background:#12385c"),
-      T(tx(t), 668, UTC(t, "%H:%M"), 4.8, "#2a5a8c", 400, "c", 0),
-    );
-  }
-  if (best) s.push(A(tx(best.t0), 607, 1.2, 65, "background:#f2f6fa"));
-  s.push(A(1410, 162, 3, 510, "background:#04060a"));
-  return frag(s);
+  return (
+    <div className="eux">
+      <EuBar go={go} here={state} crumb="Simulation">
+        <span className="eux-seg" role="group" aria-label="View">
+          <button
+            type="button"
+            className="eu-btn"
+            aria-label="Globe"
+            title="Globe"
+            aria-pressed={state === "globe"}
+            onClick={() => go("globe")}
+          >
+            <BpIcon name="globe-network" size={14} />
+            Globe
+          </button>
+          <button
+            type="button"
+            className="eu-btn"
+            aria-label="AOI ring"
+            title="AOI ring"
+            aria-pressed={state === "ring"}
+            onClick={() => go("ring")}
+          >
+            <BpIcon name="ring" size={14} />
+            AOI ring
+          </button>
+        </span>
+        {state === "ring" && (
+          <button
+            type="button"
+            className="eu-btn"
+            aria-label="Zoom out to the globe"
+            title="Zoom out to the globe"
+            onClick={() => go("globe")}
+          >
+            <BpIcon name="zoom-out" size={14} />
+            Zoom out
+          </button>
+        )}
+      </EuBar>
+      <div className="eux-main">
+        <aside
+          className="eux-side eux-left"
+          aria-label="Simulation parameters"
+          style={{ flexBasis: "clamp(240px, 17vw, 340px)" }}
+        >
+          <div className="eux-h">
+            <BpIcon name="settings" size={14} />
+            Simulation Parameters
+          </div>
+          <h3 className="eux-sub">Satellite Criteria</h3>
+          <div className="eux-card">
+            <p>
+              {plan && gpTotal !== null
+                ? `Currently working with ${plan.sarCount} of ${gpTotal.toLocaleString("en-US")}`
+                : satWhy}
+            </p>
+            <p>
+              satellites where <b>Constellation</b> is SAR
+            </p>
+          </div>
+          <h3 className="eux-sub">Required Parameters</h3>
+          <div className="eux-card">
+            <small>Area of Interest</small>
+            <p>Strait of Hormuz</p>
+            <small>Mission Time Window</small>
+            <p>{`From ${UTC(win0, "%d %b %Y %H:%MZ")} for 6 hours`}</p>
+          </div>
+          <h3 className="eux-sub">Exploration Type</h3>
+          <div className="eux-seg">
+            <button
+              type="button"
+              className="eu-btn"
+              aria-pressed="true"
+              aria-label="Monitoring"
+              title="Monitoring"
+            >
+              Monitoring
+            </button>
+            <button
+              type="button"
+              className="eu-btn"
+              aria-label="Mission Planning"
+              title="Mission planning is not available"
+              disabled
+            >
+              Mission Planning
+            </button>
+          </div>
+          <p className="eu-dim">
+            A monitoring exploration lists every pass of the selected satellites
+            over the area of interest for the entire window selected above, with
+            elevation, azimuth and sunlight at the area for each pass.
+          </p>
+          <span className="eu-gap" />
+          <button
+            type="button"
+            className="eu-btn"
+            aria-label="Simulate"
+            title="Simulate"
+            onClick={rerun}
+          >
+            <BpIcon name="play" size={14} />
+            Simulate
+          </button>
+          <button
+            type="button"
+            className="eu-btn"
+            aria-label="View results"
+            title="View results"
+            onClick={() => go(state === "globe" ? "ring" : "globe")}
+          >
+            <BpIcon name="arrow-right" size={14} />
+            View results
+          </button>
+        </aside>
+        <div className="eux-col">
+          <div className="eux-globe">
+            <div className="eux-gbox">
+              <GlobeView state={state} plan={plan} now={now} marks={marks} />
+              {best && label && (
+                <>
+                  {label.dot && (
+                    <span
+                      className="eux-dot"
+                      style={{
+                        left: `${(100 * label.x) / VW}%`,
+                        top: `${(100 * label.y) / VH}%`,
+                      }}
+                    />
+                  )}
+                  <span
+                    className="eux-glab"
+                    style={{
+                      left: `${(100 * (label.dot ? label.x + 8 : label.x)) / VW}%`,
+                      top: `${(100 * (label.dot ? label.y + 4 : label.y)) / VH}%`,
+                    }}
+                  >
+                    {best.name}
+                  </span>
+                </>
+              )}
+              {!best && <span className="eux-gmsg">{satWhy}</span>}
+            </div>
+          </div>
+          <div className="eux-tl" aria-label="Mission timeline">
+            <span className="eux-tl-lab">
+              <BpIcon name="satellite" size={12} />
+              SAR
+            </span>
+            <div className="eux-tl-row">
+              {(plan?.passes ?? [])
+                .filter((q) => q.peak >= 35)
+                .map((p) => (
+                  <i
+                    key={`${p.norad}.${p.t0}`}
+                    title={`${p.name} ${UTC(p.t0, "%H:%MZ")}`}
+                    style={{
+                      left: pct(p.t0),
+                      width: 4,
+                      background: p.name.includes("CAPELLA")
+                        ? "#8fc43c"
+                        : "#4fa86a",
+                    }}
+                  />
+                ))}
+              {best && (
+                <i
+                  title={`Selected pass ${UTC(best.t0, "%H:%MZ")}`}
+                  style={{
+                    left: pct(best.t0),
+                    width: 2,
+                    background: "#f2f6fa",
+                  }}
+                />
+              )}
+            </div>
+            <span className="eux-tl-lab">
+              <BpIcon name="flash" size={12} />
+              Sunlight
+            </span>
+            <div className="eux-tl-row">
+              {sun.map(([a, z]) => (
+                <i
+                  key={a}
+                  style={{
+                    left: pct(a),
+                    width: `${(100 * (z - a)) / WIN}%`,
+                    background: "#e0b82c",
+                  }}
+                />
+              ))}
+            </div>
+            <span />
+            <div className="eux-tl-hours">
+              {Array.from({ length: 7 }, (_, h) => (
+                <span key={h} style={{ left: `${(100 * h) / 6}%` }}>
+                  {UTC(win0 + h * 3600, "%H:%M")}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+        <aside className="eux-side eux-right" aria-label="Sweep and satellite">
+          <div className="eux-h">
+            <BpIcon name="geosearch" size={14} />
+            Strait of Hormuz
+          </div>
+          <h3 className="eux-sub">SAR Sweeps</h3>
+          {sweep ? (
+            <div className="eux-card">
+              <div className="eux-kv">
+                <span>Latest capture</span>
+                <span>{UTC(sweep.swept_at, "%-d %b %Y %H:%M")}</span>
+              </div>
+              <div className="eux-kv">
+                <span>Detections</span>
+                <span>{sweep.detections}</span>
+              </div>
+              <div className="eux-kv">
+                <span>Dark</span>
+                <span>{sweep.dark_candidates}</span>
+              </div>
+              <small>
+                {sweep.dark_candidates === 0
+                  ? "No dark-vessel candidates found for this AOI."
+                  : `${sweep.dark_candidates} detections have no AIS match.`}
+              </small>
+            </div>
+          ) : (
+            <p className="eu-note">
+              {sweepRes?.ok
+                ? "No sweep of this AOI yet"
+                : unavailable("SAR sweep", sweepRes)}
+            </p>
+          )}
+          <h3 className="eux-sub">Selected pass</h3>
+          {best ? (
+            <div className="eux-card">
+              <h3>{best.name}</h3>
+              <small>{`${best.norad || NONE} \u00b7 ${operatorOf(best.name)}`}</small>
+              <PolarPlot sky={sky} />
+              <div className="eux-kv">
+                <span>Start</span>
+                <span>{UTC(best.t0, "%b %d %Y %H:%M:%SZ")}</span>
+              </div>
+              <div className="eux-kv">
+                <span>End</span>
+                <span>{UTC(best.t1, "%b %d %Y %H:%M:%SZ")}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="eu-note">{satWhy}</p>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
 }

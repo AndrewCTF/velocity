@@ -101,4 +101,32 @@ describe("LayerRegistry", () => {
     expect(() => r.disable("nope")).toThrow(/unknown id/);
     expect(() => r.setOpacity("nope", 0.5)).toThrow(/unknown id/);
   });
+
+  it("reorder moves one layer and emits (D77: list order is draw order)", () => {
+    const r = new LayerRegistry();
+    const listener = vi.fn<(e: RegistryEvent) => void>();
+    r.subscribe(listener);
+    r.register(makeLayer("a"));
+    r.register(makeLayer("b"));
+    r.register(makeLayer("c"));
+    r.reorder("c", 0);
+    expect(r.list().map((l) => l.id)).toEqual(["c", "a", "b"]);
+    expect(listener).toHaveBeenLastCalledWith({
+      type: "reorder",
+      id: "c",
+      from: 2,
+      to: 0,
+    });
+    expect(() => r.reorder("nope", 0)).toThrow(/unknown id/);
+  });
+
+  it("reorder clamps out-of-range targets", () => {
+    const r = new LayerRegistry();
+    r.register(makeLayer("a"));
+    r.register(makeLayer("b"));
+    r.reorder("a", 99);
+    expect(r.list().map((l) => l.id)).toEqual(["b", "a"]);
+    r.reorder("a", -5);
+    expect(r.list().map((l) => l.id)).toEqual(["a", "b"]);
+  });
 });

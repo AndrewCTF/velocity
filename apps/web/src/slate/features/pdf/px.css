@@ -1,0 +1,424 @@
+/* The investigation workspace, laid out natively under .px (Blueprint scale:
+   14px body, 12px secondary, 30px controls, 4/8/16 steps, 3px radius). Each page
+   keeps the tone the copy drew it in; the tokens below carry AA pairs. */
+.px {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--tx);
+  font:
+    400 14px/1.4 "Source Sans 3",
+    "Segoe UI",
+    sans-serif;
+}
+.px[data-tone="dark"] {
+  --bg: #111418;
+  --p: #1c2127;
+  --p2: #252a31;
+  --bd: #383e47;
+  --tx: #f6f7f9;
+  --mu: #abb3bf;
+  --lk: #8abbff;
+  --pri: #2d72d2;
+  --sel: #243a5a;
+  --bar: #4c90f0;
+  --track: #2f343c;
+  --hov: #2f343c;
+  --warn: #fbb360;
+  --ok: #72ca9b;
+}
+.px[data-tone="light"] {
+  --bg: #f6f7f9;
+  --p: #fff;
+  --p2: #edeff2;
+  --bd: #d3d8de;
+  --tx: #1c2127;
+  --mu: #5f6b7c;
+  --lk: #215db0;
+  --pri: #2d72d2;
+  --sel: #e1ecfb;
+  --bar: #2d72d2;
+  --track: #e1e5ea;
+  --hov: #e5e8ec;
+  --warn: #935610;
+  --ok: #1c6e42;
+}
+.px *,
+.px *::before,
+.px *::after {
+  box-sizing: border-box;
+}
+.px svg {
+  max-width: none;
+}
+.px h1,
+.px h2,
+.px h3,
+.px h4,
+.px p {
+  margin: 0;
+}
+.px ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.px .px-gap {
+  flex: 1;
+}
+.px .px-mu,
+.px .px-sec {
+  color: var(--mu);
+  font-size: 12px;
+}
+.px .px-lk {
+  color: var(--lk);
+}
+.px .px-b {
+  font-weight: 600;
+}
+.px .px-mk {
+  background: #fdeeb5;
+  color: #1c2127;
+}
+.px .px-dim {
+  opacity: 0.55;
+}
+
+/* toolbar: the one in-page bar, page switcher included */
+.px .px-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--p);
+  border-bottom: 1px solid var(--bd);
+  container-type: inline-size;
+  overflow-x: auto;
+}
+.px .px-bar .px-btn {
+  border-color: transparent;
+  background: transparent;
+}
+.px .px-bar .px-btn:hover:not(:disabled) {
+  background: var(--hov);
+}
+.px .px-bar .px-btn[aria-current="page"] {
+  background: var(--sel);
+  border-color: var(--bar);
+}
+@container (max-width: 1500px) {
+  .px .px-bar .px-btn:not([aria-current="page"]) .px-lab {
+    display: none;
+  }
+}
+.px .px-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.px .px-pg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+.px .px-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--p);
+}
+.px .px-pane.r {
+  border-left: 1px solid var(--bd);
+}
+.px .px-pane.l {
+  border-right: 1px solid var(--bd);
+}
+.px .px-ph {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--bd);
+}
+.px .px-ph h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.px .px-sect {
+  padding: 8px 8px 4px;
+  color: var(--mu);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* controls */
+.px .px-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--bd);
+  border-radius: 3px;
+  background: var(--p2);
+  color: var(--tx);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.px .px-btn:hover:not(:disabled) {
+  background: var(--hov);
+}
+.px .px-btn:disabled {
+  color: var(--mu);
+  cursor: default;
+}
+.px .px-btn.pri {
+  background: var(--pri);
+  border-color: var(--pri);
+  color: #fff;
+}
+.px .px-btn.pri:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.px .px-btn.pri:disabled {
+  color: #fff;
+  opacity: 0.6;
+}
+.px .px-btn.sq {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+}
+.px .px-btn[aria-pressed="true"] {
+  border-color: var(--bar);
+  background: var(--sel);
+}
+.px .px-btn.lnk {
+  border-color: transparent;
+  background: transparent;
+  color: var(--lk);
+  padding: 0 4px;
+}
+.px button:focus-visible,
+.px input:focus-visible,
+.px select:focus-visible {
+  outline: 2px solid var(--bar);
+  outline-offset: 1px;
+}
+.px .px-inp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--bd);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--mu);
+}
+.px .px-inp input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--tx);
+  font: inherit;
+}
+.px .px-inp input::placeholder {
+  color: var(--mu);
+}
+.px .px-inp:focus-within {
+  outline: 2px solid var(--bar);
+  outline-offset: 1px;
+}
+.px .px-tabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--bd);
+  padding: 0 8px;
+  overflow-x: auto;
+}
+.px .px-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--tx);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.px .px-tab:disabled {
+  color: var(--mu);
+  cursor: default;
+}
+.px .px-tab[aria-current="page"] {
+  color: var(--lk);
+  border-bottom-color: var(--lk);
+}
+.px .px-tab:hover:not(:disabled) {
+  background: var(--hov);
+}
+.px .px-badge {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--track);
+  color: var(--tx);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* cards, rows */
+.px .px-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--bd);
+  border-radius: 3px;
+  background: var(--p);
+}
+.px .px-card-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--bd);
+  color: var(--lk);
+}
+.px .px-card-h h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.px .px-card-b {
+  padding: 8px;
+}
+.px .px-kv {
+  display: grid;
+  grid-template-columns: minmax(96px, 30%) 1fr auto;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--bd);
+}
+.px .px-kv:last-child {
+  border-bottom: 0;
+}
+.px .px-k {
+  color: var(--mu);
+  font-weight: 600;
+}
+.px .px-v {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.px .px-src {
+  color: var(--mu);
+  font-size: 12px;
+}
+.px .px-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--tx);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.px .px-row:hover:not(:disabled) {
+  background: var(--hov);
+}
+.px .px-row:disabled {
+  color: var(--mu);
+  cursor: default;
+}
+.px .px-row[aria-pressed="true"],
+.px .px-row[aria-current="true"] {
+  background: var(--sel);
+}
+.px .px-bar-t {
+  position: relative;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--track);
+  overflow: hidden;
+}
+.px .px-bar-t > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--bar);
+}
+.px .px-thumb {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--bd);
+  border-radius: 3px;
+  overflow: hidden;
+  display: block;
+}
+.px .px-sat {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.px .px-empty {
+  padding: 16px;
+  color: var(--mu);
+}
+.px .px-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--bd);
+  border-radius: 3px;
+  background: var(--p2);
+  color: var(--lk);
+  font: inherit;
+  vertical-align: middle;
+}
+.px button.px-chip {
+  cursor: pointer;
+}
+.px button.px-chip:hover {
+  background: var(--hov);
+}
+.px .px-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}

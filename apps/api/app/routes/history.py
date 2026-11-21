@@ -288,7 +288,11 @@ async def get_upstream_coverage(
 ) -> dict:
     """Which days in the range at least one enabled host has heatmap chunks
     for - the replay day picker asks this before offering a day. Probes are
-    16-byte, cached 24 h per (day, host), and capped at 366 days."""
+    16-byte, cached 24 h per (day, host), and capped at 366 days.
+
+    An empty day list is the honest answer for a miss (host down, no chunk) or
+    an over-cap span — both surface as 200 degraded, never 422. 422 is only
+    for a range the caller can fix (bad date, backwards)."""
     try:
         d_from = date.fromisoformat(from_)
     except ValueError as exc:
@@ -300,4 +304,6 @@ async def get_upstream_coverage(
     try:
         return await adsb_heatmap.coverage(d_from, d_to)
     except ValueError as exc:
+        if (d_to - d_from).days > adsb_heatmap._COVERAGE_MAX_DAYS - 1:
+            return {"days": [], "degraded": True}
         raise HTTPException(422, str(exc)) from exc

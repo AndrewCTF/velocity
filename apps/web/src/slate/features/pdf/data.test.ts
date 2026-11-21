@@ -18,7 +18,6 @@ import {
   type Vessel,
   type Warning,
 } from "./data.js";
-import { toPx } from "./kit.js";
 
 const V = (
   mmsi: number,
@@ -160,13 +159,6 @@ describe("pdf data", () => {
       [55, 25, 100],
     ]);
     expect(s.map((f) => f[0])).toEqual([40, 100, 160]);
-  });
-
-  it("maps lon/lat to the Gulf plate within the fit's error", () => {
-    // Al Hamriyah LPG Terminal's label anchor on scene-gulf-live (about 1019, 535)
-    const [x, y] = toPx(55.4833, 25.4667);
-    expect(Math.abs(x - 1019)).toBeLessThan(15);
-    expect(Math.abs(y - 537)).toBeLessThan(15);
   });
 });
 

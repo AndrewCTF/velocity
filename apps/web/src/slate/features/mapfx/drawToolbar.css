@@ -1,0 +1,36 @@
+/* D67 DrawToolbar: compact icon-only strip (polygon / lasso / rectangle /
+   circle / line / point) beside MainToolbar. Scoped under .mv. */
+.mv-draw-toolbar {
+  position: absolute;
+  left: 481px;
+  top: 110px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #fff;
+  border: 1px solid #c9ced4;
+  border-radius: 3px;
+  box-shadow: 0 1px 6px rgba(17, 20, 24, 0.25);
+  height: 39px;
+  padding: 0 6px;
+  z-index: 20;
+}
+.mvdt-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  color: #5f6b7c;
+  cursor: pointer;
+}
+.mvdt-btn:hover {
+  background: #eef0f2;
+  color: #2f343c;
+}
+.mvdt-btn.is-active {
+  background: #e5e8ec;
+  color: #2f343c;
+}

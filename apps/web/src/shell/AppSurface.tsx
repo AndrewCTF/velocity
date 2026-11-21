@@ -289,16 +289,20 @@ export function AppSurface({
     // the map well and left a dead 36px strip of globe down its left edge with
     // the map legend clipped to `ai / ve / da / GP`.
     <div className="absolute inset-0 z-(--z-overlay) flex flex-col bg-bg-0">
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line-2 bg-bg-1 px-3">
-        <span className="font-label text-[12px] uppercase tracking-[0.9px] text-txt-0">
-          {APP_META[app].label}
-        </span>
-        <span className="truncate text-[12px] text-txt-3">
-          {APP_META[app].hint}
-        </span>
-      </div>
+      {/* Slate's menu row already names the open app (☆ <app> ▾); a second
+          title strip under it is a top bar inside the top bar. */}
+      {scheme !== "slate" && (
+        <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line-2 bg-bg-1 px-3">
+          <span className="font-label text-[12px] uppercase tracking-[0.9px] text-txt-0">
+            {APP_META[app].label}
+          </span>
+          <span className="truncate text-[12px] text-txt-3">
+            {APP_META[app].hint}
+          </span>
+        </div>
+      )}
       <div
-        className={`min-h-0 flex-1 overflow-auto ${MEASURED.has(app) && !(app === "video" && scheme === "slate") ? "csl2-app-measure" : ""}`}
+        className={`min-h-0 flex-1 overflow-auto ${MEASURED.has(app) && !(app === "video" && scheme === "slate") ? "csl2-app-measure" : ""} ${scheme === "slate" && (app === "graph" || app === "investigate") ? "sl-form" : ""}`}
       >
         <Suspense
           fallback={

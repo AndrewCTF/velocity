@@ -1,3 +1,5 @@
+import src from "./Workspace.tsx?raw";
+import fmv from "./Fmv.tsx?raw";
 import { describe, expect, it } from "vitest";
 import { destination, distNm, hms, mgrs } from "./geo.js";
 import { rank, type Asset } from "./recommend.js";
@@ -65,5 +67,21 @@ describe("imagery plate maths", () => {
     expect(lon).toBeCloseTo(56.059, 6);
     // z17 at 27 N is about 1.06 m per pixel
     expect(gsd(p)).toBeCloseTo(1.064, 2);
+  });
+});
+
+describe("watch workspace is native, not a zoomed copy", () => {
+  it("draws at native px with no inner rail or logo", () => {
+    expect(src).not.toMatch(/zoom\s*:/);
+    expect(src).not.toContain("mv-rail");
+    expect(src).not.toContain("lightning");
+    expect(src).toContain("Back to board");
+  });
+});
+
+describe("FMV is native, not a scaled stage", () => {
+  it("never scales its stage below the shell's type", () => {
+    expect(fmv).not.toMatch(/transform: `scale\(\$\{kz\}\)`/);
+    expect(fmv).not.toMatch(/\bkz\b/);
   });
 });

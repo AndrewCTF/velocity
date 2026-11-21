@@ -1,6 +1,7 @@
 import { Fragment, useEffect } from "react";
 import { useContextMenu } from "./contextMenuStore.js";
-import { pointActions } from "./mapActions.js";
+import { pointActions, areaActions } from "./mapActions.js";
+import { useMapTools } from "./mapTools.js";
 import { BpIcon } from "../shell/BpIcon.js";
 import "./contextMenu.css";
 
@@ -10,7 +11,7 @@ import "./contextMenu.css";
 // right-click over empty ground (an entity right-click still opens search-around).
 
 export function ContextMenu(): JSX.Element | null {
-  const { open, x, y, lat, lon, close } = useContextMenu();
+  const { open, x, y, lat, lon, mode, close } = useContextMenu();
 
   // Close on any outside click / Escape / scroll.
   useEffect(() => {
@@ -29,7 +30,9 @@ export function ContextMenu(): JSX.Element | null {
 
   if (!open) return null;
 
-  const items = pointActions(lat, lon);
+  const area = useMapTools.getState().area;
+  const inArea = mode === "area" && area !== null;
+  const items = inArea ? areaActions(area!) : pointActions(lat, lon);
 
   // Clamp so the menu never overflows the viewport.
   const W = 257;
@@ -40,7 +43,11 @@ export function ContextMenu(): JSX.Element | null {
   return (
     <div
       role="menu"
-      aria-label={`Map point ${lat.toFixed(4)}, ${lon.toFixed(4)}`}
+      aria-label={
+        inArea
+          ? `Drawn area ${area!.south.toFixed(4)},${area!.west.toFixed(4)} to ${area!.north.toFixed(4)},${area!.east.toFixed(4)}`
+          : `Map point ${lat.toFixed(4)}, ${lon.toFixed(4)}`
+      }
       onClick={(e) => e.stopPropagation()}
       className="gx-cmenu"
       style={{ left, top }}
@@ -62,6 +69,15 @@ export function ContextMenu(): JSX.Element | null {
           </button>
         </Fragment>
       ))}
+      <div className="gx-sep" role="separator" />
+      <div
+        className="gx-coord"
+        data-testid={inArea ? "d92-area-footer" : "d90-coord-footer"}
+      >
+        {inArea
+          ? `${area!.south.toFixed(4)},${area!.west.toFixed(4)} to ${area!.north.toFixed(4)},${area!.east.toFixed(4)}`
+          : `${lat.toFixed(4)}, ${lon.toFixed(4)}`}
+      </div>
     </div>
   );
 }

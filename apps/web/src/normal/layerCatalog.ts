@@ -13,6 +13,10 @@
 // Pure data + registry-facade helpers; no React. Guarded by ./layerCatalog.test.ts.
 import type { LayerRegistry } from "../registry/LayerRegistry.js";
 import type { IconName } from "./Icon.js";
+import {
+  OSM_MILITARY_ACTIVE_LAYER_IDS,
+  OSM_MILITARY_DISUSED_LAYER_ID,
+} from "../registry/defaults.js";
 
 export interface CatalogRow {
   /** Plain capability label (no source name). */
@@ -75,6 +79,11 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
     rows: [
       { label: "Vessels", icon: "ship", layerIds: ["maritime.keyless"] },
       { label: "Baltic AIS", icon: "ship", layerIds: ["maritime.digitraffic"] },
+      {
+        label: "Military vessels",
+        icon: "shield",
+        layerIds: ["maritime.military"],
+      },
       {
         label: "Sanctioned vessels",
         icon: "shield",
@@ -303,6 +312,16 @@ export const MAP_LAYER_FOLDERS: readonly CatalogFolder[] = [
         icon: "shield",
         layerIds: ["military.installations"],
       },
+      {
+        label: "Military sites in use (OpenStreetMap)",
+        icon: "shield",
+        layerIds: OSM_MILITARY_ACTIVE_LAYER_IDS,
+      },
+      {
+        label: "Military sites disused or abandoned (OpenStreetMap)",
+        icon: "shield",
+        layerIds: [OSM_MILITARY_DISUSED_LAYER_ID],
+      },
       { label: "Power plants", icon: "signal", layerIds: ["infra.power"] },
       {
         label: "Power plants (WRI global)",
@@ -414,4 +433,31 @@ export function toggleFolder(
       if (anyOn) registry.disable(id);
       else registry.enable(id);
     }
+}
+
+/** Move one catalog row to a new stacking position (D77: list order is
+ *  draw order). Moves the row within its folder rows array in place, then
+ *  reorders the underlying registry layers to match. `to` is the new index
+ *  within the folder rows; out-of-range is clamped. */
+export function moveRow(
+  registry: LayerRegistry,
+  row: CatalogRow,
+  to: number,
+): void {
+  for (const f of MAP_LAYER_FOLDERS) {
+    const idx = f.rows.indexOf(row);
+    if (idx < 0) continue;
+    const rows = [...f.rows];
+    const [moved] = rows.splice(idx, 1);
+    const clamped = Math.max(0, Math.min(rows.length, to));
+    rows.splice(clamped, 0, moved!);
+    // Apply to the registry in the new row order so list() order matches.
+    for (const [i, r] of rows.entries()) {
+      for (const id of r.layerIds) {
+        const cur = registry.list().findIndex((d) => d.id === id);
+        if (cur >= 0) registry.reorder(id, i);
+      }
+    }
+    return;
+  }
 }

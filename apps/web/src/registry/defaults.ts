@@ -1,6 +1,37 @@
 import type { LayerDescriptor } from "@osint/shared";
 import type { LayerRegistry } from "./LayerRegistry.js";
 
+/** OSM military categories served by /api/places/osm-military: [slug, label].
+ *  Slugs match scripts/build_osm_military.py. */
+export const OSM_MILITARY_CATEGORIES = [
+  ["bunker", "Bunkers"],
+  ["military_landuse", "Military land use"],
+  ["trench", "Trenches"],
+  ["barracks", "Barracks"],
+  ["office", "Military offices"],
+  ["checkpoint", "Checkpoints"],
+  ["range", "Firing ranges"],
+  ["base", "Bases"],
+  ["unspecified", "Military sites (unspecified)"],
+  ["training_area", "Training areas"],
+  ["danger_area", "Danger areas"],
+  ["nuclear_test_site", "Nuclear test sites"],
+  ["airfield", "Military airfields"],
+  ["obstacle_course", "Obstacle courses"],
+  ["other", "Other military features"],
+] as const;
+
+// In-use sites (no OSM disuse tag), one layer per category, plus ONE layer of
+// disused / abandoned / ruined sites across every category: the rail's
+// in-use vs out-of-use filter.
+export const OSM_MILITARY_ACTIVE_LAYER_IDS: readonly string[] =
+  OSM_MILITARY_CATEGORIES.map(([c]) => `military.osm.${c}`);
+export const OSM_MILITARY_DISUSED_LAYER_ID = "military.osm.disused";
+export const OSM_MILITARY_LAYER_IDS: readonly string[] = [
+  ...OSM_MILITARY_ACTIVE_LAYER_IDS,
+  OSM_MILITARY_DISUSED_LAYER_ID,
+];
+
 // Phase 1 / Wave 2 default layer set. Each layer registers a backend route
 // (key-hidden, server-cached). visibleByDefault controls what's on at boot;
 // power-users can enable the rest from the LayerRail.
@@ -283,6 +314,27 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     license: "CC BY 4.0 Fintraffic + Kystverket/Kystdatahuset",
     opacity: 1,
     visibleByDefault: true,
+    emits: ["vessel"],
+  },
+  // Military vessels: live AIS contacts classified military by the backend
+  // (/api/maritime/military). A subset of maritime.keyless, so off by default
+  // to avoid double-painting. Confidence tiers in feature properties:
+  // registry (Wikidata naval registry MMSI match) > declared (AIS shipType 35)
+  // > name (hull-prefix / name patterns). min_confidence=name shows all tiers.
+  // AIS-dark military vessels are not visible here — they do not broadcast.
+  {
+    id: "maritime.military",
+    group: "maritime",
+    title: "Vessels · military (AIS-classified)",
+    kind: "geojson",
+    auth: "none",
+    endpoint: "/api/maritime/military",
+    refresh: { mode: "pull", ttlSec: 120 },
+    time: { temporal: true },
+    crs: "EPSG:4326",
+    license: "Wikidata naval registry (CC0) + AIS self-declaration",
+    opacity: 1,
+    visibleByDefault: false,
     emits: ["vessel"],
   },
   // Parking mode: stationary vessels only (SOG < 0.5 kn — anchored / moored /
@@ -929,6 +981,39 @@ export const defaultLayers: readonly LayerDescriptor[] = [
     time: { temporal: false },
     crs: "EPSG:4326",
     license: "US DoD MIRTA (public) / Wikidata (CC0)",
+    opacity: 1,
+    visibleByDefault: false,
+  },
+  // OpenStreetMap military features (~259k, /api/places/osm-military), one
+  // layer per category so 107k bunkers never crowd out 2.3k airfields. A
+  // Western Europe view holds ~61k bunkers; over the limit the API returns a
+  // hash-stable sample (zooming in only adds markers), so every row is
+  // reachable by zooming without 20k+ billboards per layer.
+  ...OSM_MILITARY_CATEGORIES.map(([category, title]) => ({
+    id: `military.osm.${category}`,
+    group: "infra" as const,
+    title: `${title} · OSM military · in use`,
+    kind: "geojson" as const,
+    auth: "none" as const,
+    endpoint: `/api/places/osm-military?category=${category}&status=active&limit=5000`,
+    refresh: { mode: "pull" as const, ttlSec: 86400 },
+    time: { temporal: false },
+    crs: "EPSG:4326" as const,
+    license: "OpenStreetMap (ODbL)",
+    opacity: 1,
+    visibleByDefault: false,
+  })),
+  {
+    id: OSM_MILITARY_DISUSED_LAYER_ID,
+    group: "infra",
+    title: "Disused, abandoned or ruined sites · OSM military",
+    kind: "geojson",
+    auth: "none",
+    endpoint: "/api/places/osm-military?status=inactive&limit=5000",
+    refresh: { mode: "pull", ttlSec: 86400 },
+    time: { temporal: false },
+    crs: "EPSG:4326",
+    license: "OpenStreetMap (ODbL)",
     opacity: 1,
     visibleByDefault: false,
   },

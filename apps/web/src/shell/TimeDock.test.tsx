@@ -351,6 +351,25 @@ describe("TimeDock — restored archive-ownership chrome (CoverageStrip + chip +
     expect(screen.getByLabelText("Replay start day")).toBeInTheDocument();
   });
 
+  it("requests upstream coverage inside the backend 366-day cap", async () => {
+    const { viewer } = fakeViewer();
+    render(<TimeDock viewer={viewer} />);
+    await waitFor(() => {
+      const call = mockedFetch.mock.calls.find((c) =>
+        String(c[0]).startsWith("/api/history/upstream/coverage"),
+      );
+      if (!call) throw new Error("coverage not yet requested");
+      const q = new URLSearchParams(String(call[0]).split("?")[1] ?? "");
+      const span =
+        (Date.parse(q.get("to") ?? "") - Date.parse(q.get("from") ?? "")) /
+        86_400_000;
+      // The live backend 422s spans over 366 days; 2024-01-01..today is
+      // 1039 days in late 2026, so the request must start inside the cap.
+      expect(span).toBeLessThanOrEqual(365);
+      expect(q.get("from")).not.toBe("2024-01-01");
+    });
+  });
+
   it("renders the second row: upstream (tar1090) availability by day", async () => {
     mockedFetch.mockImplementation(async (url: string) => {
       const u = url.toString();

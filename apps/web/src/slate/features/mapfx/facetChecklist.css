@@ -1,0 +1,45 @@
+/* D81 FacetChecklist: flag state with counts and bars. */
+.mv-facet-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+}
+.mv-facet-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--t1);
+  cursor: pointer;
+}
+.mv-facet-row.is-on {
+  color: var(--t0);
+}
+.mv-facet-name {
+  min-width: 80px;
+  text-transform: capitalize;
+}
+.mv-facet-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--field);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.mv-facet-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--link);
+}
+.mv-facet-count {
+  font-size: 11px;
+  color: var(--t2);
+  min-width: 36px;
+  text-align: right;
+}
+.mv-facet-empty {
+  font-size: 12px;
+  color: var(--t2);
+  padding: 8px 0;
+}

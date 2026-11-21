@@ -186,6 +186,13 @@
   box-sizing: border-box;
   cursor: pointer;
 }
+.maven-layers .mv-search-dialog button,
+.maven-layers .mv-filter-picker button {
+  all: revert;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: revert;
+}
 .maven-layers button:focus-visible {
   outline: 1px solid #5b8fd9;
   outline-offset: -1px;
@@ -230,6 +237,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.maven-layers .list .row .mv-layer-row {
+  position: absolute;
+  left: 244px;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+}
+.maven-layers .list .row .mv-layer-meta {
+  display: none;
+}
+.maven-layers .list .row .mv-layer-count {
+  display: none;
+}
 .maven-layers .list .row .dot {
   left: auto;
   right: 40px;
@@ -257,4 +279,99 @@
 }
 .maven-layers .bm .sw {
   background: #2d4a5c;
+}
+.maven-layers .mv-objects-band {
+  padding: 6px 14px;
+  background: var(--band);
+  border-top: 1px solid var(--edge);
+  border-bottom: 1px solid var(--edge);
+  color: var(--t2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.maven-layers .mv-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--t2);
+}
+.maven-layers .mv-empty-icon {
+  color: var(--t2);
+  opacity: 0.6;
+}
+.maven-layers .mv-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--t1);
+}
+.maven-layers .mv-empty-sub {
+  font-size: 12.5px;
+}
+.maven-layers .mv-empty-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 6px 14px;
+  background: var(--field);
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  color: var(--t0);
+  font-size: 13px;
+  cursor: pointer;
+}
+.maven-layers .mv-empty-add:hover {
+  background: #3a4447;
+}
+.maven-layers .mv-inline-legend {
+  padding: 6px 14px 10px 54px;
+}
+.maven-layers .mv-inline-legend .mv-il-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+}
+
+/* Basemap footer: the label, then the picker (one control, not two). */
+.maven-layers .bm {
+  gap: 10px;
+  padding: 0 8px 0 10px;
+}
+.maven-layers .bm .mv-bp-trigger {
+  display: inline-flex;
+  height: 26px;
+}
+/* the trigger sits at the footer's left, so its menu opens rightwards */
+.maven-layers .bm .mv-bp-menu {
+  left: 0;
+  right: auto;
+}
+
+/* Tabs flow with even spacing (the copy's per-tab lefts left 34/30/22px gaps);
+   the active tab carries its own underline. */
+.maven-layers .tabs {
+  display: flex;
+  width: auto;
+  right: 0;
+  padding: 0 4px;
+}
+.maven-layers .tab {
+  position: relative;
+  top: auto;
+  height: 44px;
+  padding: 0 10px;
+}
+.maven-layers .tab.on::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 2px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--blue);
 }

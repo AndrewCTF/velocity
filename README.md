@@ -5,7 +5,7 @@ sees, so you can rewind to any past moment. No API keys, no account.
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](./LICENSE)
 [![Version](https://img.shields.io/github/v/release/AndrewCTF/velocity?label=release&color=blue)](https://github.com/AndrewCTF/velocity/releases/latest)
-[![Tests](https://img.shields.io/badge/tests-3284%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-3332%20passing-brightgreen.svg)](#tests)
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
@@ -25,12 +25,12 @@ replay on the free tier, MarineTraffic 24 hours, and ADS-B Exchange dropped its
 free API. Velocity pulls the same public feeds and writes every position to
 your own disk, so the history is yours.
 
-|                | History you can replay            | Self-hosted | Account / API key | Who owns the archive |
-| -------------- | --------------------------------- | ----------- | ----------------- | -------------------- |
-| **Velocity**   | As much as your disk holds        | Yes         | None              | You                  |
-| Flightradar24  | 7 days on the free tier           | No          | Account           | Them                 |
-| MarineTraffic  | 24 hours free (down from 72)      | No          | Account           | Them                 |
-| ADS-B Exchange | Free API tier discontinued        | No          | Paid API          | Them                 |
+|                | History you can replay       | Self-hosted | Account / API key | Who owns the archive |
+| -------------- | ---------------------------- | ----------- | ----------------- | -------------------- |
+| **Velocity**   | As much as your disk holds   | Yes         | None              | You                  |
+| Flightradar24  | 7 days on the free tier      | No          | Account           | Them                 |
+| MarineTraffic  | 24 hours free (down from 72) | No          | Account           | Them                 |
+| ADS-B Exchange | Free API tier discontinued   | No          | Paid API          | Them                 |
 
 Free tiers as of July 2026; each cell is checkable on the vendor's pricing page.
 
@@ -188,14 +188,14 @@ Velocity isn't one mega-dashboard; it's a workspace of eighteen apps that all
 share the same selection and time context, so switching never loses the object
 you had selected. The launcher in the top bar groups them:
 
-| Group       | Apps                                                                   | What they're for                                                                                                                                                                                                                              |
-| ----------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Live**    | Map · Sim                                                              | The Cesium globe (always mounted behind everything else) and a browser war-game overlay.                                                                                                                                                      |
-| **AI**      | AI · Models                                                            | The analyst agent, automated watch and alerts, and a registry of local models (installed, catalog, presets, engine).                                                                                                                                                      |
+| Group       | Apps                                                                                     | What they're for                                                                                                                                                                                                                                                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Live**    | Map · Sim                                                                                | The Cesium globe (always mounted behind everything else) and a browser war-game overlay.                                                                                                                                                                                                                                                |
+| **AI**      | AI · Models                                                                              | The analyst agent, automated watch and alerts, and a registry of local models (installed, catalog, presets, engine).                                                                                                                                                                                                                    |
 | **Analyze** | Explorer · Graph · Investigate · Targeting · Video · Country · Markets · Quiver · Vertex | Filter the live object store, grow a link-analysis graph, run digital OSINT (domains/people/wallets), a notional kill-chain board, FMV/ground recon, per-country World-Bank/UN stat dossiers, indices/commodities/FX with a stress index, time-series cards over the recorded archive, and a system graph of sources, feeds and layers. |
-| **Data**    | Foundry · Workflows · Workshop                                         | Bring your own data through governed pipelines; automate the live feeds with a node-graph editor; compose modules from live widgets.                                                                                                                                             |
-| **Product** | Reports                                                                | Case files, watch-officer briefs, dossiers, and case→report export.                                                                                                                                                                           |
-| **3D**      | City 3D                                                                | Gaussian-splat city scenes built from a keyless satellite AOI.                                                                                                                                                                                |
+| **Data**    | Foundry · Workflows · Workshop                                                           | Bring your own data through governed pipelines; automate the live feeds with a node-graph editor; compose modules from live widgets.                                                                                                                                                                                                    |
+| **Product** | Reports                                                                                  | Case files, watch-officer briefs, dossiers, and case→report export.                                                                                                                                                                                                                                                                     |
+| **3D**      | City 3D                                                                                  | Gaussian-splat city scenes built from a keyless satellite AOI.                                                                                                                                                                                                                                                                          |
 
 The rest of this README tours the ones you'll live in. Everything below is a
 real screenshot of the current build (v1.0.1), taken against live feeds on
@@ -686,7 +686,7 @@ osint/
 
 ```bash
 # from the repo ROOT (running from apps/api makes .env auth resolve → a wall of 401s)
-OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 3284 passed + 21 skipped
+OSINT_DISABLE_BACKGROUND=1 apps/api/.venv/bin/pytest apps/api -q   # 3332 passed + 21 skipped
 pnpm -r test                          # vitest (web, shared)
 pnpm -r typecheck
 bash scripts/verify.sh                # typecheck + lint + web unit + api tests in one shot

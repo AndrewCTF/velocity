@@ -1,17 +1,24 @@
-"""Target-board routes: auth gate, validation, CRUD wiring, and the 503 it
-returns when Supabase is unconfigured (hermetic — no real upstream)."""
+"""Target-board routes: validation and CRUD wiring (hermetic — no real
+upstream). On a keyless boot the board uses the local SQLite store via
+``current_user_or_local`` (same idiom as alert rules), so it serves the
+shared ``local`` identity instead of 401/503."""
 
 from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.keys import UserCtx, current_user
+from app.keys import UserCtx, current_user_or_local
 from app.routes import targets as tg
 
 
-def test_board_requires_auth(client: TestClient) -> None:
-    assert client.get("/api/targets/board").status_code == 401
+def test_board_serves_keyless_local(client: TestClient) -> None:
+    # No auth override: the test settings carry no Supabase, so
+    # current_user_or_local yields the shared "local" identity and the local
+    # store answers 200 (not 401).
+    r = client.get("/api/targets/board")
+    assert r.status_code == 200
+    assert r.json() == []
 
 
 def _fake_user() -> UserCtx:
@@ -21,30 +28,19 @@ def _fake_user() -> UserCtx:
 def test_create_rejects_unknown_stage(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
     r = client.post(
         "/api/targets/board",
         json={"entity_id": "aircraft:abc123", "stage": "bombs-away"},
     )
     assert r.status_code == 400
-    client.app.dependency_overrides.pop(current_user, None)
-
-
-def test_board_503_when_supabase_unconfigured(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # The test Settings carry no supabase_url, so _rest() raises 503 — the
-    # store-not-configured contract the frontend relies on to stay local.
-    client.app.dependency_overrides[current_user] = _fake_user
-    r = client.get("/api/targets/board")
-    assert r.status_code == 503
-    client.app.dependency_overrides.pop(current_user, None)
+    client.app.dependency_overrides.pop(current_user_or_local, None)
 
 
 def test_crud_with_fake_user(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client.app.dependency_overrides[current_user] = _fake_user
+    client.app.dependency_overrides[current_user_or_local] = _fake_user
 
     class FakeResp:
         def __init__(self, status: int, payload):  # type: ignore[no-untyped-def]
@@ -85,6 +81,15 @@ def test_crud_with_fake_user(
 
     monkeypatch.setattr(tg, "_client", lambda: FakeClient())
     monkeypatch.setattr(tg, "_rest", lambda s: "http://x/rest/v1/target_board")
+    # Force the Supabase branch (the fake PostgREST above) rather than the
+    # keyless local store.
+    from app.config import Settings
+
+    monkeypatch.setattr(
+        tg,
+        "get_settings",
+        lambda: Settings(supabase_url="http://x", supabase_anon_key="anon"),
+    )
 
     listed = client.get("/api/targets/board")
     assert listed.status_code == 200
@@ -111,4 +116,4 @@ def test_crud_with_fake_user(
 
     assert client.delete("/api/targets/board/t1").status_code == 204
 
-    client.app.dependency_overrides.pop(current_user, None)
+    client.app.dependency_overrides.pop(current_user_or_local, None)

@@ -14,7 +14,7 @@ import { useUiMode, type UiMode } from "./state/uiMode.js";
 import type { RuntimeConfig } from "@osint/shared";
 import type { RailItem } from "./shell/LeftIconRail.js";
 import { AppSurface } from "./shell/AppSurface.js";
-import { useAppView, APP_META } from "./state/appView.js";
+import { useAppView, APP_META, type AppId } from "./state/appView.js";
 import { useGeoScope } from "./state/geoScope.js";
 import { useTheme } from "./state/theme.js";
 import {
@@ -86,6 +86,9 @@ import { FindPanel } from "./shell/panels/FindPanel.js";
 import { SelectionPanel } from "./shell/panels/SelectionPanel.js";
 import { SeriesPanel } from "./shell/panels/SeriesPanel.js";
 import { MapToolPanels } from "./shell/panels/MapToolPanels.js";
+
+/** Globe-chrome apps that Slate gives the whole well (no floating panel card). */
+const SLATE_BLEED = new Set<AppId>(["video", "graph", "investigate"]);
 
 export function App(): JSX.Element {
   const registry = useMemo(() => {
@@ -386,7 +389,13 @@ export function App(): JSX.Element {
             onOpenSettings={() => setSettingsOpen(true)}
           />
         }
-        bleed={APP_META[activeApp].chrome === "full"}
+        // Under Slate the "globe" apps that cover the globe anyway (FMV, the
+        // link graph, Investigate) own the whole well; beside the shell's
+        // floating panel card the globe showed through below it.
+        bleed={
+          APP_META[activeApp].chrome === "full" ||
+          (scheme === "slate" && SLATE_BLEED.has(activeApp))
+        }
         onOpenAlerts={() => usePhoneSheet.getState().toggle("alerts")}
         phoneMore={[
           {

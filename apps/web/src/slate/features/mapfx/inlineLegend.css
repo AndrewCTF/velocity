@@ -1,0 +1,17 @@
+/* D73 InlineLegend under each layer row. */
+.mv-inline-legend {
+  padding: 6px 14px 10px 54px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mv-inline-legend.is-hidden {
+  opacity: 0.45;
+}
+.mv-il-head { display: flex; align-items: baseline; gap: 8px; }
+.mv-il-title { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: var(--t2); text-transform: uppercase; }
+.mv-il-note { font-size: 10px; color: var(--t2); }
+.mv-il-grid { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.mv-il-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--t1); }
+.mv-il-swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.mv-il-label { white-space: nowrap; }

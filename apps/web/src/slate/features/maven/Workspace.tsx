@@ -27,13 +27,12 @@ import { GanttStrip, DetailStrip } from "./Strip.js";
 import { ObjectPanel } from "./ObjectPanel.js";
 import { destination, distNm, mgrs, zClock, zDate } from "./geo.js";
 
-// The watch workspace (reference page rows M36 to M54): rail, the left column
-// of Panels.tsx, a floating header over the map, view controls, status row,
-// the bottom strip and the object side panel. The stage is transparent over
-// the live globe; the rings and pairing lines are drawn on an unzoomed SVG by
-// projecting real positions through the Cesium camera.
+// The watch workspace: a slim toolbar, the left column of Panels.tsx, the map
+// column (header, view controls, status row, bottom strip) and the object side
+// panel, all at native px. The map column is transparent over the live globe;
+// the rings and pairing lines are drawn on an SVG that fills .mvw by projecting
+// real positions through the Cesium camera.
 
-const FRAME_H = 737; // the copy's frame height, in its own units
 const RAD = Math.PI / 180;
 
 type Pt = { x: number; y: number };
@@ -345,19 +344,19 @@ export function Workspace({
   onBoard: () => void;
 }): JSX.Element {
   const host = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 1600, h: 900 });
+  const mapEl = useRef<HTMLDivElement>(null);
+  const [mapW, setMapW] = useState(800);
+  const [mapH, setMapH] = useState(600);
   useEffect(() => {
-    const el = host.current;
+    const el = mapEl.current;
     if (!el) return;
-    const ro = new ResizeObserver(() =>
-      setSize({ w: el.clientWidth, h: el.clientHeight }),
-    );
+    const ro = new ResizeObserver(() => {
+      setMapW(el.clientWidth);
+      setMapH(el.clientHeight);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const k = Math.max(1, Math.min(1920 / 1313, size.h / FRAME_H));
-  const W = size.w / k;
-  const H = size.h / k;
 
   // The reference workspace sits on a dark basemap: switch to Esri's keyless
   // dark canvas while the workspace is open and hand the operator's choice
@@ -548,9 +547,6 @@ export function Workspace({
     return m;
   }, [entries, fixes]);
 
-  const lw = ws.collapsed ? 33 : 275;
-  const objW = ws.objOpen && entry ? 405 : 0;
-  const mapMid = lw + (W - lw - objW) / 2;
   const stripOn =
     ws.strip &&
     (ws.mode === "create" ||
@@ -558,17 +554,20 @@ export function Workspace({
       taskings.some(
         (t) => t.targetId === ws.target && t.status !== "rejected",
       ));
-  const stripW = W - (ws.collapsed ? 43 : 285) - objW;
   const nowLabel = `${zDate(now)} ${zClock(now)}`;
 
-  const rail: Array<[string, string, () => void, boolean?]> = [
+  // [icon, label, title, handler, active]
+  const bar: Array<[string, string, string, () => void, boolean?]> = [
     [
       "menu-open",
+      "Panel",
       "Collapse the panel",
       () => set({ collapsed: !ws.collapsed }),
+      !ws.collapsed,
     ],
     [
       "target",
+      "Targets",
       "Targets",
       () => set({ mode: "targets" }),
       ws.mode === "targets",
@@ -576,23 +575,35 @@ export function Workspace({
     [
       "route",
       "Taskings",
+      "Taskings",
       () => set({ mode: "taskings" }),
       ws.mode === "taskings",
     ],
     [
       "timeline-bar-chart",
+      "Gantt",
       "Show or hide the Gantt strip",
       () => set({ strip: !ws.strip }),
       ws.strip,
     ],
-    ["graph", "Open the link graph", () => setApp("graph")],
-  ];
-  const rail2: Array<[string, string, () => void]> = [
-    ["satellite", "Asset recommender", () => set({ mode: "rec" })],
-    ["search", "Search targets", () => set({ mode: "targets" })],
-    ["database", "Open Explorer", () => setApp("explorer")],
-    ["book", "Open Reports", () => setApp("reports")],
-    ["settings", "Recommender metrics", () => set({ metrics: true })],
+    ["graph", "Graph", "Open the link graph", () => setApp("graph")],
+    [
+      "satellite",
+      "Recommend",
+      "Asset recommender",
+      () => set({ mode: "rec" }),
+      ws.mode === "rec",
+    ],
+    ["search", "Search", "Search targets", () => set({ mode: "targets" })],
+    ["database", "Explorer", "Open Explorer", () => setApp("explorer")],
+    ["book", "Reports", "Open Reports", () => setApp("reports")],
+    [
+      "settings",
+      "Metrics",
+      "Recommender metrics",
+      () => set({ metrics: true }),
+    ],
+    ["globe", "Map", "Back to the map", () => setApp("map")],
   ];
 
   return (
@@ -607,54 +618,33 @@ export function Workspace({
         picked={picked?.asset}
         taskAsset={taskAsset}
       />
-      <div className="st" style={{ width: W, height: H, zoom: k }}>
-        <nav className="mv-rail" aria-label="Workspace rail">
+      <div className="mvw-bar" role="toolbar" aria-label="Workspace tools">
+        <button
+          type="button"
+          className="mvw-tb back"
+          title="Back to the board"
+          onClick={onBoard}
+        >
+          <BpIcon name="arrow-left" />
+          <span>Back to board</span>
+        </button>
+        <span className="mvw-sep" aria-hidden="true" />
+        {bar.map(([ic, label, t, fn, on]) => (
           <button
+            key={ic + label}
             type="button"
-            className="logo"
-            title="Back to the board"
-            onClick={onBoard}
+            className={`mvw-tb${on ? " on" : ""}`}
+            title={t}
+            aria-label={t}
+            aria-pressed={on === undefined ? undefined : on}
+            onClick={fn}
           >
-            <BpIcon name="lightning" />
+            <BpIcon name={ic} />
+            <span>{label}</span>
           </button>
-          {rail.map(([ic, t, fn, on]) => (
-            <button
-              key={ic}
-              type="button"
-              className={on ? "on" : ""}
-              title={t}
-              aria-label={t}
-              onClick={fn}
-            >
-              <BpIcon name={ic} />
-            </button>
-          ))}
-          <span className="sp" />
-          {rail2.map(([ic, t, fn]) => (
-            <button
-              key={ic}
-              type="button"
-              title={t}
-              aria-label={t}
-              onClick={fn}
-            >
-              <BpIcon name={ic} />
-            </button>
-          ))}
-          <button
-            type="button"
-            className="bot"
-            title="Back to the map"
-            aria-label="Back to the map"
-            onClick={() => setApp("map")}
-          >
-            <BpIcon
-              name="globe"
-              style={{ width: 12, height: 12, color: "#f3f5f5" }}
-            />
-          </button>
-        </nav>
-        <span className="gut" />
+        ))}
+      </div>
+      <div className="mvw-body">
         {!ws.collapsed && (
           <LeftPanel
             entries={entries}
@@ -667,265 +657,267 @@ export function Workspace({
             setDraft={setDraft}
           />
         )}
-
-        {entry && (
-          <div className="hdr" style={{ left: mapMid }}>
-            <span className="tg">
-              <BpIcon name="target" />
-            </span>
-            <span className="nm">
-              <b>{titleOf(entry, fix)}</b>
-              <span>
-                {kindOf(entry)}
-                {fix ? "" : ", no live fix"}
+        <div className="mvw-map" ref={mapEl}>
+          {entry && (
+            <div className="hdr">
+              <span className="tg">
+                <BpIcon name="target" />
               </span>
-            </span>
+              <span className="nm">
+                <b>{titleOf(entry, fix)}</b>
+                <span>
+                  {kindOf(entry)}
+                  {fix ? "" : ", no live fix"}
+                </span>
+              </span>
+              <button
+                type="button"
+                className="ib"
+                title="Centre on the target"
+                disabled={!fix}
+                onClick={() => fly(tilt)}
+              >
+                <BpIcon name="locate" />
+              </button>
+              <button
+                type="button"
+                className="ib"
+                title="Fit the target and its asset"
+                disabled={!fix}
+                onClick={() =>
+                  fly(
+                    tilt,
+                    ws.mode === "taskings" && taskAsset?.lat !== undefined
+                      ? { lat: taskAsset.lat, lon: taskAsset.lon! }
+                      : pickedAir,
+                  )
+                }
+              >
+                <BpIcon name="zoom-to-fit" />
+              </button>
+              <button
+                type="button"
+                className="ib"
+                title="Target details"
+                aria-pressed={ws.objOpen}
+                onClick={() => set({ objOpen: !ws.objOpen })}
+              >
+                <BpIcon name="book" />
+              </button>
+              <button
+                type="button"
+                className="ib go"
+                title="Recommend assets"
+                onClick={() => set({ mode: "rec" })}
+              >
+                <BpIcon name="play" />
+              </button>
+              <button
+                type="button"
+                className="ta"
+                onClick={() => set({ mode: "create" })}
+              >
+                Task asset →
+              </button>
+              <button
+                type="button"
+                className="mv-x"
+                title="Clear the selection"
+                onClick={() => {
+                  set({ target: null, objOpen: false });
+                  select(null);
+                }}
+              >
+                <BpIcon name="cross" />
+              </button>
+            </div>
+          )}
+
+          <div className="vc">
             <button
               type="button"
-              className="ib"
+              className={ws.overlays ? "on" : ""}
+              aria-pressed={ws.overlays}
+              title="Rings and lines"
+              onClick={() => set({ overlays: !ws.overlays })}
+            >
+              <BpIcon name="layers" />
+            </button>
+            <button type="button" title="Fit every target" onClick={fitAll}>
+              <BpIcon name="polygon-filter" />
+            </button>
+            <button
+              type="button"
+              className="mv-n"
+              title="North up"
+              style={{ transform: `rotate(${-heading}deg)` }}
+              onClick={() => {
+                if (!viewer || viewer.isDestroyed()) return;
+                viewer.camera.setView({
+                  orientation: {
+                    heading: 0,
+                    pitch: viewer.camera.pitch,
+                    roll: 0,
+                  },
+                });
+              }}
+            >
+              N
+            </button>
+            <button
+              type="button"
+              className={following ? "on" : ""}
+              aria-pressed={following}
+              title={
+                following ? "Stop following the target" : "Follow the target"
+              }
+              disabled={!ws.target}
+              onClick={() => {
+                if (!viewer || viewer.isDestroyed() || !ws.target) return;
+                if (following) stopFollow(viewer);
+                else followEntity(viewer, ws.target);
+              }}
+            >
+              <BpIcon name="lock" />
+            </button>
+            <button
+              type="button"
+              title={tilt > 5 ? "Top-down" : "Tilt 43 degrees"}
+              onClick={() => setTilt(tilt > 5 ? 0 : 43)}
+            >
+              <BpIcon name="rect-width" />
+            </button>
+            <span className="ang">{tilt}°</span>
+            <span
+              className="tilt"
+              role="slider"
+              aria-label="Camera tilt"
+              aria-valuemin={0}
+              aria-valuemax={80}
+              aria-valuenow={tilt}
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowUp") setTilt(Math.min(80, tilt + 5));
+                if (e.key === "ArrowDown") setTilt(Math.max(0, tilt - 5));
+              }}
+              onPointerDown={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setTilt(
+                  Math.round(
+                    Math.max(
+                      0,
+                      Math.min(1, (r.bottom - e.clientY) / r.height),
+                    ) * 80,
+                  ),
+                );
+              }}
+            >
+              <i style={{ height: `${Math.min(100, (tilt / 80) * 100)}%` }} />
+            </span>
+          </div>
+
+          <div className="sr" style={{ bottom: stripOn ? 220 : 0 }}>
+            <button
+              type="button"
               title="Centre on the target"
               disabled={!fix}
               onClick={() => fly(tilt)}
             >
               <BpIcon name="locate" />
             </button>
+            <span className="xy">
+              {cursor
+                ? grid
+                  ? mgrs(cursor.lat, cursor.lon)
+                  : `${cursor.lat.toFixed(3)}, ${cursor.lon.toFixed(3)}`
+                : "N/A"}
+            </span>
             <button
               type="button"
-              className="ib"
-              title="Fit the target and its asset"
-              disabled={!fix}
-              onClick={() =>
-                fly(
-                  tilt,
-                  ws.mode === "taskings" && taskAsset?.lat !== undefined
-                    ? { lat: taskAsset.lat, lon: taskAsset.lon! }
-                    : pickedAir,
-                )
-              }
+              className={grid ? "on" : ""}
+              aria-pressed={grid}
+              title="Cursor in MGRS"
+              onClick={() => setGrid(!grid)}
             >
-              <BpIcon name="zoom-to-fit" />
+              <BpIcon name="settings" />
             </button>
             <button
               type="button"
-              className="ib"
+              className={ws.strip ? "on" : ""}
+              aria-pressed={ws.strip}
+              title="Gantt strip"
+              onClick={() => set({ strip: !ws.strip })}
+            >
+              <BpIcon name="rect-height" />
+            </button>
+            <button
+              type="button"
               title="Target details"
-              aria-pressed={ws.objOpen}
+              disabled={!entry}
               onClick={() => set({ objOpen: !ws.objOpen })}
             >
-              <BpIcon name="book" />
+              <BpIcon name="target" />
             </button>
-            <button
-              type="button"
-              className="ib go"
-              title="Recommend assets"
-              onClick={() => set({ mode: "rec" })}
-            >
-              <BpIcon name="play" />
-            </button>
-            <button
-              type="button"
-              className="ta"
-              onClick={() => set({ mode: "create" })}
-            >
-              Task asset →
-            </button>
-            <button
-              type="button"
-              className="mv-x"
-              title="Clear the selection"
-              onClick={() => {
-                set({ target: null, objOpen: false });
-                select(null);
-              }}
-            >
-              <BpIcon name="cross" />
-            </button>
-          </div>
-        )}
-
-        <div className="vc" style={{ right: 8 + objW }}>
-          <button
-            type="button"
-            className={ws.overlays ? "on" : ""}
-            aria-pressed={ws.overlays}
-            title="Rings and lines"
-            onClick={() => set({ overlays: !ws.overlays })}
-          >
-            <BpIcon name="layers" />
-          </button>
-          <button type="button" title="Fit every target" onClick={fitAll}>
-            <BpIcon name="polygon-filter" />
-          </button>
-          <button
-            type="button"
-            className="mv-n"
-            title="North up"
-            style={{ transform: `rotate(${-heading}deg)` }}
-            onClick={() => {
-              if (!viewer || viewer.isDestroyed()) return;
-              viewer.camera.setView({
-                orientation: {
-                  heading: 0,
-                  pitch: viewer.camera.pitch,
-                  roll: 0,
-                },
-              });
-            }}
-          >
-            N
-          </button>
-          <button
-            type="button"
-            className={following ? "on" : ""}
-            aria-pressed={following}
-            title={
-              following ? "Stop following the target" : "Follow the target"
-            }
-            disabled={!ws.target}
-            onClick={() => {
-              if (!viewer || viewer.isDestroyed() || !ws.target) return;
-              if (following) stopFollow(viewer);
-              else followEntity(viewer, ws.target);
-            }}
-          >
-            <BpIcon name="lock" />
-          </button>
-          <button
-            type="button"
-            title={tilt > 5 ? "Top-down" : "Tilt 43 degrees"}
-            onClick={() => setTilt(tilt > 5 ? 0 : 43)}
-          >
-            <BpIcon name="rect-width" />
-          </button>
-          <span className="ang">{tilt}°</span>
-          <span
-            className="tilt"
-            role="slider"
-            aria-label="Camera tilt"
-            aria-valuemin={0}
-            aria-valuemax={80}
-            aria-valuenow={tilt}
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "ArrowUp") setTilt(Math.min(80, tilt + 5));
-              if (e.key === "ArrowDown") setTilt(Math.max(0, tilt - 5));
-            }}
-            onPointerDown={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setTilt(
-                Math.round(
-                  Math.max(0, Math.min(1, (r.bottom - e.clientY) / r.height)) *
-                    80,
-                ),
-              );
-            }}
-          >
-            <i style={{ height: `${Math.min(100, (tilt / 80) * 100)}%` }} />
-          </span>
-        </div>
-
-        <div className="sr" style={{ right: objW, bottom: stripOn ? 220 : 0 }}>
-          <button
-            type="button"
-            title="Centre on the target"
-            disabled={!fix}
-            onClick={() => fly(tilt)}
-          >
-            <BpIcon name="locate" />
-          </button>
-          <span className="xy">
-            {cursor
-              ? grid
-                ? mgrs(cursor.lat, cursor.lon)
-                : `${cursor.lat.toFixed(3)}, ${cursor.lon.toFixed(3)}`
-              : "N/A"}
-          </span>
-          <button
-            type="button"
-            className={grid ? "on" : ""}
-            aria-pressed={grid}
-            title="Cursor in MGRS"
-            onClick={() => setGrid(!grid)}
-          >
-            <BpIcon name="settings" />
-          </button>
-          <button
-            type="button"
-            className={ws.strip ? "on" : ""}
-            aria-pressed={ws.strip}
-            title="Gantt strip"
-            onClick={() => set({ strip: !ws.strip })}
-          >
-            <BpIcon name="rect-height" />
-          </button>
-          <button
-            type="button"
-            title="Target details"
-            disabled={!entry}
-            onClick={() => set({ objOpen: !ws.objOpen })}
-          >
-            <BpIcon name="target" />
-          </button>
-          <span className="clk">
-            {nowLabel}
-            <span>Z</span>
-          </span>
-          <button
-            type="button"
-            className="pn"
-            title="Collapse the panel"
-            onClick={() => set({ collapsed: !ws.collapsed })}
-          >
-            <BpIcon name="panel" />
-          </button>
-        </div>
-
-        {stripOn &&
-          (ws.mode === "taskings" && active ? (
-            <DetailStrip
-              t={active}
-              w={stripW}
-              pos={{ left: W - objW - stripW, right: objW }}
-              fix={fixes.get(active.targetId)}
-            />
-          ) : (
-            <GanttStrip
-              w={stripW}
-              pos={{ left: W - objW - stripW, right: objW }}
-              draft={ws.mode === "create" ? draft : null}
-              setDraft={setDraft}
-              picked={picked}
-            />
-          ))}
-
-        {ws.objOpen && entry && <ObjectPanel e={entry} fix={fix} />}
-
-        {ws.toast && (
-          <div className="toast" role="status" style={{ left: mapMid }}>
-            <span className="ok">
-              <BpIcon name="tick" />
+            <span className="clk">
+              {nowLabel}
+              <span>Z</span>
             </span>
-            {ws.toast}
             <button
               type="button"
-              aria-label="Dismiss"
-              onClick={() => set({ toast: null })}
+              className="pn"
+              title="Collapse the panel"
+              onClick={() => set({ collapsed: !ws.collapsed })}
             >
-              <BpIcon name="cross" />
+              <BpIcon name="panel" />
             </button>
           </div>
-        )}
 
-        {ws.metrics && (
-          <MetricsDialog
-            left={mapMid}
-            top={H / 2}
-            onOptimize={() => {
-              frozen.current = liveRanked;
-              setOpt((n) => n + 1);
-            }}
-          />
-        )}
+          {stripOn &&
+            (ws.mode === "taskings" && active ? (
+              <DetailStrip
+                t={active}
+                w={mapW}
+                pos={{ left: 0, right: 0 }}
+                fix={fixes.get(active.targetId)}
+              />
+            ) : (
+              <GanttStrip
+                w={mapW}
+                pos={{ left: 0, right: 0 }}
+                draft={ws.mode === "create" ? draft : null}
+                setDraft={setDraft}
+                picked={picked}
+              />
+            ))}
+
+          {ws.toast && (
+            <div className="toast" role="status">
+              <span className="ok">
+                <BpIcon name="tick" />
+              </span>
+              {ws.toast}
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => set({ toast: null })}
+              >
+                <BpIcon name="cross" />
+              </button>
+            </div>
+          )}
+
+          {ws.metrics && (
+            <MetricsDialog
+              left={mapW / 2}
+              top={mapH / 2}
+              onOptimize={() => {
+                frozen.current = liveRanked;
+                setOpt((n) => n + 1);
+              }}
+            />
+          )}
+        </div>
+        {ws.objOpen && entry && <ObjectPanel e={entry} fix={fix} />}
       </div>
     </div>
   );

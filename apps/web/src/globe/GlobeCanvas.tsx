@@ -29,6 +29,7 @@ import {
   getDrawController,
 } from "./draw.js";
 import { useContextMenu } from "./contextMenuStore.js";
+import { useMapTools } from "./mapTools.js";
 import { useMaven } from "./mavenStore.js";
 import { installAnnotations } from "./AnnotationLayer.js";
 import { installControl } from "./ControlLayer.js";
@@ -1080,14 +1081,26 @@ export function GlobeCanvas({
       );
       if (!cart) return;
       const c = Cesium.Cartographic.fromCartesian(cart);
+      const lat = Cesium.Math.toDegrees(c.latitude);
+      const lon = Cesium.Math.toDegrees(c.longitude);
       const rect = viewer.canvas.getBoundingClientRect();
+      // D92: right-click inside a drawn area box opens the area menu,
+      // not the point menu. No box → point menu as before.
+      const drawn = useMapTools.getState().area;
+      const inArea =
+        drawn !== null &&
+        lat <= drawn.north &&
+        lat >= drawn.south &&
+        lon <= drawn.east &&
+        lon >= drawn.west;
       useContextMenu
         .getState()
         .openAt(
           rect.left + click.position.x,
           rect.top + click.position.y,
-          Cesium.Math.toDegrees(c.latitude),
-          Cesium.Math.toDegrees(c.longitude),
+          lat,
+          lon,
+          inArea ? "area" : "point",
         );
     }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
 

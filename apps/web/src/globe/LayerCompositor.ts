@@ -1,6 +1,7 @@
 import * as Cesium from "cesium";
 import type { LayerDescriptor } from "@osint/shared";
 import type { LayerRegistry } from "../registry/LayerRegistry.js";
+import { OSM_MILITARY_LAYER_IDS } from "../registry/defaults.js";
 import { useFeeds } from "../state/stores.js";
 import { useAoi } from "../state/aoi.js";
 import { isMobileDevice } from "../shell/device.js";
@@ -220,6 +221,7 @@ export const FACILITY_LAYER_IDS: ReadonlySet<string> = new Set([
   "infra.telescopes",
   "infra.launch",
   "military.installations",
+  ...OSM_MILITARY_LAYER_IDS,
 ]);
 
 // 2026-07-14 keyless data-layers wave. Point hazards/sensors → the category-tile
@@ -341,6 +343,22 @@ export class LayerCompositor {
   private unsubAoi: (() => void) | null = null;
   private unsubStyles: (() => void) | null = null;
 
+  private applyReorder(): void {
+    // Re-attach already-spawned adapters in list order so the LAST
+    // attached renders on top (D77: list order is draw order). Cesium
+    // renders data sources in attach order.
+    const order = this.registry.list().map((d) => d.id);
+    const spawned = [...this.adapters.keys()].sort(
+      (a, b) => order.indexOf(a) - order.indexOf(b),
+    );
+    for (const id of spawned) {
+      const a = this.adapters.get(id);
+      if (!a) continue;
+      a.detach();
+      void a.attach(this.viewer);
+    }
+  }
+
   start(): void {
     this.unsubscribe = this.registry.subscribe((e) => {
       if (e.type === "register" && this.registry.isEnabled(e.layer.id)) {
@@ -352,6 +370,8 @@ export class LayerCompositor {
         this.kill(e.id);
       } else if (e.type === "opacity") {
         this.setOpacity(e.id, e.opacity);
+      } else if (e.type === "reorder") {
+        this.applyReorder();
       }
     });
     for (const d of this.registry.list()) {

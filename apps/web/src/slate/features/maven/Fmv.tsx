@@ -6,7 +6,7 @@ import { BpIcon } from "../../../shell/BpIcon.js";
 import { toast } from "../../../shell/toast.js";
 import { apiFetch } from "../../../transport/http.js";
 import { useAppView } from "../../../state/appView.js";
-import { useAlerts, useSelection, useTime } from "../../../state/stores.js";
+import { useSelection, useTime } from "../../../state/stores.js";
 import { useTargetBoard } from "../../../state/targetBoard.js";
 import { boardLookup } from "../../pages/TargetBoard.js";
 import { countGaps, type Coverage } from "../../../timeline/CoverageStrip.js";
@@ -124,6 +124,9 @@ function cameraCentre(viewer: Cesium.Viewer | null): [number, number] | null {
 }
 
 // ------------------------------------------------------------------ the plate
+
+/** Left column width; fmv.css `.lp` holds the same number. */
+const LP_W = 360;
 
 function PlateView({
   plate,
@@ -395,15 +398,25 @@ export function MavenFmv({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  // Narrow hosts keep a readable floor and let the layout reflow on W.
-  const kz = Math.max(0.7, Math.min(size.w / 1920, size.h / 1080));
-  const W = size.w / kz;
-  const H = size.h / kz;
+  const well = useRef<HTMLDivElement>(null);
+  const [wellSize, setWellSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = well.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() =>
+      setWellSize({ w: el.clientWidth, h: el.clientHeight }),
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // The host at native pixels (W/H clamp the context menu); the layout is a
+  // CSS grid that reflows and is never scaled.
+  const W = size.w;
+  const H = size.h;
 
   const setApp = useAppView((s) => s.setApp);
   const selected = useSelection((s) => s.selectedEntityId);
   const select = useSelection((s) => s.select);
-  const alerts = useAlerts((s) => s.alerts.length);
   const entries = useTargetBoard((s) => s.entries);
   const addTarget = useTargetBoard((s) => s.add);
   const time = useTime();
@@ -686,7 +699,7 @@ export function MavenFmv({
   };
   const onContext = (lat: number, lon: number, x: number, y: number): void => {
     const r = host.current!.getBoundingClientRect();
-    setMenu({ lat, lon, x: (x - r.left) / kz, y: (y - r.top) / kz });
+    setMenu({ lat, lon, x: x - r.left, y: y - r.top });
   };
 
   const now = time.currentTime;
@@ -696,29 +709,23 @@ export function MavenFmv({
       ? { lat: plate.lat, lon: plate.lon, m: 20 }
       : null;
 
-  // ---- timeline geometry (frame units)
-  const tl0 = (left ? 374 : 0) + 10;
-  const tl1 = W - (legend ? 150 : 10);
+  // ---- timeline geometry: percent of the track, so it reflows with the well
   const winH = 24;
   const t1 = Date.now();
   const t0 = t1 - winH * 3600_000;
-  const tx = (t: number): number => tl0 + ((t - t0) / (t1 - t0)) * (tl1 - tl0);
+  const pct = (t: number): number =>
+    Math.max(0, Math.min(100, ((t - t0) / (t1 - t0)) * 100));
   const buckets = cov?.buckets ?? [];
   const gaps = countGaps(buckets);
 
-  const leftW = left ? 374 : 0;
-  const vx = leftW + 9;
-  const vTop = 64;
-  const vBot = showTl ? H - 138 : H;
+  // ---- video well: one gutter around and between the panes
+  const G = 8;
+  const paneH = Math.max(0, wellSize.h - 2 * G);
+  const paneW2 = Math.max(0, (wellSize.w - 3 * G) / 2);
+  const paneW1 = Math.max(0, wellSize.w - 2 * G);
   const plateOk = plate !== null;
 
   const ICONS: Array<[string, string, () => void, boolean]> = [
-    [
-      "tag",
-      "Tag mode: click the video to mark a missed detection",
-      () => setTagMode(!tagMode),
-      tagMode,
-    ],
     [
       "airplane",
       "Telemetry",
@@ -739,199 +746,165 @@ export function MavenFmv({
 
   return (
     <div className="mfv" ref={host}>
-      <div
-        className="st"
-        style={{
-          width: W,
-          height: H,
-          transform: `scale(${kz})`,
-          transformOrigin: "0 0",
-        }}
-      >
-        {/* M2 / M15: header and toolbar */}
-        <div className="top">
-          <span className="logo">
-            <BpIcon name="lightning" />
-          </span>
+      {/* M15: one toolbar row; the shell's menu row is the header */}
+      <div className="row2">
+        <span className="fttl">
+          {subject ? `FMV · ${subject.name}` : "FMV · map centre"}
+        </span>
+        <span className={`fchip${live ? " live" : ""}`}>
+          {live ? "Live track" : "Archived imagery"}
+        </span>
+        {ICONS.map(([ic, t, fn, on]) => (
           <button
+            key={ic}
             type="button"
-            className="pill"
-            title="Alerts in the live ticker"
-            onClick={() => setApp("map")}
+            className={`ib${on ? " on" : ""}`}
+            title={t}
+            aria-label={t}
+            aria-pressed={on}
+            onClick={fn}
           >
-            <BpIcon name="inbox" />
-            {alerts}
+            <BpIcon name={ic} />
           </button>
-          <span className="fttl">
-            {subject ? `FMV · ${subject.name}` : "FMV · map centre"}
-          </span>
-          <BpIcon name="shield" className="sh" />
+        ))}
+        <button
+          type="button"
+          className={`tag${tagMode ? " on" : ""}`}
+          aria-pressed={tagMode}
+          onClick={() => setTagMode(!tagMode)}
+          title="Tag mode: click the video to mark a missed detection"
+        >
+          <BpIcon name="tag" />
+          Tag
+        </button>
+        <button
+          type="button"
+          className="ib"
+          title="Single pane"
+          onClick={() => setLayout("single")}
+        >
+          <BpIcon name="fullscreen" />
+        </button>
+        <button
+          type="button"
+          className="ib"
+          title="Map and video side by side"
+          onClick={() => setLayout("two")}
+        >
+          <BpIcon name="desktop" />
+        </button>
+        <button
+          type="button"
+          className={`ib${minimap ? " on" : ""}`}
+          title="Minimap"
+          onClick={() => setMinimap(!minimap)}
+        >
+          <BpIcon name="layout-grid" />
+        </button>
+        <span className="ts">
+          {help
+            ? "Archive satellite tiles around a real position; no sensor video"
+            : stamp(now)}
+        </span>
+        <button
+          type="button"
+          className="ib"
+          title="Export this frame as PNG"
+          aria-label="Export this frame as PNG"
+          onClick={exportFrame}
+        >
+          <BpIcon name="export" />
+        </button>
+        <button
+          type="button"
+          className={`ib${help ? " on" : ""}`}
+          title="Help: what is on this surface"
+          aria-label="Help: what is on this surface"
+          aria-pressed={help}
+          onClick={() => setHelp(!help)}
+        >
+          <BpIcon name="help" />
+        </button>
+        <span className="srch">
+          <BpIcon name="search" />
+          <input
+            placeholder="Search"
+            aria-label="Search detections"
+            onChange={(e) => {
+              const q = e.target.value.toLowerCase();
+              const hit = allDets.find(
+                (d) =>
+                  shortId(d.id).includes(q) || d.cls.toLowerCase().includes(q),
+              );
+              setSel(q && hit ? hit.id : null);
+            }}
+          />
+        </span>
+        <span className="rt">
           <button
             type="button"
-            onClick={exportFrame}
-            title="File: export this frame as PNG"
+            className={`cube${oblique ? "" : " off"}`}
+            title={oblique ? "Oblique view on" : "Oblique view off"}
+            aria-pressed={oblique}
+            onClick={() => setOblique(!oblique)}
           >
-            File
-          </button>
-          <button
-            type="button"
-            onClick={() => setLayout(layout === "two" ? "single" : "two")}
-            title="View: two-up or single pane"
-          >
-            View
-          </button>
-          <button
-            type="button"
-            onClick={() => setHelp(!help)}
-            title="Help: what is on this surface"
-          >
-            Help
-          </button>
-          <span className={`fchip${live ? " live" : ""}`}>
-            {live ? "Live track" : "Archived imagery"}
-          </span>
-          <span className="srch">
-            <BpIcon name="search" />
-            <input
-              placeholder="Search"
-              aria-label="Search detections"
-              onChange={(e) => {
-                const q = e.target.value.toLowerCase();
-                const hit = allDets.find(
-                  (d) =>
-                    shortId(d.id).includes(q) ||
-                    d.cls.toLowerCase().includes(q),
-                );
-                setSel(q && hit ? hit.id : null);
-              }}
-            />
-          </span>
-        </div>
-        <div className="row2">
-          {ICONS.map(([ic, t, fn, on]) => (
-            <button
-              key={ic}
-              type="button"
-              className={`ib${on ? " on" : ""}`}
-              title={t}
-              aria-label={t}
-              aria-pressed={on}
-              onClick={fn}
-            >
-              <BpIcon name={ic} />
-            </button>
-          ))}
-          <button
-            type="button"
-            className={`tag${tagMode ? " on" : ""}`}
-            aria-pressed={tagMode}
-            onClick={() => setTagMode(!tagMode)}
-            title="Tag mode"
-          >
-            <BpIcon name="tag" />
-            Tag
+            <BpIcon name="cube" />
           </button>
           <button
             type="button"
             className="ib"
-            title="Single pane"
-            onClick={() => setLayout("single")}
+            title="Full screen"
+            onClick={() => void host.current?.requestFullscreen?.()}
           >
             <BpIcon name="fullscreen" />
           </button>
           <button
             type="button"
-            className="ib"
-            title="Map and video side by side"
-            onClick={() => setLayout("two")}
+            className={`ib${settings ? " on" : ""}`}
+            title="Video settings"
+            onClick={() => setSettings(!settings)}
           >
-            <BpIcon name="desktop" />
+            <BpIcon name="wrench" />
           </button>
           <button
             type="button"
-            className={`ib${minimap ? " on" : ""}`}
-            title="Minimap"
-            onClick={() => setMinimap(!minimap)}
+            className={`bolt${live ? " on" : ""}`}
+            title={
+              subject
+                ? "Live: follow the selected object's fixes"
+                : "Select an object with a live fix on the map to track it"
+            }
+            disabled={!subject && !live}
+            onClick={() => setLive(!live)}
           >
-            <BpIcon name="layout-grid" />
+            <BpIcon name="lightning" />
           </button>
-          <span className="ts">
-            {help
-              ? "Archive satellite tiles around a real position; no sensor video"
-              : stamp(now)}
-          </span>
-          <span className="rt">
-            <button
-              type="button"
-              className={`cube${oblique ? "" : " off"}`}
-              title={oblique ? "Oblique view on" : "Oblique view off"}
-              aria-pressed={oblique}
-              onClick={() => setOblique(!oblique)}
-            >
-              <BpIcon name="cube" />
-            </button>
-            <button
-              type="button"
-              className="ib"
-              title="Full screen"
-              onClick={() => void host.current?.requestFullscreen?.()}
-            >
-              <BpIcon name="fullscreen" />
-            </button>
-            <button
-              type="button"
-              className={`ib${settings ? " on" : ""}`}
-              title="Video settings"
-              onClick={() => setSettings(!settings)}
-            >
-              <BpIcon name="wrench" />
-            </button>
-            <button
-              type="button"
-              className={`bolt${live ? " on" : ""}`}
-              title={
-                subject
-                  ? "Live: follow the selected object's fixes"
-                  : "Select an object with a live fix on the map to track it"
-              }
-              disabled={!subject && !live}
-              onClick={() => setLive(!live)}
-            >
-              <BpIcon name="lightning" />
-            </button>
-            <button
-              type="button"
-              className="aif"
-              onClick={() => setRuns((n) => n + 1)}
-              title="Run detection again on this plate"
-            >
-              {yolo.busy ? "Detecting…" : "AI Feedback"}
-            </button>
-          </span>
-        </div>
+          <button
+            type="button"
+            className="aif"
+            onClick={() => setRuns((n) => n + 1)}
+            title="Run detection again on this plate"
+          >
+            {yolo.busy ? "Detecting…" : "AI Feedback"}
+          </button>
+        </span>
+      </div>
 
-        {/* video panes */}
+      {/* video panes */}
+      <div className="vids" ref={well}>
         {!plateOk && (
-          <p className="nopl" style={{ left: vx, top: vTop + 40 }}>
+          <p className="nopl">
             Select an object on the map, or point the map at a place, then press
             Re-centre.
           </p>
         )}
-        {plateOk && layout === "two" && (
+        {plateOk && paneH > 0 && layout === "two" && (
           <>
-            <div
-              className="pane"
-              style={{
-                left: vx,
-                top: vTop,
-                width: (W - vx) * 0.49,
-                height: vBot - vTop,
-              }}
-            >
+            <div className="pane" style={{ width: paneW2, height: paneH }}>
               <PlateView
                 plate={plate}
-                w={(W - vx) * 0.49}
-                h={vBot - vTop}
+                w={paneW2}
+                h={paneH}
                 k={1.6}
                 dets={dets}
                 showDets={showDets}
@@ -1023,19 +996,11 @@ export function MavenFmv({
                 </div>
               )}
             </div>
-            <div
-              className="pane"
-              style={{
-                left: vx + (W - vx) * 0.51,
-                top: vTop + (vBot - vTop) * 0.25,
-                width: (W - vx) * 0.49 - 10,
-                height: (vBot - vTop) * 0.5,
-              }}
-            >
+            <div className="pane" style={{ width: paneW2, height: paneH }}>
               <PlateView
                 plate={plate}
-                w={(W - vx) * 0.49 - 10}
-                h={(vBot - vTop) * 0.5}
+                w={paneW2}
+                h={paneH}
                 k={2.4}
                 tilt={oblique ? 46 : 0}
                 rot={0}
@@ -1055,20 +1020,12 @@ export function MavenFmv({
             </div>
           </>
         )}
-        {plateOk && layout === "single" && (
-          <div
-            className="pane"
-            style={{
-              left: vx,
-              top: vTop + 8,
-              width: W - vx - 10,
-              height: vBot - vTop - 12,
-            }}
-          >
+        {plateOk && paneH > 0 && layout === "single" && (
+          <div className="pane" style={{ width: paneW1, height: paneH }}>
             <PlateView
               plate={plate}
-              w={W - vx - 10}
-              h={vBot - vTop - 12}
+              w={paneW1}
+              h={paneH}
               k={3.2}
               tilt={oblique ? 42 : 0}
               dets={dets}
@@ -1111,544 +1068,538 @@ export function MavenFmv({
             )}
           </div>
         )}
+      </div>
 
-        {/* M27: chip for the selected detection or object */}
-        {plateOk && (selDet || subject) && (
-          <div className="dchip" style={{ left: vx + 16, top: vBot - 70 }}>
-            <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
-              <path
-                d="M12 1 L23 12 L12 23 L1 12Z"
-                fill="#e6606e"
-                stroke="#0e1112"
-                strokeWidth="1.6"
-              />
-              <rect
-                x="7.5"
-                y="8.5"
-                width="9"
-                height="7"
-                fill="none"
-                stroke="#0e1112"
-                strokeWidth="1.2"
-              />
-            </svg>
-            <span>
-              <b>{selDet ? "Computer Vision Detection" : subject!.name}</b>
-              <small>
-                {selDet
-                  ? `${selDet.cls} · ${selDet.by === "you" ? "marked by you" : `YOLO ${Math.round((selDet.conf ?? 0) * 100)}%`}`
-                  : subject!.kind}
-                <i />
-                UNCLAS
-              </small>
-            </span>
-          </div>
-        )}
+      {/* M27: chip for the selected detection or object */}
+      {plateOk && (selDet || subject) && (
+        <div className="dchip">
+          <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
+            <path
+              d="M12 1 L23 12 L12 23 L1 12Z"
+              fill="#e6606e"
+              stroke="#0e1112"
+              strokeWidth="1.6"
+            />
+            <rect
+              x="7.5"
+              y="8.5"
+              width="9"
+              height="7"
+              fill="none"
+              stroke="#0e1112"
+              strokeWidth="1.2"
+            />
+          </svg>
+          <span>
+            <b>{selDet ? "Computer Vision Detection" : subject!.name}</b>
+            <small>
+              {selDet
+                ? `${selDet.cls} · ${selDet.by === "you" ? "marked by you" : `YOLO ${Math.round((selDet.conf ?? 0) * 100)}%`}`
+                : subject!.kind}
+              <i />
+              UNCLAS
+            </small>
+          </span>
+        </div>
+      )}
 
-        {/* M21: right-click menu */}
-        {menu && (
-          <div
-            className="ctx"
-            style={{
-              left: Math.min(menu.x, W - 330),
-              top: Math.min(menu.y, H - 380),
-            }}
-            role="menu"
-          >
-            <button
-              type="button"
-              role="menuitem"
-              title="Copy the coordinate"
-              onClick={() => {
-                void navigator.clipboard?.writeText(
-                  grid ? mgrs(menu.lat, menu.lon) : llText(menu.lat, menu.lon),
-                );
-                setMenu(null);
-              }}
-            >
-              <BpIcon name="locate" />
-              {grid ? mgrs(menu.lat, menu.lon) : llText(menu.lat, menu.lon)}
-              <span
-                className="end"
-                title="Switch between lat/lon and MGRS"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setGrid(!grid);
-                }}
-              >
-                <BpIcon name="settings" />
-              </span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              title="Terrain height under the point"
-              onClick={() => setMenu(null)}
-            >
-              <BpIcon name="mountain" />
-              {elevation(menu.lat, menu.lon)}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMeasure([[menu.lat, menu.lon]]);
-                setMenu(null);
-                toast.info("Click the second point");
-              }}
-            >
-              <BpIcon name="arrows-horizontal" />
-              Measure distance
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="hl"
-              onClick={() => {
-                const near = allDets.find(
-                  (d) => distNm(d.lat, d.lon, menu.lat, menu.lon) * 1852 < 15,
-                );
-                if (near || selected) nominate(near?.id ?? null);
-                else {
-                  addTarget(
-                    `point:${menu.lat.toFixed(5)},${menu.lon.toFixed(5)}`,
-                    {
-                      label: `Point ${llText(menu.lat, menu.lon)}`,
-                      kind: "point",
-                    },
-                  );
-                  toast.ok("Point nominated to the board");
-                }
-                setMenu(null);
-              }}
-            >
-              <BpIcon name="target" />
-              Nominate to board
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                addMark({
-                  id: `mark:${Date.now()}`,
-                  lat: menu.lat,
-                  lon: menu.lon,
-                  cls: "Vehicle",
-                  conf: null,
-                  by: "you",
-                });
-                setMenu(null);
-              }}
-            >
-              <BpIcon name="add" />
-              Mark missed detection(s)
-            </button>
-            <span className="na">
-              {yolo.note ??
-                (yolo.dets.length
-                  ? `${yolo.dets.length} detections on this plate`
-                  : "No actions available")}
-            </span>
-            <hr />
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setDebug(!debug);
-                setMenu(null);
-              }}
-            >
-              <BpIcon name="bug" />
-              {debug ? "Disable debugging info" : "Enable debugging info"}
-            </button>
-          </div>
-        )}
-        {menu && (
-          <div
-            className="scrim"
-            onClick={() => setMenu(null)}
-            onContextMenu={(e) => {
-              e.preventDefault();
+      {/* M21: right-click menu */}
+      {menu && (
+        <div
+          className="ctx"
+          style={{
+            left: Math.min(menu.x, W - 330),
+            top: Math.min(menu.y, H - 380),
+          }}
+          role="menu"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            title="Copy the coordinate"
+            onClick={() => {
+              void navigator.clipboard?.writeText(
+                grid ? mgrs(menu.lat, menu.lon) : llText(menu.lat, menu.lon),
+              );
               setMenu(null);
             }}
-          />
-        )}
-        {debug && plate && (
-          <pre className="dbg" style={{ left: vx + 10, top: vTop + 10 }}>
-            {`plate z${plate.z} tiles ${plate.tx0}..${plate.tx0 + SPAN - 1} x ${plate.ty0}..${plate.ty0 + SPAN - 1}\nGSD ${gsd(plate).toFixed(2)} m/px\ndetections ${yolo.dets.length} yolo, ${marks.length} marked`}
-          </pre>
-        )}
-
-        {/* left column: M16 telemetry, M19 minimap card, M22 nomination */}
-        {left && (
-          <aside className="lp" style={{ bottom: showTl ? 138 : 0 }}>
-            {(layout === "single" || left === "nominate") && plate && (
-              <div className="mm">
-                <PlateView
-                  plate={plate}
-                  w={374}
-                  h={181}
-                  k={0.42}
-                  dets={dets}
-                  showDets={showDets}
-                  sel={sel}
-                  hover={null}
-                  setHover={() => undefined}
-                  ring={null}
-                  centre={[plate.lat, plate.lon]}
-                  measure={null}
-                  onContext={onContext}
-                  onPick={onPick}
-                />
-                <div className="mmh">
-                  <BpIcon name="chevron-down" />
-                  <span>
-                    <b>{subject?.name ?? "Plate"} AOI</b>
-                    <small>☀ This device | UNCLAS</small>
-                  </span>
-                </div>
-                <div className="mmf">
-                  <button type="button" title="Re-centre" onClick={recentre}>
-                    <BpIcon name="locate" />
-                  </button>
-                  <button
-                    type="button"
-                    title="Single pane"
-                    onClick={() =>
-                      setLayout(layout === "two" ? "single" : "two")
-                    }
-                  >
-                    <BpIcon name="fullscreen" />
-                  </button>
-                  <button
-                    type="button"
-                    title="Open the map"
-                    onClick={() => setApp("map")}
-                  >
-                    <BpIcon name="map" />
-                  </button>
-                  <button
-                    type="button"
-                    title="Debugging info"
-                    onClick={() => setDebug(!debug)}
-                  >
-                    <BpIcon name="info-sign" />
-                  </button>
-                </div>
-              </div>
-            )}
-            {left === "telemetry" ? (
-              <div className="tel">
-                <div className="h">
-                  <BpIcon name="airplane" />
-                  Telemetry
-                  <span className="end">
-                    <button
-                      type="button"
-                      title="Target nomination"
-                      onClick={() => setLeft("nominate")}
-                    >
-                      <BpIcon name="th" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Video settings"
-                      onClick={() => setSettings(!settings)}
-                    >
-                      <BpIcon name="cog" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Close"
-                      onClick={() => setLeft(null)}
-                    >
-                      <BpIcon name="cross" />
-                    </button>
-                  </span>
-                </div>
-                <svg
-                  className="ac"
-                  viewBox="-150 -90 300 140"
-                  aria-hidden="true"
-                  style={{
-                    transform:
-                      subject?.trk != null ? `rotate(0deg)` : undefined,
-                  }}
-                >
-                  <ellipse
-                    cx="0"
-                    cy="0"
-                    rx="107"
-                    ry="31"
-                    fill="none"
-                    stroke="#4a6a9a"
-                    strokeWidth="1.5"
-                  />
-                  <line x1="-107" y1="0" x2="107" y2="0" stroke="#4a6a9a" />
-                  <line x1="0" y1="-48" x2="0" y2="31" stroke="#4a6a9a" />
-                  <path
-                    d="M-92 -22 L-20 -37 L-8 -33 L-60 -26 L-8 -30 L52 -44 L92 -62 L96 -58 L40 -30 L22 -22 L-4 -20 L-52 -14 Z"
-                    fill="#aeb6b9"
-                  />
-                  <path
-                    d="M-60 -26 L-8 -30 L40 -30 L50 -24 L-20 -16 Z"
-                    fill="#d3d9db"
-                  />
-                  <text
-                    x="-122"
-                    y="5"
-                    fontSize="16"
-                    fontWeight="600"
-                    fill="#e6eaea"
-                    textAnchor="middle"
-                  >
-                    W
-                  </text>
-                  <text
-                    x="122"
-                    y="5"
-                    fontSize="16"
-                    fontWeight="600"
-                    fill="#e6eaea"
-                    textAnchor="middle"
-                  >
-                    E
-                  </text>
-                  <text
-                    x="0"
-                    y="40"
-                    fontSize="16"
-                    fontWeight="600"
-                    fill="#e6eaea"
-                    textAnchor="middle"
-                  >
-                    S
-                  </text>
-                </svg>
-                <div className="nm">
-                  Notional model - may not reflect actual aircraft type
-                </div>
-                <div className="fkv">
-                  <span>Oblique view</span>
-                  <button
-                    type="button"
-                    className={`tg${oblique ? " on" : ""}`}
-                    aria-pressed={oblique}
-                    onClick={() => setOblique(!oblique)}
-                    title="Draw the plate oblique (no sensor pose: a fixed 46 degree view)"
-                  >
-                    <i />
-                  </button>
-                  <span>Source</span>
-                  <span>
-                    {subject && subject.kind === "aircraft"
-                      ? "ADS-B"
-                      : "Velocity"}
-                  </span>
-                </div>
-                <div className="sec">PLATFORM</div>
-                <div className="fkv">
-                  <span>Altitude (MSL)</span>
-                  <span>
-                    {subject?.altM != null
-                      ? `${Math.round(subject.altM * 3.28084)} ft`
-                      : "n/a"}
-                  </span>
-                  <span>Heading</span>
-                  <span>
-                    {subject?.trk != null
-                      ? `${Math.round(subject.trk)}°`
-                      : "n/a"}
-                  </span>
-                  <span>Pitch</span>
-                  <span>n/a</span>
-                  <span>Roll</span>
-                  <span>n/a</span>
-                  <span>Location</span>
-                  <span>{plate ? llText(plate.lat, plate.lon) : "n/a"}</span>
-                </div>
-                <div className="sec">SENSOR</div>
-                <div className="fkv">
-                  <span>Type</span>
-                  <span>
-                    {plate
-                      ? `Esri imagery z${plate.z} (${gsd(plate).toFixed(2)} m/px)`
-                      : "n/a"}
-                  </span>
-                  <span>Relative Azimuth</span>
-                  <span>n/a</span>
-                  <span>Relative Roll</span>
-                  <span>n/a</span>
-                  <span>Relative Elevation</span>
-                  <span>{oblique ? "46° (drawn)" : "90° (nadir)"}</span>
-                  <span>SPI Location</span>
-                  <span>{plate ? mgrs(plate.lat, plate.lon) : "n/a"}</span>
-                  <span>SPI Elevation</span>
-                  <span>{plate ? elevation(plate.lat, plate.lon) : "n/a"}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="nom">
-                <div className="h">
-                  <BpIcon name="target" />
-                  Target Nomination
-                  <span className="end">
-                    <button
-                      type="button"
-                      title="Telemetry"
-                      onClick={() => setLeft("telemetry")}
-                    >
-                      <BpIcon name="cross" />
-                    </button>
-                  </span>
-                </div>
-                <div className="r">
-                  Targets
-                  <button
-                    type="button"
-                    className="wb"
-                    onClick={() => setApp("targeting")}
-                  >
-                    Open in Workbench
-                    <BpIcon name="arrow-top-right" />
-                  </button>
-                  <button
-                    type="button"
-                    className="nt"
-                    disabled={!sel && !selected}
-                    title={
-                      sel || selected
-                        ? "Add the selected detection or object to the board"
-                        : "Select a detection or an object first"
-                    }
-                    onClick={() => nominate(sel)}
-                  >
-                    <BpIcon name="target" />
-                    Nominate target
-                  </button>
-                </div>
-                <div className="r">Board</div>
-                <div className="bd">
-                  <i />
-                  My board
-                </div>
-                <div className="lst">
-                  {entries.map((e) => (
-                    <button
-                      type="button"
-                      key={e.id}
-                      className="it"
-                      onClick={() => select(e.entityId)}
-                    >
-                      <BpIcon name="locate" />
-                      <span>
-                        <b>{e.label ?? e.entityId}</b>
-                        <small>
-                          {(e.kind ?? e.entityId.split(":")[0]) as string} •{" "}
-                          {e.classification.replace("UNCLASSIFIED", "UNCLAS")}
-                        </small>
-                      </span>
-                    </button>
-                  ))}
-                  {allDets.map((d) => (
-                    <button
-                      type="button"
-                      key={d.id}
-                      className={`it${d.id === sel ? " on" : ""}`}
-                      onClick={() => setSel(d.id)}
-                      onMouseEnter={() => setHover(d.id)}
-                      onMouseLeave={() => setHover(null)}
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        width="24"
-                        height="24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M12 1 L23 12 L12 23 L1 12Z"
-                          fill="#e0505e"
-                          stroke="#101414"
-                          strokeWidth="1.4"
-                        />
-                        <circle
-                          cx="12"
-                          cy="12"
-                          r="5"
-                          fill="none"
-                          stroke="#101414"
-                          strokeWidth="1.4"
-                        />
-                      </svg>
-                      <span>
-                        <b>Detection {shortId(d.id)}</b>
-                        <small>{d.cls} • UNCLAS</small>
-                      </span>
-                    </button>
-                  ))}
-                  {entries.length === 0 && allDets.length === 0 && (
-                    <p className="none">
-                      {yolo.note ? `${yolo.note}. ` : ""}No targets or
-                      detections yet. Right-click the video to mark one.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-            <button
-              type="button"
-              className="vs"
-              onClick={() => setSettings(!settings)}
+          >
+            <BpIcon name="locate" />
+            {grid ? mgrs(menu.lat, menu.lon) : llText(menu.lat, menu.lon)}
+            <span
+              className="end"
+              title="Switch between lat/lon and MGRS"
+              onClick={(e) => {
+                e.stopPropagation();
+                setGrid(!grid);
+              }}
             >
-              <BpIcon name="cog" />
-              Video settings
-              <BpIcon name={settings ? "caret-down" : "caret-up"} />
-            </button>
-            {settings && (
-              <div className="vset">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={gray}
-                    onChange={(e) => setGray(e.target.checked)}
-                  />{" "}
-                  Grayscale (styled, not thermal)
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={oblique}
-                    onChange={(e) => setOblique(e.target.checked)}
-                  />{" "}
-                  Oblique view
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={showDets}
-                    onChange={(e) => setShowDets(e.target.checked)}
-                  />{" "}
-                  Detection overlay
-                </label>
-              </div>
-            )}
-          </aside>
-        )}
+              <BpIcon name="settings" />
+            </span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            title="Terrain height under the point"
+            onClick={() => setMenu(null)}
+          >
+            <BpIcon name="mountain" />
+            {elevation(menu.lat, menu.lon)}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setMeasure([[menu.lat, menu.lon]]);
+              setMenu(null);
+              toast.info("Click the second point");
+            }}
+          >
+            <BpIcon name="arrows-horizontal" />
+            Measure distance
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="hl"
+            onClick={() => {
+              const near = allDets.find(
+                (d) => distNm(d.lat, d.lon, menu.lat, menu.lon) * 1852 < 15,
+              );
+              if (near || selected) nominate(near?.id ?? null);
+              else {
+                addTarget(
+                  `point:${menu.lat.toFixed(5)},${menu.lon.toFixed(5)}`,
+                  {
+                    label: `Point ${llText(menu.lat, menu.lon)}`,
+                    kind: "point",
+                  },
+                );
+                toast.ok("Point nominated to the board");
+              }
+              setMenu(null);
+            }}
+          >
+            <BpIcon name="target" />
+            Nominate to board
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              addMark({
+                id: `mark:${Date.now()}`,
+                lat: menu.lat,
+                lon: menu.lon,
+                cls: "Vehicle",
+                conf: null,
+                by: "you",
+              });
+              setMenu(null);
+            }}
+          >
+            <BpIcon name="add" />
+            Mark missed detection(s)
+          </button>
+          <span className="na">
+            {yolo.note ??
+              (yolo.dets.length
+                ? `${yolo.dets.length} detections on this plate`
+                : "No actions available")}
+          </span>
+          <hr />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setDebug(!debug);
+              setMenu(null);
+            }}
+          >
+            <BpIcon name="bug" />
+            {debug ? "Disable debugging info" : "Enable debugging info"}
+          </button>
+        </div>
+      )}
+      {menu && (
+        <div
+          className="scrim"
+          onClick={() => setMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenu(null);
+          }}
+        />
+      )}
+      {debug && plate && (
+        <pre className="dbg">
+          {`plate z${plate.z} tiles ${plate.tx0}..${plate.tx0 + SPAN - 1} x ${plate.ty0}..${plate.ty0 + SPAN - 1}\nGSD ${gsd(plate).toFixed(2)} m/px\ndetections ${yolo.dets.length} yolo, ${marks.length} marked`}
+        </pre>
+      )}
 
-        {/* M23 / M26: timeline over the history archive's real coverage */}
-        {showTl && (
-          <div className="ftl" style={{ width: W }}>
-            <span className="box" style={{ left: tl0 }}>
+      {/* left column: M16 telemetry, M19 minimap card, M22 nomination */}
+      {left && (
+        <aside className="lp">
+          {(layout === "single" || left === "nominate") && plate && (
+            <div className="mm">
+              <PlateView
+                plate={plate}
+                w={LP_W}
+                h={181}
+                k={0.42}
+                dets={dets}
+                showDets={showDets}
+                sel={sel}
+                hover={null}
+                setHover={() => undefined}
+                ring={null}
+                centre={[plate.lat, plate.lon]}
+                measure={null}
+                onContext={onContext}
+                onPick={onPick}
+              />
+              <div className="mmh">
+                <BpIcon name="chevron-down" />
+                <span>
+                  <b>{subject?.name ?? "Plate"} AOI</b>
+                  <small>☀ This device | UNCLAS</small>
+                </span>
+              </div>
+              <div className="mmf">
+                <button type="button" title="Re-centre" onClick={recentre}>
+                  <BpIcon name="locate" />
+                </button>
+                <button
+                  type="button"
+                  title="Single pane"
+                  onClick={() => setLayout(layout === "two" ? "single" : "two")}
+                >
+                  <BpIcon name="fullscreen" />
+                </button>
+                <button
+                  type="button"
+                  title="Open the map"
+                  onClick={() => setApp("map")}
+                >
+                  <BpIcon name="map" />
+                </button>
+                <button
+                  type="button"
+                  title="Debugging info"
+                  onClick={() => setDebug(!debug)}
+                >
+                  <BpIcon name="info-sign" />
+                </button>
+              </div>
+            </div>
+          )}
+          {left === "telemetry" ? (
+            <div className="tel">
+              <div className="h">
+                <BpIcon name="airplane" />
+                Telemetry
+                <span className="end">
+                  <button
+                    type="button"
+                    title="Target nomination"
+                    onClick={() => setLeft("nominate")}
+                  >
+                    <BpIcon name="th" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Video settings"
+                    onClick={() => setSettings(!settings)}
+                  >
+                    <BpIcon name="cog" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Close"
+                    onClick={() => setLeft(null)}
+                  >
+                    <BpIcon name="cross" />
+                  </button>
+                </span>
+              </div>
+              <svg
+                className="ac"
+                viewBox="-150 -90 300 140"
+                aria-hidden="true"
+                style={{
+                  transform: subject?.trk != null ? `rotate(0deg)` : undefined,
+                }}
+              >
+                <ellipse
+                  cx="0"
+                  cy="0"
+                  rx="107"
+                  ry="31"
+                  fill="none"
+                  stroke="#4a6a9a"
+                  strokeWidth="1.5"
+                />
+                <line x1="-107" y1="0" x2="107" y2="0" stroke="#4a6a9a" />
+                <line x1="0" y1="-48" x2="0" y2="31" stroke="#4a6a9a" />
+                <path
+                  d="M-92 -22 L-20 -37 L-8 -33 L-60 -26 L-8 -30 L52 -44 L92 -62 L96 -58 L40 -30 L22 -22 L-4 -20 L-52 -14 Z"
+                  fill="#aeb6b9"
+                />
+                <path
+                  d="M-60 -26 L-8 -30 L40 -30 L50 -24 L-20 -16 Z"
+                  fill="#d3d9db"
+                />
+                <text
+                  x="-122"
+                  y="5"
+                  fontSize="16"
+                  fontWeight="600"
+                  fill="#e6eaea"
+                  textAnchor="middle"
+                >
+                  W
+                </text>
+                <text
+                  x="122"
+                  y="5"
+                  fontSize="16"
+                  fontWeight="600"
+                  fill="#e6eaea"
+                  textAnchor="middle"
+                >
+                  E
+                </text>
+                <text
+                  x="0"
+                  y="40"
+                  fontSize="16"
+                  fontWeight="600"
+                  fill="#e6eaea"
+                  textAnchor="middle"
+                >
+                  S
+                </text>
+              </svg>
+              <div className="nm">
+                Notional model - may not reflect actual aircraft type
+              </div>
+              <div className="fkv">
+                <span>Oblique view</span>
+                <button
+                  type="button"
+                  className={`tg${oblique ? " on" : ""}`}
+                  aria-pressed={oblique}
+                  onClick={() => setOblique(!oblique)}
+                  title="Draw the plate oblique (no sensor pose: a fixed 46 degree view)"
+                >
+                  <i />
+                </button>
+                <span>Source</span>
+                <span>
+                  {subject && subject.kind === "aircraft"
+                    ? "ADS-B"
+                    : "Velocity"}
+                </span>
+              </div>
+              <div className="sec">PLATFORM</div>
+              <div className="fkv">
+                <span>Altitude (MSL)</span>
+                <span>
+                  {subject?.altM != null
+                    ? `${Math.round(subject.altM * 3.28084)} ft`
+                    : "n/a"}
+                </span>
+                <span>Heading</span>
+                <span>
+                  {subject?.trk != null ? `${Math.round(subject.trk)}°` : "n/a"}
+                </span>
+                <span>Pitch</span>
+                <span>n/a</span>
+                <span>Roll</span>
+                <span>n/a</span>
+                <span>Location</span>
+                <span>{plate ? llText(plate.lat, plate.lon) : "n/a"}</span>
+              </div>
+              <div className="sec">SENSOR</div>
+              <div className="fkv">
+                <span>Type</span>
+                <span>
+                  {plate
+                    ? `Esri imagery z${plate.z} (${gsd(plate).toFixed(2)} m/px)`
+                    : "n/a"}
+                </span>
+                <span>Relative Azimuth</span>
+                <span>n/a</span>
+                <span>Relative Roll</span>
+                <span>n/a</span>
+                <span>Relative Elevation</span>
+                <span>{oblique ? "46° (drawn)" : "90° (nadir)"}</span>
+                <span>SPI Location</span>
+                <span>{plate ? mgrs(plate.lat, plate.lon) : "n/a"}</span>
+                <span>SPI Elevation</span>
+                <span>{plate ? elevation(plate.lat, plate.lon) : "n/a"}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="nom">
+              <div className="h">
+                <BpIcon name="target" />
+                Target Nomination
+                <span className="end">
+                  <button
+                    type="button"
+                    title="Telemetry"
+                    onClick={() => setLeft("telemetry")}
+                  >
+                    <BpIcon name="cross" />
+                  </button>
+                </span>
+              </div>
+              <div className="r">
+                Targets
+                <button
+                  type="button"
+                  className="wb"
+                  onClick={() => setApp("targeting")}
+                >
+                  Open in Workbench
+                  <BpIcon name="arrow-top-right" />
+                </button>
+                <button
+                  type="button"
+                  className="nt"
+                  disabled={!sel && !selected}
+                  title={
+                    sel || selected
+                      ? "Add the selected detection or object to the board"
+                      : "Select a detection or an object first"
+                  }
+                  onClick={() => nominate(sel)}
+                >
+                  <BpIcon name="target" />
+                  Nominate target
+                </button>
+              </div>
+              <div className="r">Board</div>
+              <div className="bd">
+                <i />
+                My board
+              </div>
+              <div className="lst">
+                {entries.map((e) => (
+                  <button
+                    type="button"
+                    key={e.id}
+                    className="it"
+                    onClick={() => select(e.entityId)}
+                  >
+                    <BpIcon name="locate" />
+                    <span>
+                      <b>{e.label ?? e.entityId}</b>
+                      <small>
+                        {(e.kind ?? e.entityId.split(":")[0]) as string} •{" "}
+                        {e.classification.replace("UNCLASSIFIED", "UNCLAS")}
+                      </small>
+                    </span>
+                  </button>
+                ))}
+                {allDets.map((d) => (
+                  <button
+                    type="button"
+                    key={d.id}
+                    className={`it${d.id === sel ? " on" : ""}`}
+                    onClick={() => setSel(d.id)}
+                    onMouseEnter={() => setHover(d.id)}
+                    onMouseLeave={() => setHover(null)}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M12 1 L23 12 L12 23 L1 12Z"
+                        fill="#e0505e"
+                        stroke="#101414"
+                        strokeWidth="1.4"
+                      />
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="5"
+                        fill="none"
+                        stroke="#101414"
+                        strokeWidth="1.4"
+                      />
+                    </svg>
+                    <span>
+                      <b>Detection {shortId(d.id)}</b>
+                      <small>{d.cls} • UNCLAS</small>
+                    </span>
+                  </button>
+                ))}
+                {entries.length === 0 && allDets.length === 0 && (
+                  <p className="none">
+                    {yolo.note ? `${yolo.note}. ` : ""}No targets or detections
+                    yet. Right-click the video to mark one.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          <button
+            type="button"
+            className="vs"
+            onClick={() => setSettings(!settings)}
+          >
+            <BpIcon name="cog" />
+            Video settings
+            <BpIcon name={settings ? "caret-down" : "caret-up"} />
+          </button>
+          {settings && (
+            <div className="vset">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={gray}
+                  onChange={(e) => setGray(e.target.checked)}
+                />{" "}
+                Grayscale (styled, not thermal)
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={oblique}
+                  onChange={(e) => setOblique(e.target.checked)}
+                />{" "}
+                Oblique view
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showDets}
+                  onChange={(e) => setShowDets(e.target.checked)}
+                />{" "}
+                Detection overlay
+              </label>
+            </div>
+          )}
+        </aside>
+      )}
+
+      {/* M23 / M26: timeline over the history archive's real coverage */}
+      {showTl && (
+        <div className="ftl">
+          <div className="ctl">
+            <span className="box">
               {new Date(now).toISOString().slice(0, 10)}
             </span>
-            <span className="box" style={{ left: tl0 + 89 }}>
+            <span className="box">
               {new Date(now).toISOString().slice(11, 19)}
               <i>Z</i>
             </span>
-            <span
-              className="tr"
-              style={{ left: Math.max(tl0 + 200, (tl0 + tl1) / 2 - 230) }}
-            >
+            <span className="tr">
               <button
                 type="button"
                 title="Back one hour"
@@ -1716,16 +1667,17 @@ export function MavenFmv({
                 {live ? "Live" : "Archived"}
               </button>
             </span>
+          </div>
+          <div className="trk">
             {Array.from({ length: 9 }, (_, i) => t0 + (i * (t1 - t0)) / 8).map(
               (t) => (
-                <span key={t} className="tick" style={{ left: tx(t) - 30 }}>
+                <span key={t} className="tick" style={{ left: `${pct(t)}%` }}>
                   {new Date(t).toISOString().slice(11, 16)}
                 </span>
               ),
             )}
             <span
               className="cov"
-              style={{ left: tl0, width: tl1 - tl0 }}
               title={
                 covErr ??
                 (cov
@@ -1738,70 +1690,65 @@ export function MavenFmv({
                   key={b.t}
                   className={b.count > 0 ? "rec" : "gap"}
                   style={{
-                    left: tx(b.t * 1000) - tl0,
-                    width: (3600_000 / (t1 - t0)) * (tl1 - tl0),
+                    left: `${pct(b.t * 1000)}%`,
+                    width: `${(3600_000 / (t1 - t0)) * 100}%`,
                   }}
                 />
               ))}
             </span>
             <span
-              className="cur"
-              style={{ left: Math.max(tl0, Math.min(tl1 - 49, tx(now))) }}
+              // near the live edge the label hangs left of the playhead, so
+              // the line stays on the true time and the label inside the track
+              className={`cur${pct(now) > 90 ? " end" : ""}`}
+              style={{ left: `${pct(now)}%` }}
             >
               {new Date(now).toISOString().slice(11, 19)}
             </span>
-            {covErr && (
-              <span className="err" style={{ left: tl0 + 8 }}>
-                {covErr}
-              </span>
-            )}
+            {covErr && <span className="err">{covErr}</span>}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* M24: AI detections legend */}
-        {legend && (
-          <div
-            className="leg"
-            style={{ left: W - 145, top: showTl ? H - 133 : H - 140 }}
-          >
-            <div className="h">
-              AI detections
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => setLegend(false)}
-              >
-                <BpIcon name="cross" />
-              </button>
-            </div>
-            {counts.map(([cls, n]) => (
-              <label key={cls}>
-                <input
-                  type="checkbox"
-                  checked={!hidden.has(cls)}
-                  onChange={() =>
-                    setHidden((s) => {
-                      const x = new Set(s);
-                      if (x.has(cls)) x.delete(cls);
-                      else x.add(cls);
-                      return x;
-                    })
-                  }
-                />
-                {cls}
-                <b>{n}</b>
-              </label>
-            ))}
-            {counts.length === 0 && (
-              <p>
-                {yolo.busy
-                  ? "detecting…"
-                  : (yolo.note ?? "No detections on this plate")}
-              </p>
-            )}
+      {/* M24: AI detections legend */}
+      {legend && (
+        <div className="leg">
+          <div className="h">
+            AI detections
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setLegend(false)}
+            >
+              <BpIcon name="cross" />
+            </button>
           </div>
-        )}
-      </div>
+          {counts.map(([cls, n]) => (
+            <label key={cls}>
+              <input
+                type="checkbox"
+                checked={!hidden.has(cls)}
+                onChange={() =>
+                  setHidden((s) => {
+                    const x = new Set(s);
+                    if (x.has(cls)) x.delete(cls);
+                    else x.add(cls);
+                    return x;
+                  })
+                }
+              />
+              {cls}
+              <b>{n}</b>
+            </label>
+          ))}
+          {counts.length === 0 && (
+            <p>
+              {yolo.busy
+                ? "detecting…"
+                : (yolo.note ?? "No detections on this plate")}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

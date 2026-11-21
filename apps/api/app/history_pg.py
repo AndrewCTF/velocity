@@ -77,7 +77,32 @@ SOURCE_MIGRATED = 1
 #: Reserved: an opt-in backfill from a public upstream archive, licence in hand.
 SOURCE_UPSTREAM = 2
 
-_SCHEMA_SQL = Path(__file__).resolve().parents[3] / "infra" / "db" / "20_history_timescale.sql"
+
+def _schema_sql_path() -> Path:
+    """Resolve the timescale schema SQL lazily (never at import).
+
+    In the source tree this file is at apps/api/app/history_pg.py so
+    parents[3] reaches the repo root; in the Docker image only apps/api/app
+    is copied to /srv/app (2 parents) and the schema lives at
+    /srv/infra/db/20_history_timescale.sql (copied by the Dockerfile).
+    HISTORY_PG_SCHEMA_SQL overrides for custom deployments.
+    """
+    import os
+
+    override = os.environ.get("HISTORY_PG_SCHEMA_SQL")
+    if override:
+        return Path(override)
+    parents = Path(__file__).resolve().parents
+    if len(parents) > 3:
+        candidate = parents[3] / "infra" / "db" / "20_history_timescale.sql"
+        if candidate.exists():
+            return candidate
+    fallback = parents[-1] / "infra" / "db" / "20_history_timescale.sql"
+    return fallback
+
+
+# Kept for tests that import the path directly; resolved lazily by callers.
+_SCHEMA_SQL = _schema_sql_path()
 
 # A read that outlives its own poll interval is what pinned the SQLite WAL; on
 # Postgres the equivalent damage is a transaction that never ends. Cap both.
@@ -211,7 +236,7 @@ async def apply_schema(con: asyncpg.Connection) -> None:
     applicable by psql.
     """
     settings = get_settings()
-    sql = _SCHEMA_SQL.read_text(encoding="utf-8")
+    sql = _schema_sql_path().read_text(encoding="utf-8")
     compressed = await _compression_enabled(con)
     for stmt in split_sql(sql):
         lowered = stmt.lower()

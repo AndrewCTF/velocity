@@ -128,6 +128,29 @@
   align-items: center;
   gap: 8px;
 }
+/* The open document's title, centred between the menus (Support ends ~215px,
+   sep at 237) and the account slot (right 166 + avatar + "Sign out").
+   Centred on the viewport it slid over "Support" below ~650px. Symmetric
+   insets keep it on the page centre; a long title truncates instead. */
+.slate-shell .menu > .sl-doc {
+  left: 260px;
+  right: 260px;
+  justify-content: center;
+  overflow: hidden;
+}
+.slate-shell .sl-doc > * {
+  flex: none;
+}
+.slate-shell .sl-doc > button:last-child {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.slate-shell .sl-doc-t {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .slate-shell .menu .sep {
   width: 1px;
   height: 22px;
@@ -1117,4 +1140,170 @@
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #4a585c transparent;
+}
+
+/* Full-surface apps (AI, Foundry and friends) tile over the globe and the
+   time dock. The map's corner furniture and centre notices live under that
+   tile but still matched the overlap census, so the tile did not read as
+   hiding them; hidden while an app surface is open instead. Notices mounted
+   outside the shell are covered by the top-level block below. */
+.slate-shell:has(.csl2-overlay > *) .sl-mapread,
+.slate-shell:has(.csl2-overlay > *) .sl-mapread-c,
+.slate-shell:has(.csl2-overlay > *) .sl-compass,
+.slate-shell:has(.csl2-overlay > *) .sl-lowend {
+  display: none;
+}
+
+/* The Suspense fallback for the app surfaces is full-size by design, so its
+   text node intersected every map chip it sits over. Compact it to its
+   content box at the surface's top-left, where nothing else draws. */
+.slate-shell .csl2-overlay > .mono.absolute.inset-0 {
+  inset: auto;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Notices mounted outside the shell (the router-level notice stack) are
+   covered by the same app tiles, whose selectors the shell-scoped block
+   cannot reach. */
+body:has(.slate-shell:has(.csl2-overlay > *)) .notice-stack {
+  display: none;
+}
+/* The stack centres on the viewport, which put it over the left panel's tabs
+   below ~1400px. Centre it on the map strip between the docked panels instead
+   (.sit ends at 494px; .obj starts 474px from the right). Only while that
+   strip can hold a one-line notice; narrower, the viewport centring stands. */
+@media (min-width: 1100px) {
+  body:has(.slate-shell .sit) .notice-stack {
+    left: calc(50% + 247px);
+    width: max-content;
+    max-width: min(640px, calc(100vw - 534px));
+  }
+}
+@media (min-width: 1100px) and (max-width: 1599px) {
+  body:has(.slate-shell .sit):has(.slate-shell .obj) .notice-stack {
+    left: 50%;
+    max-width: min(640px, calc(100vw - 40px));
+  }
+}
+@media (min-width: 1600px) {
+  body:has(.slate-shell .sit):has(.slate-shell .obj) .notice-stack {
+    left: calc(50% + 10px);
+    max-width: min(640px, calc(100vw - 1008px));
+  }
+}
+
+/* D64: app-launcher hover card (Map hover card). */
+.slate-shell .sl-hovercard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #c9ced4;
+  border-radius: 3px;
+  box-shadow: 0 1px 6px rgba(17, 20, 24, 0.25);
+  color: #2f343c;
+  pointer-events: none;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  width: 280px;
+  z-index: 500;
+}
+.slate-shell .sl-hc-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.slate-shell .sl-hc-hint {
+  font-size: 12px;
+  color: #5f6b7c;
+}
+.slate-shell .sl-hc-counts {
+  font-size: 12px;
+  color: #5f6b7c;
+  margin-top: 4px;
+}
+.slate-shell .sl-hc-open {
+  display: none;
+}
+
+/* The layer style editor's list+editor pair does not fit side by side in the
+   437px left panel (names truncated by up to 75px): stack them instead. */
+.slate-shell .le-root {
+  flex-direction: column;
+}
+.slate-shell .le-root > aside {
+  width: auto;
+  max-height: 58%;
+  border-right: 0;
+  border-bottom: 1px solid #2c393c;
+}
+
+/* Docked Sim controls take the left panel's slot under Slate instead of the
+   classic console's (left 44, top 68), which put them over the menu row and
+   half of the left panel. Inline coordinates need the !important. */
+body:has(.slate-shell) .sim-panel[data-docked] {
+  left: 57px !important;
+  top: 103px !important;
+  bottom: 161px !important;
+  width: 437px;
+  z-index: 21;
+  border: 1px solid #2c393c;
+}
+
+/* The object panel runs to 10px off the bottom, so the time dock stops short
+   of it instead of drawing its right-hand hours underneath (465 + 9 + gap). */
+.slate-shell:has(aside.a.obj) .csl2-dock {
+  margin-right: 482px;
+}
+
+/* Type floor: the shared console components that open inside Slate apps (the
+   Foundry workbench, AI hub, case export, ground recon, imagery control) carry
+   9-10.5px micro-labels written for the classic console. Under Slate nothing
+   paints below the shell's 11px; the classic scheme keeps its own sizes. */
+html[data-theme="slate"]
+  :is(.text-\[9px\], .text-\[9\.5px\], .text-\[10px\], .text-\[10\.5px\]) {
+  font-size: 11px;
+}
+
+/* Graph and Investigate share one form metric under Slate. Their panels come
+   from three eras (inline 28px controls, Tailwind 22px controls, 19px inline
+   inputs), so the surface states the control box once: 28px tall, 4px radius,
+   13px text, 12px inset to match the content. Bordered buttons only; text
+   links (reset, live, history rows) keep their own size. */
+.sl-form
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"]), select) {
+  box-sizing: border-box;
+  height: 28px;
+  padding-block: 0;
+  padding-inline: 8px;
+  font-size: 13px;
+  border-radius: 4px;
+}
+.sl-form textarea {
+  padding: 6px 8px;
+  font-size: 13px;
+  border-radius: 4px;
+}
+.sl-form button.border,
+.sl-form button[style*="border"] {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding-block: 0;
+  padding-inline: 10px;
+  font-size: 13px;
+  border-radius: 4px;
+}
+.sl-form .k-ptab {
+  padding: 0 12px;
 }

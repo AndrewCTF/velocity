@@ -1,0 +1,733 @@
+/* The dark AIP pages (ground station .tt, target board .bd, map .mp) on the
+   shared native-page kit. Compound selectors (.aip-pg.aip-dk) so they win over
+   pages.css whatever the import order. Blueprint dark ramp; ink on every fill
+   is AA: #f6f7f9 / #abb3bf on #1c2127 #252a31 #2f343c, white on #2d72d2. */
+.aip-pg.aip-dk {
+  --ink: #f6f7f9;
+  --mut: #abb3bf;
+  --lnk: #8abbff;
+  --pri: #2d72d2;
+  --line: #404854;
+  --bg: #1c2127;
+  --p1: #252a31;
+  --p2: #2f343c;
+  --ok: #72ca9b;
+  --warn: #fbb360;
+  --bad: #ff9b9b;
+  color-scheme: dark;
+}
+.aip-dk .pg-nav {
+  background: var(--p1);
+}
+.aip-dk .pg-tab:hover:not([aria-current]) {
+  background: var(--p2);
+}
+.aip-dk .pg-tab[aria-current="page"] {
+  border-bottom-color: var(--lnk);
+  color: var(--lnk);
+}
+.aip-dk .pg-bar {
+  background: var(--p1);
+}
+.aip-dk .pg-btn,
+.aip-dk .pg-in {
+  border-color: #5f6b7c;
+  background: var(--p2);
+  color: var(--ink);
+}
+.aip-dk .pg-btn:hover:not(:disabled) {
+  background: #383e47;
+}
+.aip-dk .pg-btn.pri {
+  border-color: var(--pri);
+  background: var(--pri);
+  color: #fff;
+}
+.aip-dk .pg-btn.pri:hover:not(:disabled) {
+  background: #215db0;
+}
+.aip-dk .pg-btn.flat {
+  border-color: transparent;
+  background: transparent;
+  color: var(--lnk);
+}
+.aip-dk .pg-btn.flat:hover:not(:disabled) {
+  background: var(--p2);
+}
+.aip-dk .pg-btn:disabled,
+.aip-dk .pg-btn.pri:disabled {
+  border-color: var(--line);
+  background: var(--p1);
+  color: var(--mut);
+}
+.aip-dk .pg-link {
+  color: var(--lnk);
+}
+.aip-dk .pg-link:disabled {
+  color: var(--ink);
+}
+.aip-dk .pg-card {
+  border-color: var(--line);
+  background: var(--p1);
+}
+.aip-dk .pg-card > h3 {
+  border-bottom-color: var(--line);
+}
+.aip-dk .pg-chip {
+  background: #383e47;
+  color: var(--ink);
+}
+.aip-dk .pg-chip.ok {
+  background: #1d3b2b;
+  color: #9be3bb;
+}
+.aip-dk .pg-chip.bad {
+  background: #4a2226;
+  color: #ffb3b3;
+}
+.aip-dk .pg-err {
+  color: var(--bad);
+}
+.aip-dk .pg-tbl th {
+  border-bottom-color: var(--line);
+  background: var(--p2);
+  color: var(--mut);
+}
+.aip-dk .pg-tbl td {
+  border-bottom-color: var(--line);
+}
+.aip-dk .tt-ok {
+  color: var(--ok);
+}
+.aip-dk .tt-warn {
+  color: var(--warn);
+}
+.aip-dk .tt-bad {
+  color: var(--bad);
+}
+.aip-dk .tt-mut {
+  color: var(--mut);
+}
+.aip-dk .tt-ok .pg-ico,
+.aip-dk .tt-warn .pg-ico,
+.aip-dk .tt-bad .pg-ico {
+  margin-right: 4px;
+}
+
+/* click-away and modal dialogs */
+.aip-dk .dk-away {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+.aip-dk .dk-over {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgba(16, 22, 26, 0.7);
+}
+.aip-dk .dk-dlg {
+  width: min(560px, calc(100% - 32px));
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--p1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.aip-dk .dk-dlg > h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.aip-dk .dk-pad {
+  padding: 16px;
+}
+
+/* ground station */
+.aip-dk .dk-tabs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  background: var(--p2);
+}
+.aip-dk .dk-tabs [role="tab"] {
+  flex: none;
+  height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.aip-dk .dk-tabs [role="tab"]:hover:not(:disabled) {
+  background: #383e47;
+}
+.aip-dk .dk-tabs [role="tab"][aria-selected="true"] {
+  border-bottom-color: var(--lnk);
+  color: var(--lnk);
+}
+.aip-dk .dk-tabs [role="tab"]:disabled {
+  color: var(--mut);
+  cursor: default;
+}
+.aip-dk .tt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.aip-dk .tt-card > h3 {
+  min-height: 40px;
+}
+.aip-dk .tt-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.aip-dk .tt-tile {
+  display: flex;
+  flex: 1 1 140px;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+.aip-dk .tt-tile.g {
+  border-color: #2f5c43;
+  background: #1a2e24;
+  color: var(--ok);
+}
+.aip-dk .tt-tile.r {
+  border-color: #6b3036;
+  background: #3a1d20;
+  color: var(--bad);
+}
+.aip-dk .tt-tile.n {
+  background: var(--p2);
+  color: var(--ink);
+}
+.aip-dk .tt-clock {
+  font-size: 14px;
+}
+.aip-dk .tt-big {
+  font-size: 40px;
+  line-height: 1.1;
+}
+.aip-dk .tt-plate {
+  position: relative;
+  min-height: 200px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #000;
+}
+.aip-dk .tt-plate img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.9;
+}
+.aip-dk .tt-plate b {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+}
+.aip-dk .tt-hw,
+.aip-dk .tt-sw {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .aip-dk .tt-hw,
+  .aip-dk .tt-sw {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.aip-dk .tt-devs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.aip-dk .tt-dev {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 72px;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--p2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+.aip-dk .tt-dev:not(:disabled) {
+  cursor: pointer;
+}
+.aip-dk .tt-dev:not(:disabled):hover {
+  background: #383e47;
+}
+.aip-dk .tt-dev[aria-pressed="true"] {
+  border-color: var(--lnk);
+  background: #22407c;
+}
+.aip-dk .tt-dev.off {
+  color: var(--mut);
+}
+.aip-dk .tt-loc {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+.aip-dk .tt-loc ul,
+.aip-dk .tt-ul,
+.aip-dk .mp-q {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.aip-dk .tt-loc li,
+.aip-dk .tt-ul li,
+.aip-dk .mp-q li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.aip-dk .tt-ul li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.aip-dk .tt-bar {
+  display: inline-block;
+  width: 96px;
+  height: 8px;
+  margin-left: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #11141a;
+  vertical-align: middle;
+}
+.aip-dk .tt-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+.aip-dk .tt-bar .ok {
+  background: var(--ok);
+}
+.aip-dk .tt-bar .warn {
+  background: var(--warn);
+}
+.aip-dk .tt-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.aip-dk .tt-row,
+.aip-dk .tt-conn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--p1);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+.aip-dk .tt-conn {
+  flex-wrap: wrap;
+  border-width: 0 0 1px;
+  border-radius: 0;
+}
+.aip-dk .tt-row {
+  cursor: pointer;
+}
+.aip-dk .tt-row:hover {
+  background: var(--p2);
+}
+.aip-dk .tt-row[aria-pressed="true"] {
+  border-color: var(--lnk);
+  background: #1f2d44;
+}
+.aip-dk .tt-grow {
+  display: flex;
+  flex: 2 1 200px;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.aip-dk .tt-col2 {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  min-width: 0;
+}
+.aip-dk .tt-scroll {
+  overflow-x: auto;
+}
+.aip-dk .tt-sum {
+  grid-template-columns: repeat(auto-fit, minmax(0, max-content));
+}
+.aip-dk .tt-meter {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* target board */
+.aip-dk .bd-body {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.aip-dk .bd-cols {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: repeat(5, minmax(220px, 1fr));
+  min-width: 0;
+  overflow: auto;
+}
+.aip-dk .bd-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  background: var(--p1);
+}
+.aip-dk .bd-col > h3 {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  margin: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 600;
+}
+.aip-dk .bd-dia {
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+}
+.aip-dk .bd-list {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 8px;
+  overflow: auto;
+}
+.aip-dk .bd-grp {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0 4px;
+  color: var(--mut);
+  font-size: 12px;
+}
+.aip-dk .bd-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--p2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.aip-dk .bd-card:hover {
+  background: #383e47;
+}
+.aip-dk .bd-card[aria-pressed="true"] {
+  border-color: var(--lnk);
+  background: #323e4e;
+}
+.aip-dk .bd-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.aip-dk .bd-mark {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid;
+  border-radius: 50%;
+  background: #2a3640;
+  color: var(--ink);
+}
+.aip-dk .bd-mark.dia {
+  border-radius: 3px;
+  background: #4a2a30;
+}
+.aip-dk .bd-panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: clamp(320px, 30%, 520px);
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--p1);
+}
+.aip-dk .bd-phead {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.aip-dk .bd-pop {
+  position: relative;
+}
+.aip-dk .bd-menu {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 280px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--p2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.aip-dk .bd-mi {
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.aip-dk .bd-mi:hover {
+  background: #383e47;
+}
+.aip-dk .bd-tabs {
+  display: flex;
+  flex: none;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+}
+.aip-dk .bd-tabs [role="tab"] {
+  flex: none;
+  height: 40px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.aip-dk .bd-tabs [role="tab"][aria-selected="true"] {
+  border-bottom-color: var(--lnk);
+  color: var(--lnk);
+}
+.aip-dk .bd-tabs [role="tab"]:disabled {
+  color: var(--mut);
+  cursor: default;
+}
+.aip-dk .bd-pbody {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 16px;
+  overflow: auto;
+}
+
+/* map */
+.aip-dk .mp-body {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.aip-dk .mp-left {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 280px;
+  border-right: 1px solid var(--line);
+  background: var(--p1);
+}
+.aip-dk .mp-left h3 {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.aip-dk .mp-left ul {
+  flex: 1 1 0;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  list-style: none;
+}
+.aip-dk .mp-left label,
+.aip-dk .mp-lay {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.aip-dk .mp-left label:hover,
+.aip-dk .mp-lay:hover {
+  background: var(--p2);
+}
+.aip-dk .mp-lay[aria-pressed="true"] {
+  background: #22407c;
+}
+.aip-dk .mp-foot {
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+}
+.aip-dk .mp-stage {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  background: #0c1a26;
+}
+.aip-dk .mp-svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.aip-dk .mp-hit {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+.aip-dk .mp-hit:hover {
+  outline: 2px solid var(--lnk);
+}
+.aip-dk .mp-msg {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  max-width: 80%;
+  padding: 8px 16px;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  background: rgba(16, 22, 26, 0.9);
+  color: #fff;
+}
+.aip-dk .mp-side {
+  flex: none;
+  width: clamp(280px, 24%, 400px);
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: var(--p1);
+}
+.aip-dk .mp-shead {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.aip-dk .mp-thumb {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  aspect-ratio: 165 / 95;
+  border: 1px solid var(--line);
+}
+.aip-dk .mp-viewer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 280px;
+  background: #11141a;
+}
+.aip-dk .mp-vbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--p1);
+}
+.aip-dk .mp-vimg {
+  min-width: 0;
+  min-height: 0;
+  padding: 8px;
+}
+.aip-dk .mp-vimg svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.aip-dk .mp-vinfo {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: var(--p1);
+}
+@media (max-width: 1100px) {
+  .aip-dk .mp-left {
+    width: 200px;
+  }
+  .aip-dk .mp-viewer {
+    grid-template-columns: minmax(0, 1fr) 220px;
+  }
+}

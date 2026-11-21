@@ -21,7 +21,9 @@ _DSN = "postgresql://velocity@127.0.0.1:5433/velocity"
 
 
 @contextlib.contextmanager
-def _env(monkeypatch: pytest.MonkeyPatch, *, backend: str | None, dsn: str | None) -> Iterator[None]:
+def _env(
+    monkeypatch: pytest.MonkeyPatch, *, backend: str | None, dsn: str | None
+) -> Iterator[None]:
     """Set HISTORY_BACKEND / HISTORY_PG_DSN and clear the cached Settings.
 
     Both are DELETED rather than blanked when not wanted, so a developer (or CI)
@@ -161,8 +163,13 @@ def test_timescale_stats_carry_the_chunk_shape(monkeypatch: pytest.MonkeyPatch) 
     with _env(monkeypatch, backend=None, dsn=_DSN):
         st = H.stats()
         for key in (
-            "archive_bytes", "row_count", "chunks", "compressed_chunks",
-            "compressed_bytes", "uncompressed_bytes", "stats_age_s",
+            "archive_bytes",
+            "row_count",
+            "chunks",
+            "compressed_chunks",
+            "compressed_bytes",
+            "uncompressed_bytes",
+            "stats_age_s",
         ):
             assert key in st, key
 
@@ -185,19 +192,15 @@ def test_schema_file_splits_into_idempotent_statements() -> None:
     # Every statement must be safe to re-send; the backend re-applies on boot.
     for stmt in stmts:
         low = stmt.lower()
-        assert (
-            "if not exists" in low
-            or "if_not_exists" in low
-            or low.startswith("alter table")
-        ), stmt
+        assert "if not exists" in low or "if_not_exists" in low or low.startswith("alter table"), (
+            stmt
+        )
 
 
 def test_split_sql_respects_quotes_and_comments() -> None:
     from app import history_pg
 
-    out = history_pg.split_sql(
-        "SELECT 'a;b' AS x; -- a trailing ; comment\nSELECT 2;\n"
-    )
+    out = history_pg.split_sql("SELECT 'a;b' AS x; -- a trailing ; comment\nSELECT 2;\n")
     assert out == ["SELECT 'a;b' AS x", "SELECT 2"]
 
 

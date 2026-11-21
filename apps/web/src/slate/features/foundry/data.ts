@@ -588,7 +588,3 @@ export function splitWrap(pts: [number, number][]): [number, number][][] {
   }
   return segs;
 }
-
-/** Fit-to-surface zoom for a W x H frame (the copy scales each section). */
-export const fitZoom = (cw: number, ch: number, W: number, H: number): number =>
-  Math.min(cw / W, ch / H);

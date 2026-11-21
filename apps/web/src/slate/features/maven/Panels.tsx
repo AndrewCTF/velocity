@@ -473,7 +473,7 @@ function PairCard({
     <div className="pc">
       <span
         className="mv-bar"
-        style={{ width: `${Math.round(222 * r.bar)}px` }}
+        style={{ width: `${Math.round(100 * r.bar)}%` }}
       />
       <div className="ph">
         <BpIcon name="flow-linear" />
@@ -739,7 +739,7 @@ function AssetCard({
     >
       <span
         className="mv-bar"
-        style={{ width: `${Math.round(190 * r.bar)}px` }}
+        style={{ width: `${Math.round(100 * r.bar)}%` }}
       />
       <div className="top">
         <span className="mv-av">
@@ -1047,7 +1047,7 @@ function CreateView(
           <BpIcon name="chevron-down" />
         </div>
         <div className="srch" style={{ padding: "6px 0 0" }}>
-          <label style={{ width: 184 }}>
+          <label>
             <BpIcon name="search" />
             <input
               ref={searchRef}

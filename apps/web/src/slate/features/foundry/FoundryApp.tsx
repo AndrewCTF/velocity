@@ -1,17 +1,15 @@
-// The Foundry app under the Slate scheme: the Foundry apps copy
-// (gotham/docs/foundry-apps.html, D182-D202) wired to the live routes. Each
-// page is one section of the copy at its own logical frame size, fitted to the
-// surface with CSS zoom and letterboxed in the frame's own background. Pages
-// reach each other through the copy's own chrome: every frame's logo tile
-// opens the apps menu, tabs and nav rows go where they say, and "Back home" /
+// The Foundry app under the Slate scheme: the Foundry apps (D182-D202) as native
+// layouts on the live routes. Every page fills the surface and reflows; there is
+// no inner app chrome, the Slate shell already names the app. Pages reach each
+// other through the Apps button (the menu below), tabs and nav rows, and "Home" /
 // "Datasources" open the token-driven Foundry workbench this surface replaced.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type * as Cesium from "cesium";
 import { ErrorBoundary } from "../../../shell/ErrorBoundary.js";
 import { FoundryApp as Workbench } from "../../../foundry/FoundryApp.js";
 import { useFoundryNav } from "../../../foundry/nav.js";
 import { resetCache } from "./data.js";
-import { MENU, SIZE, type Nav, type Page } from "./nav.js";
+import { MENU, type Nav, type Page } from "./nav.js";
 import { D182, D183 } from "./ControlPanel.js";
 import { D184, D185, D186, D187, D190 } from "./Ontology.js";
 import { D188, D189 } from "./Params.js";
@@ -50,10 +48,8 @@ export function SlateFoundry({
   viewer: Cesium.Viewer | null;
   initial?: Page;
 }): JSX.Element {
-  const host = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState<Page | "workbench">(initial);
   const [menu, setMenu] = useState(false);
-  const [k, setK] = useState(1);
   // every open refetches every route: the copy's numbers are never stale here
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -61,18 +57,6 @@ export function SlateFoundry({
     setReady(true);
   }, []);
   const setView = useFoundryNav((s) => s.setView);
-  const p: Page = page === "workbench" ? initial : page;
-  const [W, H, bg] = SIZE[p];
-  useLayoutEffect(() => {
-    const el = host.current;
-    if (!el) return;
-    const fit = (): void =>
-      setK(Math.min(el.clientWidth / W, el.clientHeight / H));
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [page, W, H]);
   useEffect(() => {
     if (!menu) return;
     const onKey = (e: KeyboardEvent): void => {
@@ -109,19 +93,9 @@ export function SlateFoundry({
     );
   const Frame = FRAMES[page];
   return (
-    <div
-      className="sl-fx"
-      ref={host}
-      data-page={page}
-      style={{ background: bg }}
-    >
+    <div className="sl-fx" data-page={page}>
       <ErrorBoundary label="Foundry">
-        <div
-          className="copy"
-          style={{ width: W, height: H, zoom: k, background: bg }}
-        >
-          {ready ? <Frame nav={nav} /> : null}
-        </div>
+        {ready ? <Frame nav={nav} /> : null}
       </ErrorBoundary>
       {menu ? (
         <>
@@ -132,7 +106,7 @@ export function SlateFoundry({
             style={{ position: "absolute", inset: 0, zIndex: 5 }}
             onClick={() => setMenu(false)}
           />
-          <div className="fx-menu" role="menu" style={{ left: 8, top: 8 }}>
+          <div className="fx-menu" role="menu" style={{ left: 8, top: 44 }}>
             {MENU.map(([group, items]) => (
               <div key={group}>
                 <h6>{group}</h6>
