@@ -132,6 +132,33 @@ def _JAIL_BINDS(exe: str) -> list[str]:  # noqa: N802 - reads as a constant at c
     return argv
 
 
+def _base_python_binds() -> list[str]:
+    """Read-only binds for the base install the venv's python symlinks into.
+
+    Under /usr that is already bound. A uv-managed or CI-toolcache Python lives
+    elsewhere, and uv points venvs through a minor-version alias
+    (``cpython-3.12-…`` -> ``cpython-3.12.13-…``), so each install is bound at
+    the path the symlink NAMES — binding only the resolved path leaves the alias
+    missing in the jail and the child dies at exec with no output.
+    """
+    binds: list[str] = []
+    link = sys.executable
+    for _ in range(8):  # bounded: a symlink loop must not hang the spawn
+        if not os.path.islink(link):
+            break
+        link = os.path.normpath(os.path.join(os.path.dirname(link), os.readlink(link)))
+        root = Path(link).parent.parent  # <prefix>/bin/python3.x -> <prefix>
+        if (
+            root == Path("/usr") or root.is_relative_to("/usr")
+            or root.is_relative_to(sys.prefix)  # the venv itself, bound below
+            or _RUNNER.is_relative_to(root)     # never a parent of the repo (.env)
+            or str(root) in binds
+        ):
+            continue
+        binds += ["--ro-bind", str(root), str(root)]
+    return binds
+
+
 def _child_argv() -> list[str]:
     """argv for the runner, jailed when bubblewrap is available.
 
@@ -146,6 +173,7 @@ def _child_argv() -> list[str]:
         return [sys.executable, str(_RUNNER)]
     return [
         *_JAIL_BINDS(exe),
+        *_base_python_binds(),
         "--ro-bind", sys.prefix, sys.prefix,      # the venv: interpreter + site-packages
         "--ro-bind", str(_RUNNER), str(_RUNNER),  # the runner, and nothing else from the repo
         "--",
