@@ -9,9 +9,9 @@ sees, so you can rewind to any past moment. No API keys, no account.
 [![No keys required](https://img.shields.io/badge/API%20keys-optional-success.svg)](#what-it-pulls-in)
 
 <p align="center">
-  <img src="docs/media/hero-replay.gif" alt="Live world view, fly-in to Europe, an aircraft selected with its owned track, then the last hour rewound on the replay scrubber" width="900">
+  <img src="docs/media/hero-timelapse.gif" alt="Eight hours of aircraft over Europe on 22 October 2026, replayed from the app's own archive as amber dots on a dark globe" width="900">
 </p>
-<p align="center"><i>One take, real data: the live world, zoom to Europe, click an aircraft, see its track, rewind the last hour.</i></p>
+<p align="center"><i>Eight hours of European air traffic on 22 October 2026, replayed from the archive one computer recorded. Up to 2,000 aircraft per half hour, drawn larger for the camera.</i></p>
 
 ```bash
 git clone https://github.com/AndrewCTF/velocity.git && cd velocity
@@ -33,6 +33,11 @@ your own disk, so the history is yours.
 | ADS-B Exchange | Free API tier discontinued   | No          | Paid API          | Them                 |
 
 Free tiers as of July 2026; each cell is checkable on the vendor's pricing page.
+
+<p align="center">
+  <img src="docs/media/hero-replay.gif" alt="Live world view, fly-in to Europe, an aircraft selected with its owned track, then the last hour rewound on the replay scrubber" width="900">
+</p>
+<p align="center"><i>One take, real data: the live world, zoom to Europe, click an aircraft, see its track, rewind the last hour.</i></p>
 
 ## What it does
 
