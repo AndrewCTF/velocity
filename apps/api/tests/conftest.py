@@ -251,6 +251,18 @@ def _isolate_action_proposals_db(tmp_path: Path) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _isolate_target_board_db(tmp_path: Path) -> Iterator[None]:
+    """Per-test temp file for the keyless target-board store (mirrors
+    alert_rules) — without this every keyless board test would write
+    ``./data/target_board.db`` into the repo and see other tests' rows."""
+    from app.intel import target_board_local
+
+    target_board_local.override_db_path(str(tmp_path / "target_board.db"))
+    yield
+    target_board_local.override_db_path(None)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_evidence_dir(tmp_path: Path) -> Iterator[None]:
     """Point the evidence-locker blob dir at a per-test temp dir (mirrors the
     ontology/foundry isolation) — route handlers resolve ``evidence_dir`` via

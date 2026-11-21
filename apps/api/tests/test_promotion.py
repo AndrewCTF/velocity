@@ -340,6 +340,88 @@ def test_promote_alert_with_no_usable_id_mints_nothing() -> None:
     asyncio.run(run())
 
 
+# ── W4 backfill: incident store -> graph, bounded + idempotent ─────────────
+
+
+def _record(store, incidents, scope: str = "world") -> None:
+    store.record(scope, incidents)
+
+
+def test_backfill_mints_significant_incidents_from_store() -> None:
+    async def run() -> None:
+        from app.intel.incident_store import IncidentStore
+
+        reg = _reg()
+        store = IncidentStore()
+        # A significant incident with translatable members (aircraft + vessel).
+        _record(store, [_incident(lon=10.0, lat=20.0, score=95.0, threat_level="high")])
+        # Below the significance bar: must not mint.
+        _record(store, [_incident(lon=40.0, lat=40.0, score=10.0, threat_level="low")])
+        # No translatable members: skipped by promote_incident itself.
+        _record(store, [_quake_only_incident(lon=50.0, lat=60.0)])
+
+        minted = await promotion.backfill_incident_store(reg, store)
+
+        assert len(minted) == 1
+        obj = await reg.get(minted[0])
+        assert obj is not None and obj.kind == "incident"
+        rows = await reg.get_assertions(minted[0])
+        assert any(r.source == "backfill:incident_store" for r in rows)
+        links = await reg._links_touching(["aircraft:4ca7b3"])
+        assert any(
+            lk.src == "aircraft:4ca7b3" and lk.dst == minted[0] and lk.rel == "evidence_of"
+            for lk in links
+        )
+
+    asyncio.run(run())
+
+
+def test_backfill_dedupes_across_snapshots_and_is_idempotent() -> None:
+    async def run() -> None:
+        from app.intel.incident_store import IncidentStore
+
+        reg = _reg()
+        store = IncidentStore()
+        inc = _incident(lon=10.0, lat=20.0, score=95.0, threat_level="high")
+        # Same convergence recorded across three snapshots -> one key.
+        for _ in range(3):
+            _record(store, [inc])
+        first = await promotion.backfill_incident_store(reg, store)
+        second = await promotion.backfill_incident_store(reg, store)
+        assert len(first) == 1
+        assert first == second
+
+        con = _db()
+        try:
+            (n,) = con.execute("SELECT COUNT(*) FROM objects WHERE kind='incident'").fetchone()
+        finally:
+            con.close()
+        assert n == 1
+
+    asyncio.run(run())
+
+
+def test_backfill_caps_at_per_cycle_budget_and_logs(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def run() -> None:
+        from app.intel.incident_store import IncidentStore
+
+        reg = _reg()
+        store = IncidentStore()
+        incidents_in = [
+            _incident(lon=float(i), lat=float(i), score=100.0 - i, threat_level="high")
+            for i in range(promotion.MAX_INCIDENT_MINTS_PER_CYCLE + 4)
+        ]
+        _record(store, incidents_in)
+        with caplog.at_level(logging.INFO, logger="app.intel.promotion"):
+            minted = await promotion.backfill_incident_store(reg, store)
+        assert len(minted) == promotion.MAX_INCIDENT_MINTS_PER_CYCLE
+        assert any("dropped" in rec.message for rec in caplog.records)
+
+    asyncio.run(run())
+
+
 # ── mint counters (/api/status/provenance "ontology") ─────────────────────────
 
 

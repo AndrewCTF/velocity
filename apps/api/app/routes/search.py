@@ -53,12 +53,16 @@ def _result(
 def _place_display_name(rec: dict[str, Any]) -> str:
     """The plain place name from a places.search_places record's label.
 
-    Labels are "CODE · Name" (airport) / "Port: Name" (port); strip the prefix
+    Labels are "CODE · Name" (airport) / "Port: Name" (port) / "Military: Name"
+    (OSM military feature); strip the prefix
     so we can test an EXACT name match against the query."""
     label = str(rec.get("label") or "")
     if rec.get("kind") == "airport":
         return label.split(" · ", 1)[-1]
-    return label[len("Port: "):] if label.startswith("Port: ") else label
+    for prefix in ("Port: ", "Military: "):
+        if label.startswith(prefix):
+            return label[len(prefix):]
+    return label
 
 
 def _split_place_hits(
@@ -356,7 +360,9 @@ async def search(
     # 6. Nominatim forward-geocode — only if no results so far. Local airport/
     # port hits already populated `results`, so Nominatim (and any duplicate
     # place hit) is skipped whenever a reference place matched.
-    if not results:
+    # OSM military name hits (tier 4 of search_places) must not suppress the
+    # geocoder: "Wunstorf" the town outranks a barracks named after it.
+    if all(r["id"].startswith("military:osm-") for r in results):
         s = get_settings()
         base = s.nominatim_url or ("" if s.commercial_mode else "https://nominatim.openstreetmap.org")
         if base:
@@ -400,8 +406,8 @@ async def search(
             # cache.get_or_fetch wraps the loader return in whatever the loader
             # returns, so cached is a list[dict] here.
             if isinstance(cached, list):
-                results.extend(cached)
+                results[:0] = cached
             elif isinstance(cached, dict) and "results" in cached:
-                results.extend(cached["results"])
+                results[:0] = cached["results"]
 
     return {"results": results[:limit]}

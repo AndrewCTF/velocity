@@ -714,6 +714,9 @@ def _pick_ollama(models: list[str], prefer: str) -> str | None:
             if m == prefer or m.startswith(prefer):
                 return m
         return prefer  # let Ollama resolve / pull
+    # An embedding model (nomic-embed-text, bge-m3...) 400s on /api/chat, so a box
+    # holding only one reads as "no chat model" rather than a raw Ollama error.
+    models = [m for m in models if "embed" not in m.lower() and "bge-" not in m.lower()]
     if not models:
         return None
     for hint in _OLLAMA_SMALL_HINTS:

@@ -15,6 +15,10 @@ Curated keyless datasets ship in ``app/data/``:
 - ``bases.json`` — ~7.2k rows ``{name, lat, lon, branch}`` (branch is
   'air' | 'naval' | 'army'); no stable upstream id, so entity ids are a
   content hash of name+coords (``_base_id``).
+- ``osm_military.json.gz`` — ~259k OpenStreetMap military features (bunkers,
+  trenches, barracks, checkpoints, ranges, landuse...), columnar, built by
+  ``scripts/build_osm_military.py``; expanded lazily by ``osm_military()`` on
+  the first OSM-military bbox, entity or 3+ char search (~0.4 s, ~200 MB).
 
 The single-field ``/api/search`` resolver was burying airports/ports under
 fuzzy VESSEL-NAME substring hits (q="Singapore" → ships named SINGAPORE;
@@ -41,6 +45,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zlib
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -103,6 +108,111 @@ def military() -> list[dict[str, Any]]:
     return rows if isinstance(rows, list) else []
 
 
+_OSM_TYPES = ("node", "way", "relation")
+
+
+@lru_cache(maxsize=1)
+def osm_military() -> list[dict[str, Any]]:
+    """OpenStreetMap military features (~259k: bunkers, trenches, barracks,
+    checkpoints, ranges, landuse...), expanded from the columnar
+    ``osm_military.json.gz`` built by scripts/build_osm_military.py. Rows share
+    the facility shape; id is ``osm-{n|w|r}{osm id}``. Empty fields are dropped,
+    never filled in. Empty list when the file is absent (honest degrade)."""
+    path = _DATA / "osm_military.json.gz"
+    if not path.exists():
+        return []
+    import gzip
+
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        d = json.load(fh)
+    cats, labels, sts = d["categories"], d["category_labels"], d["statuses"]
+    ctys, regs, plcs, ops = d["countries"], d["regions"], d["places"], d["operators"]
+    rows: list[dict[str, Any]] = []
+    for i in range(len(d["lat"])):
+        otype = _OSM_TYPES[d["ot"][i]]
+        oid = d["oid"][i]
+        r: dict[str, Any] = {
+            "id": f"osm-{otype[0]}{oid}",
+            "category": cats[d["cat"][i]],
+            "subcategory": labels[d["cat"][i]],
+            "name": d["nm"][i],
+            "lat": d["lat"][i],
+            "lon": d["lon"][i],
+            "country": ctys[d["cty"][i]],
+            "region": regs[d["reg"][i]],
+            "place": plcs[d["np"][i]],
+            "operator": ops[d["op"][i]],
+            "status": "" if d["st"][i] == 0 else sts[d["st"][i]],
+            "start_year": d["yr"][i] or None,
+            "osm_url": f"https://www.openstreetmap.org/{otype}/{oid}",
+            "source": "openstreetmap",
+        }
+        rows.append({k: v for k, v in r.items() if v not in ("", None)})
+    _assign_osm_branches(rows)
+    return rows
+
+
+# Branch keywords, checked naval → air → army on the lowercased name+operator.
+# Only explicit service words: a name that says none of them gets NO branch.
+_BRANCH_WORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("naval", ("naval", "navy", "marinebasis", "marinestützpunkt", "base navale",
+               "base naval", "marina militare", "военно-морск", "海军", "海軍", "해군")),
+    ("air", ("air base", "airbase", "air force", " afb", "air station", "fliegerhorst",
+             "luftwaffe", "base aérienne", "base aerea", "base aérea", "aeronautica militare",
+             "lotnisko wojskowe", "авиабаз", "空军", "空軍", "航空基地", "공군")),
+    ("army", ("army", "kaserne", "caserne", "barracks", "garrison", "cuartel", "quartel",
+              "kasarna", "koszary", "陆军", "陸軍", "육군")),
+)
+_BRANCH_NEAR_DEG = 0.03  # ~3 km: same installation as a Wikidata base point
+
+
+def _assign_osm_branches(rows: list[dict[str, Any]]) -> None:
+    """Give OSM bases/airfields a service branch (air|naval|army) from data,
+    never a guess: airfield is air by its OSM tag; a base takes the branch of a
+    Wikidata base within ~3 km, else an explicit service word in its name or
+    operator. ``branch_basis`` says which. Anything else stays unbranched."""
+    near: dict[tuple[int, int], list[dict[str, Any]]] = {}
+    for b in bases():
+        near.setdefault((int(b["lat"] // 0.1), int(b["lon"] // 0.1)), []).append(b)
+    for r in rows:
+        cat = r["category"]
+        if cat == "airfield":
+            r["branch"], r["branch_basis"] = "air", "OSM military=airfield"
+            continue
+        if cat != "base":
+            continue
+        cy, cx = int(r["lat"] // 0.1), int(r["lon"] // 0.1)
+        best, best_d = None, _BRANCH_NEAR_DEG
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                for b in near.get((cy + dy, cx + dx), ()):
+                    d = max(abs(b["lat"] - r["lat"]), abs(b["lon"] - r["lon"]))
+                    if d <= best_d:
+                        best, best_d = b, d
+        if best is not None and best.get("branch") in ("air", "naval", "army"):
+            r["branch"], r["branch_basis"] = best["branch"], f"Wikidata base nearby: {best['name']}"
+            continue
+        text = f"{r.get('name', '')} {r.get('operator', '')}".lower()
+        for branch, words in _BRANCH_WORDS:
+            if any(w in text for w in words):
+                r["branch"], r["branch_basis"] = branch, "service named in OSM name/operator"
+                break
+
+
+# OSM marks a site out of use with a lifecycle tag (disused:/abandoned:/ruins);
+# a site with none is presumed in use. That is the whole basis of the filter.
+_INACTIVE_STATUSES = frozenset({"disused", "abandoned", "ruins"})
+
+
+def _status_class(r: dict[str, Any]) -> str:
+    return "inactive" if r.get("status") in _INACTIVE_STATUSES else "active"
+
+
+@lru_cache(maxsize=1)
+def _osm_military_index() -> dict[str, dict[str, Any]]:
+    return {r["id"]: r for r in osm_military()}
+
+
 @lru_cache(maxsize=1)
 def _facility_index() -> dict[str, dict[str, Any]]:
     """facility id -> row, over infrastructure() + military()."""
@@ -117,7 +227,10 @@ def _facility_index() -> dict[str, dict[str, Any]]:
 def facility_by_id(fid: str) -> dict[str, Any] | None:
     """Resolve an infrastructure/military row by its dataset id (the part
     after the ``facility:``/``military:`` entity-id prefix)."""
-    return _facility_index().get(str(fid or "").strip())
+    fid = str(fid or "").strip()
+    if fid.startswith("osm-"):  # separate index: a MIRTA click never loads 259k OSM rows
+        return _osm_military_index().get(fid)
+    return _facility_index().get(fid)
 
 
 @lru_cache(maxsize=1)
@@ -350,7 +463,38 @@ def search_places(q: str, limit: int = 8) -> list[dict[str, Any]]:
         if qlow in str(p.get("name") or "").lower():
             _push(_port_record(p, i))
 
+    # Tier 4 — named OSM military features (startswith, then contains), after
+    # every airport/port so a base never buries the airport it shares a name with.
+    if len(out) < limit and len(qlow) >= 3:
+        named = _osm_military_named()
+        for pass_contains in (False, True):
+            for low, r in named:
+                if len(out) >= limit:
+                    break
+                if low.startswith(qlow) if not pass_contains else qlow in low:
+                    _push(_osm_military_record(r))
+
     return out[:limit]
+
+
+@lru_cache(maxsize=1)
+def _osm_military_named() -> list[tuple[str, dict[str, Any]]]:
+    return [(r["name"].lower(), r) for r in osm_military() if r.get("name")]
+
+
+def _osm_military_record(r: dict[str, Any]) -> dict[str, Any]:
+    where = r.get("place") or r.get("region") or ""
+    bits = [r.get("subcategory") or "", where, r.get("country") or ""]
+    return {
+        "kind": "place",
+        "id": f"military:{r['id']}",
+        "label": f"Military: {r['name']}",
+        "lat": float(r["lat"]),
+        "lon": float(r["lon"]),
+        "iata": "",
+        "icao": "",
+        "detail": " · ".join(b for b in bits if b),
+    }
 
 
 # ── bbox GeoJSON ─────────────────────────────────────────────────────────────
@@ -493,7 +637,9 @@ def _cells_for_box(
 
 
 @lru_cache(maxsize=64)
-def _grid(key: str, category: str | None = None) -> dict[tuple[int, int], list[dict[str, Any]]]:
+def _grid(
+    key: str, category: str | None = None, status: str | None = None
+) -> dict[tuple[int, int], list[dict[str, Any]]]:
     """Bucket one dataset (optionally one category of it) by 10-degree cell.
 
     Cached per (key, category); the datasets themselves are already
@@ -509,6 +655,8 @@ def _grid(key: str, category: str | None = None) -> dict[tuple[int, int], list[d
         rows = infrastructure()
     elif key == "military":
         rows = military()
+    elif key == "osm_military":
+        rows = osm_military()
     else:  # pragma: no cover — callers pass a literal
         rows = []
     grid: dict[tuple[int, int], list[dict[str, Any]]] = {}
@@ -518,6 +666,8 @@ def _grid(key: str, category: str | None = None) -> dict[tuple[int, int], list[d
                 # `nuclear` is a filter over power rows, not a stored category.
                 if not (category == "nuclear" and r.get("nuclear")):
                     continue
+        if status is not None and _status_class(r) != status:
+            continue
         try:
             lat, lon = float(r["lat"]), float(r["lon"])
         except (KeyError, TypeError, ValueError):
@@ -535,6 +685,7 @@ def _rows_in_box(
     maxlon: float,
     maxlat: float,
     category: str | None = None,
+    status: str | None = None,
 ) -> list[dict[str, Any]]:
     """Rows whose lat/lon fall inside the bbox, visiting only the cells it touches."""
 
@@ -545,7 +696,7 @@ def _rows_in_box(
             return minlon <= lon <= maxlon
         return lon >= minlon or lon <= maxlon  # antimeridian wrap
 
-    grid = _grid(key, category)
+    grid = _grid(key, category, status)
     out: list[dict[str, Any]] = []
     for c in _cells_for_box(minlon, minlat, maxlon, maxlat):
         bucket = grid.get(c)
@@ -558,13 +709,15 @@ def _rows_in_box(
 
 
 def facility_bbox_features(
-    dataset: Literal["infrastructure", "military"],
+    dataset: Literal["infrastructure", "military", "osm_military"],
     minlon: float,
     minlat: float,
     maxlon: float,
     maxlat: float,
     limit: int,
     category: str | None = None,
+    status: Literal["active", "inactive"] | None = None,
+    thin: bool = False,
 ) -> dict[str, Any]:
     """GeoJSON FeatureCollection of facility/military rows inside a bbox,
     optionally filtered to one ``category``. Feature.id = ``facility:{id}`` /
@@ -574,7 +727,16 @@ def facility_bbox_features(
     # The grid is keyed by (dataset, category), so the category filter is applied
     # ONCE at index build instead of on every row of every request — which is the
     # whole cost when nine category layers share this endpoint.
-    rows = _rows_in_box(dataset, minlon, minlat, maxlon, maxlat, category or None)
+    rows = _rows_in_box(dataset, minlon, minlat, maxlon, maxlat, category or None, status)
+    total = len(rows)
+    if thin:
+        rows = _thin(rows, minlon, minlat, maxlon, maxlat)
+    if len(rows) > limit:
+        # Over the cap, keep a hash-stable subset instead of the first cells in
+        # grid order (which emptied the south/east of a dense view). A row kept
+        # in a wide view is kept in every narrower view containing it, so
+        # zooming in only adds markers, never swaps them.
+        rows = sorted(rows, key=lambda r: zlib.crc32(str(r.get("id")).encode()))[:limit]
     prefix = "facility" if dataset == "infrastructure" else "military"
     features: list[dict[str, Any]] = []
     for r in rows:
@@ -588,7 +750,20 @@ def facility_bbox_features(
             "category": r.get("category") or "",
             "subcategory": r.get("subcategory") or "",
         }
-        extras = ("fuel", "capacity_mw", "operator", "component", "operational_status", "status")
+        extras = (
+            "fuel",
+            "capacity_mw",
+            "operator",
+            "component",
+            "operational_status",
+            "status",
+            "country",
+            "region",
+            "place",
+            "start_year",
+            "branch",
+            "osm_url",
+        )
         for extra in extras:
             if r.get(extra) not in (None, ""):
                 props[extra] = r[extra]
@@ -600,9 +775,35 @@ def facility_bbox_features(
                 "properties": props,
             }
         )
-        if len(features) >= limit:
-            break
-    return {"type": "FeatureCollection", "features": features}
+    fc: dict[str, Any] = {"type": "FeatureCollection", "features": features}
+    if len(features) < total:
+        fc["truncated"] = True
+        fc["total"] = total
+    return fc
+
+
+_THIN_CELLS = 32  # ≈ one marker per 60 px across a 1920 px view, per layer
+
+
+def _thin(
+    rows: list[dict[str, Any]], minlon: float, minlat: float, maxlon: float, maxlat: float
+) -> list[dict[str, Any]]:
+    """Declutter: keep one row per cell of an ABSOLUTE power-of-two grid sized
+    to ~1/48 of the view, so markers do not pile up and the kept set does not
+    reshuffle as the view pans. Named rows win a cell, then a stable hash.
+    Zooming in shrinks the cell until every row is shown."""
+    import math
+
+    span = max(maxlat - minlat, (maxlon - minlon) % 360 or 360.0, 1e-9)
+    cell = 2.0 ** math.floor(math.log2(span / _THIN_CELLS))
+    best: dict[tuple[int, int], tuple[tuple[int, int], dict[str, Any]]] = {}
+    for r in rows:
+        key = (math.floor(float(r["lat"]) / cell), math.floor(float(r["lon"]) / cell))
+        rank = (0 if r.get("name") else 1, zlib.crc32(str(r.get("id")).encode()))
+        cur = best.get(key)
+        if cur is None or rank < cur[0]:
+            best[key] = (rank, r)
+    return [r for _, r in best.values()]
 
 
 if __name__ == "__main__":

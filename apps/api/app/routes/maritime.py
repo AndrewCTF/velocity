@@ -36,6 +36,113 @@ from app.upstream import cache, get_client
 router = APIRouter(tags=["maritime"])
 log = logging.getLogger(__name__)
 
+# ── /api/maritime/military: AIS self-report + independent registry tiers ────
+# AIS type 35 is self-declared (any hull can broadcast it); the Wikidata
+# naval registry (intel/naval_registry) is the independent half. Hull prefixes
+# count only with the matching flag on the MMSI — a private boat named
+# "HMS BUBBLES" under the Saint Kitts flag (341) is not a warship.
+def _mid_range(*mids: int) -> frozenset[int]:
+    return frozenset(m * 10 + d for m in mids for d in range(10))
+
+
+_HULL_MID: dict[str, frozenset[int]] = {
+    "HMS": _mid_range(265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277),
+    "KNM": _mid_range(257, 258, 259),
+    "USNS": _mid_range(366, 367, 368, 369, 370, 371, 372, 373, 374, 375, 376, 377),
+    "USCGC": _mid_range(366, 367, 368, 369, 370, 371, 372, 373, 374, 375, 376, 377),
+    "FS": _mid_range(265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276),
+}
+_NAME_PAT = re.compile(
+    r"(?<!\S)(?:US\s+COAST\s+GUARD|U\.?S\.?\s*NAVY|ROYAL\s+NAVY|"
+    r"(?:NATO|US|UK|DE|FR|NL|IT|ES|DK|NO|SE)\s+NAVY|"
+    r"WARSHIP|NAVAL\s+(?:VESSEL|SHIP)|MILITARY\s+V(HE|ESSEL|SHIP))(?!\S)",
+    re.IGNORECASE,
+)
+
+
+def military_reason(props: dict[str, Any]) -> str | None:
+    """Why these AIS props look military, or None. Tier label for /military."""
+    try:
+        ship_type = int(props.get("shipType") or 0)
+    except (TypeError, ValueError):
+        ship_type = 0
+    if ship_type == 35:
+        return "ais_type_35"
+    name = str(props.get("name") or "").strip()
+    if name:
+        upper = name.upper()
+        first = upper.split(None, 1)[0] if upper.split() else ""
+        if first in _HULL_MID:
+            try:
+                mid = int(props.get("mmsi") or 0) // 100000
+            except (TypeError, ValueError):
+                mid = 0
+            if mid in _HULL_MID[first]:
+                return f"hull_prefix:{first}"
+            return None  # prefix on the wrong flag: a private boat's name
+        if _NAME_PAT.search(name):
+            return "name"
+    return None
+
+
+@router.get("/api/maritime/military")
+async def maritime_military(
+    min_confidence: str = Query("name", pattern="^(name|declared|registry)$"),
+) -> dict[str, Any]:
+    from app.intel.naval_registry import naval_mmsis
+
+    rank = {"name": 0, "declared": 1, "registry": 2}
+    want = rank[min_confidence]
+    feats: list[dict[str, Any]] = []
+    try:
+        registry = await naval_mmsis()
+    except Exception:
+        registry = {}
+    declared = confirmed = 0
+    for f in (vessel_snapshot().get("features") or []):
+        props = f.get("properties") or {}
+        try:
+            mmsi = int(props.get("mmsi") or 0)
+        except (TypeError, ValueError):
+            mmsi = 0
+        in_registry = mmsi in registry
+        reason = military_reason(props)
+        if in_registry:
+            confidence = "registry"
+            why = f"registry:{registry[mmsi]}"
+        elif reason == "ais_type_35":
+            confidence, why = "declared", reason
+        elif reason:
+            confidence, why = "name", reason
+        else:
+            continue
+        if rank[confidence] < want:
+            continue
+        if confidence != "name":
+            if confidence == "declared":
+                declared += 1
+            confirmed += 1
+        feats.append({
+            **f,
+            "properties": {**props, "confidence": confidence, "why": why},
+        })
+    body: dict[str, Any] = {
+        "type": "FeatureCollection",
+        "features": feats,
+        "summary": (
+            f"{len(feats)} military contacts: {declared} AIS-declared, "
+            f"{confirmed} registry-confirmed (of {len(registry)} registry MMSIs). "
+            "AIS-dark military vessels are not visible in live AIS."
+        ),
+    }
+    if not registry:
+        body["note"] = (
+            "Naval registry unavailable (Wikidata pull failed); "
+            "showing AIS-declared tiers only."
+        )
+    return body
+
+
 LOCATIONS_URL = "https://meri.digitraffic.fi/api/ais/v1/locations"
 METADATA_URL = "https://meri.digitraffic.fi/api/ais/v1/vessels"
 

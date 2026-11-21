@@ -580,14 +580,23 @@ class _Fetched:
         self.body = body
 
 
-async def _fetch_guarded(url: str, settings: Settings, *, max_hops: int = 5) -> _Fetched:
+async def _fetch_guarded(
+    url: str,
+    settings: Settings,
+    *,
+    cap: int | None = None,
+    extra_headers: dict[str, str] | None = None,
+    max_hops: int = 5,
+) -> _Fetched:
     """Fetch with SSRF validation on every hop and a streaming byte cap."""
     client = get_client()
-    cap = settings.evidence_max_blob_bytes
+    cap = settings.evidence_max_blob_bytes if cap is None else cap
     current = url
     for _ in range(max_hops + 1):
         ip = await _validate_public_url(current)
         target, headers, extensions = _pinned_request(current, ip)
+        if extra_headers:
+            headers = {**headers, **extra_headers}
         async with client.stream(
             "GET", target, headers=headers, extensions=extensions, follow_redirects=False
         ) as resp:

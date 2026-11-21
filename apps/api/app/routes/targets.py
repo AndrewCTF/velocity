@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from app.config import Settings, get_settings
 from app.intel import classification as clf
 from app.intel.actions import audit_row
-from app.keys import UserCtx, _client, _headers, current_user
+from app.keys import UserCtx, _client, _headers, current_user_or_local
 
 router = APIRouter(tags=["targets"])
 
@@ -158,6 +158,10 @@ def _to_target(row: dict) -> Target:
     )
 
 
+def _use_local(s: Settings) -> bool:
+    return not s.supabase_url
+
+
 def _rest(s: Settings) -> str:
     if not s.supabase_url:
         raise HTTPException(status_code=503, detail="Supabase is not configured")
@@ -238,6 +242,10 @@ async def _fetch_target(
 ) -> dict | None:  # type: ignore[no-untyped-def]
     """Read one board row (own rows only, RLS-scoped) so the PATCH can gate the
     transition against the CURRENT stage. Returns the row dict or None (404)."""
+    if _use_local(s):
+        from app.intel import target_board_local  # noqa: PLC0415
+
+        return await target_board_local.get_target(ctx.user_id, target_id, settings=s)
     r = await c.get(
         _rest(s),
         params={
@@ -272,6 +280,13 @@ async def _append_transition_audit(
         target_id,
         {"from": frm, "to": to, "forced": forced},
     )
+    if _use_local(s):
+        from app.intel import action_log_local  # noqa: PLC0415
+
+        try:
+            return await action_log_local.append_row(row)
+        except Exception:
+            return None
     try:
         url = s.supabase_url.rstrip("/") + "/rest/v1/action_log"
         r = await c.post(
@@ -287,8 +302,13 @@ async def _append_transition_audit(
 
 
 @router.get("/api/targets/board", response_model=list[Target])
-async def list_targets(ctx: UserCtx = Depends(current_user)) -> list[Target]:
+async def list_targets(ctx: UserCtx = Depends(current_user_or_local)) -> list[Target]:
     s = get_settings()
+    if _use_local(s):
+        from app.intel import target_board_local  # noqa: PLC0415
+
+        rows = await target_board_local.list_targets(ctx.user_id, settings=s)
+        return [_to_target(row) for row in rows]
     async with _client() as c:
         r = await c.get(
             _rest(s),
@@ -306,10 +326,17 @@ async def list_targets(ctx: UserCtx = Depends(current_user)) -> list[Target]:
 
 @router.post("/api/targets/board", response_model=Target, status_code=201)
 async def create_target(
-    body: TargetIn, ctx: UserCtx = Depends(current_user)
+    body: TargetIn, ctx: UserCtx = Depends(current_user_or_local)
 ) -> Target:
     _validate_stage(body.stage)
     s = get_settings()
+    if _use_local(s):
+        from app.intel import target_board_local  # noqa: PLC0415
+
+        payload = body.model_dump()
+        payload["classification"] = _normalise_classification(body.classification)
+        row = await target_board_local.create_target(ctx.user_id, payload, settings=s)
+        return _to_target(row)
     row = {**body.model_dump(), "user_id": ctx.user_id}
     row["classification"] = _normalise_classification(body.classification)
     # unique(user_id, entity_id): re-adding the same entity upserts instead of
@@ -329,10 +356,63 @@ async def create_target(
 
 @router.patch("/api/targets/board/{target_id}", response_model=Target)
 async def update_target(
-    target_id: str, body: TargetPatch, ctx: UserCtx = Depends(current_user)
+    target_id: str, body: TargetPatch, ctx: UserCtx = Depends(current_user_or_local)
 ) -> Target:
     _validate_stage(body.stage)
     s = get_settings()
+    if _use_local(s):
+        from app.intel import target_board_local  # noqa: PLC0415
+
+        need_current = body.stage is not None or body.requirements is not None
+        current = (
+            await target_board_local.get_target(ctx.user_id, target_id, settings=s)
+            if need_current
+            else None
+        )
+        if need_current and current is None:
+            raise HTTPException(status_code=404, detail="target not found")
+        cur_req = (current or {}).get("requirements") if current else {}
+        cur_req = cur_req if isinstance(cur_req, dict) else {}
+        merged_req = {**cur_req, **(body.requirements or {})}
+        patch: dict = {}
+        if body.stage is not None:
+            patch["stage"] = body.stage
+        if body.priority is not None:
+            patch["priority"] = body.priority
+        if body.note is not None:
+            patch["note"] = body.note
+        if body.classification is not None:
+            patch["classification"] = _normalise_classification(body.classification)
+        if body.requirements is not None:
+            patch["requirements"] = merged_req
+        if not patch:
+            raise HTTPException(status_code=400, detail="empty update")
+        prev_stage: str | None = current.get("stage") if current else None
+        forced = False
+        if body.stage is not None and prev_stage != body.stage:
+            _validate_transition(str(prev_stage), str(body.stage))
+            advancing = STAGE_INDEX.get(str(body.stage), 0) > STAGE_INDEX.get(str(prev_stage), 0)
+            if advancing:
+                unmet = _unmet_for(body.stage, merged_req)
+                if unmet and not body.force:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"checklist incomplete to enter {body.stage}: "
+                            f"{', '.join(unmet)} not met"
+                        ),
+                    )
+                forced = bool(unmet)
+        updated_local = await target_board_local.update_target(
+            ctx.user_id, target_id, patch, settings=s
+        )
+        if updated_local is None:
+            raise HTTPException(status_code=404, detail="target not found")
+        if body.stage is not None and current is not None:
+            await _append_transition_audit(
+                None, s, ctx, target_id, str(prev_stage), str(body.stage), forced=forced
+            )
+        return _to_target(updated_local)
     headers = {**_headers(ctx, s, write=True), "Prefer": "return=representation"}
     # We need the current row to (a) gate a stage move against the chain, and (b)
     # MERGE a partial checklist toggle into the stored requirements — a jsonb
@@ -404,7 +484,7 @@ async def update_target(
 
 @router.get("/api/targets/board/{target_id}/audit")
 async def target_audit(
-    target_id: str, ctx: UserCtx = Depends(current_user)
+    target_id: str, ctx: UserCtx = Depends(current_user_or_local)
 ) -> list[dict]:
     """Stage-transition history for one target (own rows only, newest first).
 
@@ -413,8 +493,22 @@ async def target_audit(
     404/500) when the log is empty or the table is absent — the audit trail is a
     best-effort overlay, never a hard dependency of the board."""
     s = get_settings()
-    if not s.supabase_url:
-        raise HTTPException(status_code=503, detail="Supabase is not configured")
+    if _use_local(s):
+        from app.intel import action_log_local  # noqa: PLC0415
+
+        rows = await action_log_local.list_rows(limit=100)
+        return [
+            {
+                "action": r["action"],
+                "target_id": r["target_id"],
+                "params": r["params"],
+                "ts": r["ts"],
+            }
+            for r in rows
+            if r["action"] == "advance_stage"
+            and r["target_id"] == target_id
+            and r["user_id"] == ctx.user_id
+        ][:20]
     url = s.supabase_url.rstrip("/") + "/rest/v1/action_log"
     async with _client() as c:
         r = await c.get(
@@ -436,8 +530,13 @@ async def target_audit(
 
 
 @router.delete("/api/targets/board/{target_id}", status_code=204)
-async def delete_target(target_id: str, ctx: UserCtx = Depends(current_user)) -> None:
+async def delete_target(target_id: str, ctx: UserCtx = Depends(current_user_or_local)) -> None:
     s = get_settings()
+    if _use_local(s):
+        from app.intel import target_board_local  # noqa: PLC0415
+
+        await target_board_local.delete_target(ctx.user_id, target_id, settings=s)
+        return
     async with _client() as c:
         r = await c.delete(
             _rest(s),

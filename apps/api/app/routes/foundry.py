@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Any, Literal
 
@@ -525,6 +526,13 @@ _CONNECTOR_CATALOG: tuple[dict[str, str], ...] = (
         "docs": "An .eml / .docx / .txt / .md / .pdf becomes one text row via "
                 "POST /api/foundry/datasets/{dataset_id}/documents.",
     },
+    {
+        "kind": "http",
+        "title": "HTTP feed (URL poll)",
+        "needs": "built in",
+        "docs": "Poll a public feed URL (JSON/CSV/GeoJSON/RSS/NDJSON); each poll "
+                "replaces the dataset with the parsed rows.",
+    },
 )
 
 
@@ -544,6 +552,7 @@ async def list_connectors(ctx: UserCtx = Depends(current_user_or_local)) -> list
         "ingest-token": True,
         "upload": True,
         "document": True,
+        "http": conn_avail["http"]["available"],
     }
     pdf_note = "available" if documents_mod.pdf_available() else "unavailable: pip install pypdf"
     out = []
@@ -574,7 +583,7 @@ class ConnectionIn(BaseModel):
     """
 
     name: str = Field(..., min_length=1, max_length=80)
-    kind: Literal["mqtt", "kafka", "sql"]
+    kind: Literal["mqtt", "kafka", "sql", "http"]
     dataset_id: str = Field(..., min_length=1, max_length=80)
     config: dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
@@ -602,6 +611,82 @@ def _reject_inline_dsn(kind: str, config: dict[str, Any]) -> None:
                    "the connection string (e.g. OSINT_SQL_DSN_WAREHOUSE), not the "
                    "connection string itself",
         )
+
+
+_PRESET_KEYS = ("url", "format", "rows_path", "interval_s", "auth_header_env")
+
+
+def _reject_bad_http_config(kind: str, config: dict[str, Any]) -> None:
+    """An http connection polls a PUBLIC url only — the same SSRF boundary the
+    evidence fetch enforces (netguard refuses non-public addresses at fetch
+    time); a private URL is rejected here too so the mistake is named at
+    save time, not at the first poll. The url is NOT resolved here (no DNS on
+    the route path); only its shape and scheme are checked."""
+    if kind != "http":
+        return
+    url = str(config.get("url") or "")
+    if not url.startswith(("http://", "https://")) or "://" not in url:
+        raise HTTPException(
+            status_code=422,
+            detail="url must be an http(s) URL to poll",
+        )
+    host = url.split("://", 1)[1].split("/", 1)[0].split("?", 1)[0].split("@")[-1]
+    host = host.split(":", 1)[0] if not host.startswith("[") else host.split("]")[0].lstrip("[")
+    if not host:
+        raise HTTPException(status_code=422, detail="url must name a host to poll")
+    if host in ("localhost",) or host.endswith(".localhost"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"refusing to poll a non-public host ({host}); polls go to public feeds only",
+        )
+    import ipaddress  # noqa: PLC0415
+
+    try:
+        ipaddress.ip_address(host)
+        is_ip = True
+    except ValueError:
+        is_ip = False
+    if is_ip:
+        from app.netguard import is_non_public_ip  # noqa: PLC0415
+
+        if is_non_public_ip(host):
+            raise HTTPException(
+                status_code=422,
+                detail="refusing to poll a non-public host; polls go to public feeds only",
+            )
+    elif not re.match(r"^[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)*\.?$", host):
+        raise HTTPException(
+            status_code=422,
+            detail=f"url must name a host to poll ({host!r} is not a host)",
+        )
+    fmt = str(config.get("format") or "json")
+    if fmt not in ("json", "csv", "geojson", "rss", "ndjson"):
+        raise HTTPException(
+            status_code=422,
+            detail="format must be one of json, csv, geojson, rss, ndjson",
+        )
+    rows_path = str(config.get("rows_path") or "")
+    if rows_path and not connections_mod.valid_rows_path(rows_path):
+        raise HTTPException(
+            status_code=422,
+            detail="rows_path must be a dotted path of bare keys (e.g. data.items)",
+        )
+    try:
+        connections_mod.auth_header(config)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _presets() -> list[dict[str, Any]]:
+    import json  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    path = Path(__file__).resolve().parents[1] / "foundry" / "source_presets.json"
+    try:
+        data = json.loads(path.read_text())
+    except Exception:  # noqa: BLE001 - a broken preset file lists as empty
+        return []
+    return data if isinstance(data, list) else []
 
 
 def _reject_bad_table_identifiers(kind: str, config: dict[str, Any]) -> None:
@@ -647,6 +732,7 @@ async def create_connection(
 ) -> dict[str, Any]:
     _reject_inline_dsn(body.kind, body.config)
     _reject_bad_table_identifiers(body.kind, body.config)
+    _reject_bad_http_config(body.kind, body.config)
     store = _store()
     if await store.get_dataset(body.dataset_id) is None:
         raise HTTPException(status_code=404, detail="dataset not found")
@@ -693,6 +779,55 @@ async def delete_connection(
         raise HTTPException(status_code=404, detail="connection not found")
     await connections_mod.reconcile()
     return {"deleted": connection_id}
+
+
+@router.get("/api/foundry/source-presets")
+async def list_source_presets(
+    ctx: UserCtx = Depends(current_user_or_local),
+) -> list[dict[str, Any]]:
+    """Shipped http feed presets (foundry/source_presets.json), each with whether
+    it is already installed as a connection."""
+    conns = await _store().list_connections()
+    installed_urls = {c["config"].get("url") for c in conns}
+    out: list[dict[str, Any]] = []
+    for p in _presets():
+        row = {k: p[k] for k in ("id", "title", "category", "url", "license") if k in p}
+        row["format"] = p.get("format", "json")
+        row["installed"] = p.get("url") in installed_urls
+        out.append(row)
+    return out
+
+
+@router.post(
+    "/api/foundry/source-presets/{preset_id}/install",
+    dependencies=[Depends(require_operator)],
+)
+async def install_source_preset(
+    preset_id: str, ctx: UserCtx = Depends(current_user_or_local)
+) -> dict[str, Any]:
+    """Create a dataset + http connection from a shipped preset, once."""
+    preset = next((p for p in _presets() if p.get("id") == preset_id), None)
+    if preset is None:
+        raise HTTPException(status_code=404, detail="preset not found")
+    config = {k: preset[k] for k in _PRESET_KEYS if k in preset}
+    _reject_bad_http_config("http", config)
+    store = _store()
+    if any(c["config"].get("url") == config.get("url") for c in await store.list_connections()):
+        raise HTTPException(status_code=409, detail="preset already installed")
+    try:
+        dataset = await store.create_dataset(preset_id)
+    except FoundryError as exc:
+        _raise(exc)
+        raise AssertionError("unreachable") from exc  # pragma: no cover
+    try:
+        created = await store.create_connection(
+            preset_id, "http", dataset["id"], config, True
+        )
+    except FoundryError as exc:
+        _raise(exc)
+        raise AssertionError("unreachable") from exc  # pragma: no cover
+    await connections_mod.reconcile()
+    return {"dataset": dataset, "connection": created}
 
 
 @router.post(

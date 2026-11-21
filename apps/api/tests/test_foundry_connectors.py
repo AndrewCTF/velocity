@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-_EXPECTED_KINDS = {"mqtt", "kafka", "sql", "sql-table", "ingest-token", "upload", "document"}
+_EXPECTED_KINDS = {"mqtt", "kafka", "sql", "sql-table", "ingest-token", "upload", "document", "http"}
 
 
-def test_lists_all_seven_kinds_with_boolean_availability(client: TestClient) -> None:
+def test_lists_all_eight_kinds_with_boolean_availability(client: TestClient) -> None:
     r = client.get("/api/foundry/connectors")
     assert r.status_code == 200, r.text
     body = r.json()

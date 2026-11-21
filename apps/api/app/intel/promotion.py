@@ -206,6 +206,59 @@ async def promote_incidents(
     return minted
 
 
+# ── W4 backfill (roadmap-users §W4: "Backfill job over history.db +
+# incident store so the GRAPH page opens onto real structure day one") ────
+#
+# The history.db half is deliberately NOT implemented here: history.py
+# positions tables are multi-million-row blobs (the "10 GB history.db"
+# noted at history.py:1167) and materialising them in one pass is exactly
+# the OOM this session was told to avoid — a position backfill wants a
+# streaming / per-entity-cursor job, not an incident-shaped list. The
+# incident-store half is safe: IncidentStore._history is already a bounded
+# in-memory structure (≤360 snapshots/scope × a few dozen keys each), so
+# deduping it by incident_key and promoting through promote_incidents is
+# a small, capped pass over data production is already holding.
+
+
+async def backfill_incident_store(
+    reg: SqliteRegistry,
+    store: Any,
+    *,
+    source: str = "backfill:incident_store",
+    score_min: float = 80.0,
+) -> list[str]:
+    """Mint the already-recorded incident history into the ontology graph.
+
+    Bounded by design: dedups every snapshot of ``store._history`` by
+    ``incident_key`` (newest observation wins; a re-observed convergence is
+    one incident, not N), keeps only incidents at/above ``score_min`` (an
+    incident object must be significant — the slow tail of low-score
+    convergences is graph noise), and hands the remainder to
+    promote_incidents, which applies the per-cycle 10-mint cap and logs
+    the dropped tail. Idempotent: the stable incident id means a second
+    run updates the same object instead of minting a duplicate.
+
+    Returns the minted incident-object ids.
+    """
+    latest: dict[str, dict[str, Any]] = {}
+    for scope_snaps in store._history.values():
+        for _t, snap in scope_snaps:
+            for key, summary in snap.items():
+                latest[key] = summary
+    candidates = [
+        s
+        for s in latest.values()
+        if (s.get("score") or 0) >= score_min
+        and s.get("threat_level") in ("high", "elevated")
+    ]
+    # Best-first, matching incidents.brief()'s order that promote_incidents
+    # already assumes — so the per-cycle cap keeps the most actionable.
+    candidates.sort(key=lambda s: s.get("score") or 0, reverse=True)
+    if not candidates:
+        return []
+    return await promote_incidents(reg, candidates, source=source)
+
+
 # ── alert-bus significance (Phase 2 trigger (a): "any entity that trips a
 # detector"). Deliberately NOT wired into the correlation bus here — that is
 # another slice; the function is exported so it can be called and tested

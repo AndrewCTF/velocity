@@ -100,6 +100,12 @@ changing BOTH the guard and this file.
   answers `/health` 200 forever, so it must be aged out and evicted, not adopted.
   → `tests/test_ais_keyless.py`, `tests/test_ais_sidecar_reuse.py`,
   `docs/decisions.md` (2026-07-15 post-mortem)
+- `/api/maritime/military` tiers live AIS contacts by confidence: AIS type-35
+  declared, hull prefix (only with the matching flag on the MMSI — a private
+  boat named "HMS BUBBLES" under the wrong flag is not a warship), name
+  patterns, and the Wikidata naval registry (`intel/naval_registry`,
+  keyless, daily-cached; a failed pull degrades to an amber `"note"` rather
+  than going dark). → `tests/test_maritime_military.py`
 
 ## Sidecar supervision
 
@@ -270,8 +276,8 @@ argument NAMES only. → `tests/test_upload_caps.py`, `tests/test_audit_mutation
 
 ## Connections (operator-configured sources)
 
-`foundry/connections.py` runs MQTT / Kafka / SQL sources the operator points at
-their own infrastructure. Two rules:
+`foundry/connections.py` runs MQTT / Kafka / SQL / HTTP sources the operator points at
+their own infrastructure. Three rules before the two below still hold:
 
 - A `sql` connection stores the **NAME of an environment variable** holding the
   DSN, never the DSN. The row is returned by the list route and sits in
@@ -288,6 +294,14 @@ their own infrastructure. Two rules:
   why `sqlalchemy` is also a DEV dependency). **Kafka has no equivalent** — it
   needs a broker this box cannot run — so its runner is configured and
   supervised but unproven on the wire.
+- An `http` connection polls a PUBLIC feed URL through the evidence SSRF
+  guard (`intel/evidence._fetch_guarded`) and REPLACES the dataset each poll
+  (a fresh version, never appended). Config validates at the route boundary
+  (http(s) scheme, non-localhost host, format in json/csv/geojson/rss/ndjson,
+  dotted bare-key `rows_path`, `auth_header_env` = NAME of an env var holding
+  "Header-Name: value" — a literal credential is never stored). 121 shipped
+  presets (`foundry/source_presets.json`) install through the same validator.
+  → `tests/test_connections_http.py`
 
 Supervised, not started once (same rule as the sidecars): the reconcile loop
 restarts a connection that dies later and applies an edit made in the UI.

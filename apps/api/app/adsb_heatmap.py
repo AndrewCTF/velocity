@@ -461,23 +461,39 @@ async def coverage(day_from: date, day_to: date) -> dict:
     cache = await asyncio.to_thread(_coverage_cache_read)
     now = time.time()
 
-    pending = [
-        (day, host)
-        for day in days
-        for host in hosts
-        if now - cache.get(f"{day}/{host}", {}).get("ts", 0.0) >= _COVERAGE_TTL_S
-    ]
+    settings = get_settings()
+    neg_ttl = settings.heatmap_coverage_negative_ttl_s
+
+    def _expired(day: date, host: str) -> bool:
+        entry = cache.get(f"{day}/{host}", {})
+        age = now - entry.get("ts", 0.0)
+        # Negative entries use the short TTL; positive keep 24 h.
+        ttl = neg_ttl if entry.get("present") is False else _COVERAGE_TTL_S
+        return age >= ttl
+
+    pending = [(day, host) for day in days for host in hosts if _expired(day, host)]
     if pending:
         client = get_client()
         sem = asyncio.Semaphore(_COVERAGE_CONCURRENCY)
+        max_s = settings.heatmap_coverage_max_seconds
 
         async def probe(day: date, host: str) -> None:
             async with sem:
                 present = await _probe_chunk(client, host, day)
             if present is not None:
                 cache[f"{day}/{host}"] = {"ts": now, "present": present}
+            else:
+                # Negative-cache dead hosts so the next request does not
+                # re-probe the same unreachable (day, host) for neg_ttl.
+                cache[f"{day}/{host}"] = {"ts": now, "present": False}
 
-        await asyncio.gather(*(probe(day, host) for day, host in pending))
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*(probe(day, host) for day, host in pending)),
+                timeout=max_s,
+            )
+        except TimeoutError:
+            pass
         await asyncio.to_thread(_coverage_cache_write, cache)
 
     result: list[dict[str, Any]] = []

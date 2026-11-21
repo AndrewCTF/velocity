@@ -38,6 +38,11 @@ def _summary(inc: dict[str, Any]) -> dict[str, Any]:
         "narrative": inc.get("narrative"),
         "centroid": inc.get("centroid"),
         "signal_count": inc.get("signal_count"),
+        # Carried so the W4 backfill can mint the incident object with its
+        # member -> incident evidence_of links. _summary has no other
+        # consumers reading this (history()/last_changes pass whole dicts
+        # through), so it is invisible to the timeline/scrubber surfaces.
+        "evidence": inc.get("evidence"),
     }
 
 
